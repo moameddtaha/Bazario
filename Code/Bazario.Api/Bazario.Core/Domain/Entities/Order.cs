@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using Bazario.Core.Domain.IdentityEntities;
 
 namespace Bazario.Core.Domain.Entities
