@@ -1,5 +1,7 @@
 ﻿using Bazario.Core.Domain.IdentityEntities;
+using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Infrastructure.DbContext;
+using Bazario.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,6 +25,13 @@ namespace Bazario.Api.StartupExtensions
             services.AddIdentity<ApplicationUser, ApplicationRole>()
                 .AddEntityFrameworkStores<ApplicationDbContext>()
                 .AddDefaultTokenProviders();
+
+            // Register Repositories
+            services.AddScoped<IAdminRepository, AdminRepository>();
+            services.AddScoped<ICustomerRepository, CustomerRepository>();
+            services.AddScoped<ISellerRepository, SellerRepository>();
+
+            // Register Services
 
             services.AddControllers();
             // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

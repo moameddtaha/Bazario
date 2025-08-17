@@ -17,6 +17,13 @@ namespace Bazario.Core.Domain.IdentityEntities
         [StringLength(20)]
         public string? LastName { get; set; }
 
+        [StringLength(10)]
+        public string? Gender { get; set; }
+
+        public int? Age { get; set; }
+
+        public DateTime? DateOfBirth { get; set; }
+
         // ---------- Navigation Properties ----------
 
         public ICollection<Store>? Stores { get; set; }
