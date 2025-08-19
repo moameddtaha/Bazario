@@ -28,7 +28,7 @@ namespace Bazario.Core.Domain.Entities
 
         public int StockQuantity { get; set; }
 
-        public string? ImageUrl { get; set; }
+        public string? Image { get; set; }
 
         [DataType(DataType.DateTime)]
         public DateTime? CreatedAt { get; set; }

@@ -27,7 +27,7 @@ namespace Bazario.Core.Domain.Entities
 
         public string? Category { get; set; }
 
-        public string? LogoUrl { get; set; }
+        public string? Logo { get; set; }
 
         [DataType(DataType.DateTime)]
         public DateTime? CreatedAt { get; set; }

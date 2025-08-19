@@ -293,6 +293,28 @@ namespace Bazario.Infrastructure.Repositories
             }
         }
 
+        public async Task<decimal> GetTotalRevenueByStoreIdAsync(Guid storeId, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                // Validate input
+                if (storeId == Guid.Empty)
+                {
+                    return 0; // Invalid ID, return 0
+                }
+
+                var totalRevenue = await _context.OrderItems
+                    .Where(oi => oi.Product != null && oi.Product.StoreId == storeId)
+                    .SumAsync(oi => oi.Quantity * oi.Price, cancellationToken);
+
+                return totalRevenue;
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Failed to calculate total revenue for store {storeId}: {ex.Message}", ex);
+            }
+        }
+
         public async Task<bool> DeleteOrderItemsByOrderIdAsync(Guid orderId, CancellationToken cancellationToken = default)
         {
             try
