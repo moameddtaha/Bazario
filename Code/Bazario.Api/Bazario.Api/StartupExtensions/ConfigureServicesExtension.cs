@@ -31,6 +31,7 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<ICustomerRepository, CustomerRepository>();
             services.AddScoped<ISellerRepository, SellerRepository>();
             services.AddScoped<IOrderRepository, OrderRepository>();
+            services.AddScoped<IOrderItemRepository, OrderItemRepository>();
 
             // Register Services
 

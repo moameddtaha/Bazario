@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.IdentityEntities;
 using Bazario.Core.Domain.RepositoryContracts;
+using System.Linq.Expressions;
 using Microsoft.AspNetCore.Identity;
 
 namespace Bazario.Infrastructure.Repositories
@@ -190,6 +191,37 @@ namespace Bazario.Infrastructure.Repositories
             {
                 // Log the exception (you can inject ILogger if needed)
                 throw new InvalidOperationException($"Failed to retrieve customer with ID {customerId}: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<List<ApplicationUser>> GetFilteredCustomersAsync(Expression<Func<ApplicationUser, bool>> predicate, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                // Validate input
+                if (predicate == null)
+                    throw new ArgumentNullException(nameof(predicate));
+
+                // Check if Customer role exists
+                if (!await _roleManager.RoleExistsAsync("Customer"))
+                {
+                    // Return empty list if Customer role doesn't exist
+                    return new List<ApplicationUser>();
+                }
+
+                // Get all customers and filter by predicate
+                var allCustomers = await _userManager.GetUsersInRoleAsync("Customer");
+                var filteredCustomers = allCustomers.AsQueryable().Where(predicate.Compile()).ToList();
+
+                return filteredCustomers;
+            }
+            catch (ArgumentException)
+            {
+                throw; // Re-throw argument exceptions as-is
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Failed to retrieve filtered customers: {ex.Message}", ex);
             }
         }
 

@@ -20,7 +20,7 @@ namespace Bazario.Core.Domain.RepositoryContracts
 
         Task<List<ApplicationUser>> GetAllSellersAsync(CancellationToken cancellationToken = default);
 
-        Task<ApplicationUser> GetFilteredSellerAsync(Expression<Func<ApplicationUser, bool>> predicate, CancellationToken cancellationToken = default);
+        Task<List<ApplicationUser>> GetFilteredSellersAsync(Expression<Func<ApplicationUser, bool>> predicate, CancellationToken cancellationToken = default);
 
         Task<bool> ChangeSellerPasswordAsync(Guid sellerId, string currentPassword, string newPassword, CancellationToken cancellationToken = default);
 

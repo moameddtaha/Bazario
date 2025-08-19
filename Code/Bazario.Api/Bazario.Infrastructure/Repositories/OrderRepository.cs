@@ -227,31 +227,6 @@ namespace Bazario.Infrastructure.Repositories
             }
         }
 
-        public async Task<Order?> GetFilteredOrderAsync(Expression<Func<Order, bool>> predicate, CancellationToken cancellationToken = default)
-        {
-            try
-            {
-                // Validate input
-                if (predicate == null)
-                    throw new ArgumentNullException(nameof(predicate));
-
-                var order = await _context.Orders
-                    .Include(o => o.Customer)
-                    .Include(o => o.OrderItems)
-                    .FirstOrDefaultAsync(predicate, cancellationToken);
-
-                return order;
-            }
-            catch (ArgumentException)
-            {
-                throw; // Re-throw argument exceptions as-is
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException($"Failed to retrieve filtered order: {ex.Message}", ex);
-            }
-        }
-
         public async Task<List<Order>> GetFilteredOrdersAsync(Expression<Func<Order, bool>> predicate, CancellationToken cancellationToken = default)
         {
             try

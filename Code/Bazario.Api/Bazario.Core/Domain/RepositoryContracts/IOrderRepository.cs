@@ -27,8 +27,6 @@ namespace Bazario.Core.Domain.RepositoryContracts
 
         Task<List<Order>> GetOrdersByDateRangeAsync(DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default);
 
-        Task<Order?> GetFilteredOrderAsync(Expression<Func<Order, bool>> predicate, CancellationToken cancellationToken = default);
-
         Task<List<Order>> GetFilteredOrdersAsync(Expression<Func<Order, bool>> predicate, CancellationToken cancellationToken = default);
 
         Task<decimal> GetTotalRevenueAsync(CancellationToken cancellationToken = default);

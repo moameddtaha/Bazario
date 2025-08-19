@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.IdentityEntities;
 using Bazario.Core.Domain.RepositoryContracts;
+using System.Linq.Expressions;
 using Bazario.Infrastructure.DbContext;
 using Microsoft.AspNetCore.Identity;
 
@@ -198,6 +199,37 @@ namespace Bazario.Infrastructure.Repositories
             {
                 // Log the exception (you can inject ILogger if needed)
                 throw new InvalidOperationException($"Failed to retrieve admins: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<List<ApplicationUser>> GetFilteredAdminsAsync(Expression<Func<ApplicationUser, bool>> predicate, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                // Validate input
+                if (predicate == null)
+                    throw new ArgumentNullException(nameof(predicate));
+
+                // Check if Admin role exists
+                if (!await _roleManager.RoleExistsAsync("Admin"))
+                {
+                    // Return empty list if Admin role doesn't exist
+                    return new List<ApplicationUser>();
+                }
+
+                // Get all admins and filter by predicate
+                var allAdmins = await _userManager.GetUsersInRoleAsync("Admin");
+                var filteredAdmins = allAdmins.AsQueryable().Where(predicate.Compile()).ToList();
+
+                return filteredAdmins;
+            }
+            catch (ArgumentException)
+            {
+                throw; // Re-throw argument exceptions as-is
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Failed to retrieve filtered admins: {ex.Message}", ex);
             }
         }
 

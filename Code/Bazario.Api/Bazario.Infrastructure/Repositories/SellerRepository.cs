@@ -154,9 +154,35 @@ namespace Bazario.Infrastructure.Repositories
             }
         }
 
-        public Task<ApplicationUser> GetFilteredSellerAsync(Expression<Func<ApplicationUser, bool>> predicate, CancellationToken cancellationToken = default)
+        public async Task<List<ApplicationUser>> GetFilteredSellersAsync(Expression<Func<ApplicationUser, bool>> predicate, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            try
+            {
+                // Validate input
+                if (predicate == null)
+                    throw new ArgumentNullException(nameof(predicate));
+
+                // Check if Seller role exists
+                if (!await _roleManager.RoleExistsAsync("Seller"))
+                {
+                    // Return empty list if Seller role doesn't exist
+                    return new List<ApplicationUser>();
+                }
+
+                // Get all sellers and filter by predicate
+                var allSellers = await _userManager.GetUsersInRoleAsync("Seller");
+                var filteredSellers = allSellers.AsQueryable().Where(predicate.Compile()).ToList();
+
+                return filteredSellers;
+            }
+            catch (ArgumentException)
+            {
+                throw; // Re-throw argument exceptions as-is
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Failed to retrieve filtered sellers: {ex.Message}", ex);
+            }
         }
 
         public async Task<ApplicationUser?> GetSellerByIdAsync(Guid sellerId, CancellationToken cancellationToken = default)

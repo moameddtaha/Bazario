@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Linq.Expressions;
 using Bazario.Core.Domain.IdentityEntities;
 
 namespace Bazario.Core.Domain.RepositoryContracts
@@ -18,6 +19,8 @@ namespace Bazario.Core.Domain.RepositoryContracts
         Task<ApplicationUser?> GetCustomerByIdAsync(Guid customerId, CancellationToken cancellationToken = default);
 
         Task<List<ApplicationUser>> GetAllCustomersAsync(CancellationToken cancellationToken = default);
+
+        Task<List<ApplicationUser>> GetFilteredCustomersAsync(Expression<Func<ApplicationUser, bool>> predicate, CancellationToken cancellationToken = default);
 
         Task<bool> ChangeCustomerPasswordAsync(Guid customerId, string currentPassword, string newPassword, CancellationToken cancellationToken = default);
 
