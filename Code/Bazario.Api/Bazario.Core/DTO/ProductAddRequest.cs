@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.Entities;
+using Bazario.Core.Enums;
 
 namespace Bazario.Core.DTO
 {
@@ -36,6 +37,10 @@ namespace Bazario.Core.DTO
         [Display(Name = "Image")]
         public string? Image { get; set; }
 
+        [Required(ErrorMessage = "Category cannot be blank")]
+        [Display(Name = "Category")]
+        public Category Category { get; set; }
+
         public Product ToProduct()
         {
             return new Product
@@ -46,6 +51,7 @@ namespace Bazario.Core.DTO
                 Price = Price,
                 StockQuantity = StockQuantity,
                 Image = Image,
+                Category = Category.ToString(),
                 CreatedAt = DateTime.UtcNow
             };
         }

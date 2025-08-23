@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Bazario.Core.Enums;
 
 namespace Bazario.Core.DTO
 {
@@ -29,6 +30,9 @@ namespace Bazario.Core.DTO
         [Display(Name = "Image")]
         public string? Image { get; set; }
 
+        [Display(Name = "Category")]
+        public Category Category { get; set; }
+
         [Display(Name = "Created At")]
         [DataType(DataType.DateTime)]
         public DateTime? CreatedAt { get; set; }
@@ -46,6 +50,7 @@ namespace Bazario.Core.DTO
                    Price == response.Price &&
                    StockQuantity == response.StockQuantity &&
                    Image == response.Image &&
+                   Category == response.Category &&
                    CreatedAt == response.CreatedAt;
         }
 
@@ -59,13 +64,14 @@ namespace Bazario.Core.DTO
             hash.Add(Price);
             hash.Add(StockQuantity);
             hash.Add(Image);
+            hash.Add(Category);
             hash.Add(CreatedAt);
             return hash.ToHashCode();
         }
 
         public override string ToString()
         {
-            return $"Product: ID: {ProductId}, Name: {Name}, Price: {Price:C}, Stock: {StockQuantity}, Store ID: {StoreId}";
+            return $"Product: ID: {ProductId}, Name: {Name}, Price: {Price:C}, Stock: {StockQuantity}, Store ID: {StoreId}, Category: {Category}";
         }
 
         public ProductUpdateRequest ToProductUpdateRequest()
@@ -77,7 +83,8 @@ namespace Bazario.Core.DTO
                 Description = Description,
                 Price = Price,
                 StockQuantity = StockQuantity,
-                Image = Image
+                Image = Image,
+                Category = Category
             };
         }
     }

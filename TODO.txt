@@ -1,0 +1,9 @@
+"JwtSettings": {
+    "SecretKey": "YourSuperSecretKeyHere_MakeItAtLeast256BitsLong_ForProductionUse",
+    "Issuer": "Bazario.Api",
+    "Audience": "Bazario.Client",
+    "AccessTokenExpirationMinutes": 15,
+    "RefreshTokenExpirationDays": 7
+}
+
+What is SecretKey and is it okay to provide the SecretKey in the appsettings?

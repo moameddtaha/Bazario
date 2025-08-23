@@ -6,7 +6,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.IdentityEntities;
-using Bazario.Core.Enums;
 
 namespace Bazario.Core.Domain.Entities
 {
@@ -29,6 +28,8 @@ namespace Bazario.Core.Domain.Entities
         public int StockQuantity { get; set; }
 
         public string? Image { get; set; }
+
+        public string? Category { get; set; }
 
         [DataType(DataType.DateTime)]
         public DateTime? CreatedAt { get; set; }
