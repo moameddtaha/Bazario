@@ -9,10 +9,10 @@ using Bazario.Core.Enums;
 
 namespace Bazario.Core.DTO
 {
-    public class CustomerUpdateRequest
+    public class AdminUpdateRequest
     {
-        [Required(ErrorMessage = "Customer Id cannot be blank")]
-        public Guid CustomerId { get; set; }
+        [Required(ErrorMessage = "Admin Id cannot be blank")]
+        public Guid AdminId { get; set; }
 
         [StringLength(30)]
         [Display(Name = "First Name")]
@@ -47,18 +47,35 @@ namespace Bazario.Core.DTO
         [DataType(DataType.Date)]
         public DateTime? DateOfBirth { get; set; }
 
-        public ApplicationUser ToCustomer()
+        [Display(Name = "Email Confirmed")]
+        public bool? EmailConfirmed { get; set; }
+
+        [Display(Name = "Phone Number Confirmed")]
+        public bool? PhoneNumberConfirmed { get; set; }
+
+        [Display(Name = "User Role")]
+        public Role Role { get; set; }
+
+        [Display(Name = "Last Login At")]
+        [DataType(DataType.DateTime)]
+        public DateTime? LastLoginAt { get; set; }
+
+        public ApplicationUser ToAdmin()
         {
             return new ApplicationUser
             {
-                Id = CustomerId,
+                Id = AdminId,
                 FirstName = FirstName,
                 LastName = LastName,
                 UserName = UserName,
-                Gender = Gender.ToString(),
+                Gender = Gender?.ToString(),
                 Age = Age,
                 Email = Email,
-                PhoneNumber = PhoneNumber
+                PhoneNumber = PhoneNumber,
+                DateOfBirth = DateOfBirth,
+                EmailConfirmed = EmailConfirmed ?? false,
+                PhoneNumberConfirmed = PhoneNumberConfirmed ?? false,
+                LastLoginAt = LastLoginAt
             };
         }
     }

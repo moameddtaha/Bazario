@@ -1,6 +1,10 @@
 using Bazario.Api.StartupExtensions;
 using Serilog;
 using Serilog.Events;
+using DotNetEnv;
+
+// Load environment variables from .env file
+Env.Load();
 
 var builder = WebApplication.CreateBuilder(args);
 

@@ -4,12 +4,13 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 using Bazario.Core.Domain.IdentityEntities;
 using Bazario.Core.Enums;
 
 namespace Bazario.Core.DTO
 {
-    public class SellerAddRequest
+    public class CustomerAddRequest
     {
         [StringLength(30)]
         [Display(Name = "First Name")]
@@ -31,6 +32,7 @@ namespace Bazario.Core.DTO
         [Required(ErrorMessage = "Gender cannot be blank")]
         public Gender? Gender { get; set; }
 
+        [Display(Name = "Age")]
         [Required(ErrorMessage = "Age cannot be blank")]
         public int? Age { get; set; }
 
@@ -46,17 +48,35 @@ namespace Bazario.Core.DTO
         [RegularExpression(@"^\+?\d{10,15}$", ErrorMessage = "Invalid phone number format.")]
         public string? PhoneNumber { get; set; }
 
-        public ApplicationUser ToSeller()
+        [Display(Name = "Date of birth")]
+        [Required(ErrorMessage = "Date of birth cannot be blank")]
+        [DataType(DataType.Date)]
+        public DateTime? DateOfBirth { get; set; }
+
+        [Display(Name = "Email Confirmed")]
+        public bool EmailConfirmed { get; set; } = false;
+
+        [Display(Name = "Phone Number Confirmed")]
+        public bool PhoneNumberConfirmed { get; set; } = false;
+
+        [Display(Name = "User Roles")]
+        public List<string> Roles { get; set; } = new() { "customer" };
+
+        public ApplicationUser ToCustomer()
         {
             return new ApplicationUser
             {
                 FirstName = FirstName,
                 LastName = LastName,
                 UserName = UserName,
-                Gender = Gender.ToString(),
+                Gender = Gender?.ToString(),
                 Age = Age,
                 Email = Email,
-                PhoneNumber = PhoneNumber
+                PhoneNumber = PhoneNumber,
+                DateOfBirth = DateOfBirth,
+                EmailConfirmed = EmailConfirmed,
+                PhoneNumberConfirmed = PhoneNumberConfirmed,
+                CreatedAt = DateTime.UtcNow
             };
         }
     }

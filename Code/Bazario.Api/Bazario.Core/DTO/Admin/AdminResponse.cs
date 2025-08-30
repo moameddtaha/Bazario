@@ -37,6 +37,21 @@ namespace Bazario.Core.DTO
         [DataType(DataType.Date)]
         public DateTime? DateOfBirth { get; set; }
 
+        [Display(Name = "Email Confirmed")]
+        public bool EmailConfirmed { get; set; }
+
+        [Display(Name = "Phone Number Confirmed")]
+        public bool PhoneNumberConfirmed { get; set; }
+
+        [Display(Name = "User Role")]
+        public Role Role { get; set; }
+
+        [Display(Name = "Created At")]
+        public DateTime CreatedAt { get; set; }
+
+        [Display(Name = "Last Login At")]
+        public DateTime? LastLoginAt { get; set; }
+
         public override bool Equals(object? obj)
         {
             return obj is AdminResponse response &&
@@ -48,7 +63,11 @@ namespace Bazario.Core.DTO
                    Age == response.Age &&
                    Email == response.Email &&
                    PhoneNumber == response.PhoneNumber &&
-                   DateOfBirth == response.DateOfBirth;
+                   DateOfBirth == response.DateOfBirth &&
+                   EmailConfirmed == response.EmailConfirmed &&
+                   PhoneNumberConfirmed == response.PhoneNumberConfirmed &&
+                   CreatedAt == response.CreatedAt &&
+                   LastLoginAt == response.LastLoginAt;
         }
 
         public override int GetHashCode()
@@ -63,12 +82,16 @@ namespace Bazario.Core.DTO
             hash.Add(Email);
             hash.Add(PhoneNumber);
             hash.Add(DateOfBirth);
+            hash.Add(EmailConfirmed);
+            hash.Add(PhoneNumberConfirmed);
+            hash.Add(CreatedAt);
+            hash.Add(LastLoginAt);
             return hash.ToHashCode();
         }
 
         public override string ToString()
         {
-            return $"Admin: ID: {AdminId}, First Name: {FirstName}, Last Name: {LastName}, Username: {UserName}, Gender: {Gender}, Age: {Age}, Email: {Email}, Phone: {PhoneNumber}, DOB: {DateOfBirth:yyyy-MM-dd}";
+            return $"Admin: ID: {AdminId}, First Name: {FirstName}, Last Name: {LastName}, Username: {UserName}, Gender: {Gender}, Age: {Age}, Email: {Email}, Phone: {PhoneNumber}, DOB: {DateOfBirth:yyyy-MM-dd}, Email Confirmed: {EmailConfirmed}, Phone Confirmed: {PhoneNumberConfirmed}, Created: {CreatedAt:yyyy-MM-dd}, Last Login: {LastLoginAt:yyyy-MM-dd}";
         }
 
         public AdminUpdateRequest ToAdminUpdateRequest()
@@ -83,7 +106,11 @@ namespace Bazario.Core.DTO
                 Age = Age,
                 Email = Email,
                 PhoneNumber = PhoneNumber,
-                DateOfBirth = DateOfBirth
+                DateOfBirth = DateOfBirth,
+                EmailConfirmed = EmailConfirmed,
+                PhoneNumberConfirmed = PhoneNumberConfirmed,
+                Role = Role,
+                LastLoginAt = LastLoginAt
             };
         }
     }

@@ -24,6 +24,11 @@ namespace Bazario.Core.Domain.IdentityEntities
 
         public DateTime? DateOfBirth { get; set; }
 
+        // ---------- Audit Properties ----------
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        
+        public DateTime? LastLoginAt { get; set; }
+
         // ---------- Navigation Properties ----------
 
         public ICollection<Store>? Stores { get; set; }
