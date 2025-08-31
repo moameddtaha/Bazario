@@ -21,6 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Bazario.Auth\Bazario.Auth.csproj" />
     <ProjectReference Include="..\Bazario.Core\Bazario.Core.csproj" />
   </ItemGroup>
 

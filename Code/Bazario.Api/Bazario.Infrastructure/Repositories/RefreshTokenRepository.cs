@@ -1,3 +1,5 @@
+using Bazario.Auth.Domain.Entities;
+using Bazario.Auth.Domain.RepositoryContracts;
 using Bazario.Core.Domain.Entities;
 using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Infrastructure.DbContext;

@@ -1,6 +1,4 @@
-﻿using Bazario.Core.Domain.IdentityEntities;
-using Bazario.Core.Domain.RepositoryContracts;
-using Bazario.Infrastructure.DbContext;
+﻿using Bazario.Infrastructure.DbContext;
 using Bazario.Infrastructure.DbContext.Configurations;
 using Bazario.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -8,12 +6,19 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using Bazario.Core.ServiceContracts;
-using Bazario.Core.Services;
 using System.Text;
-using Bazario.Core.Services.Auth;
-using Bazario.Core.Models.Email;
-using Bazario.Core.Services.Email;
+
+using Bazario.Core.ServiceContracts;
+using Bazario.Core.Domain.IdentityEntities;
+using Bazario.Core.Domain.RepositoryContracts;
+
+using Bazario.Email.Models;
+using Bazario.Email.Services;
+using Bazario.Email.ServiceContracts;
+
+using Bazario.Auth.Domain.RepositoryContracts;
+using Bazario.Auth.ServiceContracts;
+using Bazario.Auth.Services;
 
 namespace Bazario.Api.StartupExtensions
 {
