@@ -25,8 +25,8 @@ namespace Bazario.Auth.ServiceContracts
         /// Gets current user information
         /// </summary>
         /// <param name="userId">User ID</param>
-        /// <returns>User information</returns>
-        Task<object> GetCurrentUserAsync(Guid userId);
+        /// <returns>User result with success/failure status and data</returns>
+        Task<UserResult> GetCurrentUserAsync(Guid userId);
 
         /// <summary>
         /// Changes user password
