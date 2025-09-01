@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Auth.DTO;
 using Bazario.Auth.ServiceContracts;
+using Bazario.Auth.Exceptions;
 
 namespace Bazario.Auth.Services
 {
@@ -54,20 +55,20 @@ namespace Bazario.Auth.Services
                 var user = await FindAndValidateUserAsync(request);
                 if (user == null)
                 {
-                    return AuthResponse.Failure("Invalid email or password.");
+                    throw new AuthException("Invalid email or password.", AuthException.ErrorCodes.InvalidCredentials);
                 }
 
                 // Check if user is locked out
                 if (await _userManager.IsLockedOutAsync(user))
                 {
-                    return AuthResponse.Failure("Account is locked. Please try again later.");
+                    throw new AuthException("Account is locked. Please try again later.", AuthException.ErrorCodes.AccountLocked);
                 }
 
                 // Attempt to sign in
                 var signInResult = await _signInManager.CheckPasswordSignInAsync(user, request.Password, true);
                 if (!signInResult.Succeeded)
                 {
-                    return AuthResponse.Failure("Invalid email or password.");
+                    throw new AuthException("Invalid email or password.", AuthException.ErrorCodes.InvalidCredentials);
                 }
 
                 // Check email confirmation status
@@ -165,7 +166,7 @@ namespace Bazario.Auth.Services
             catch (InvalidOperationException ex)
             {
                 _logger.LogError(ex, "Role mapping failed during login for user {Email}: {Message}", user.Email, ex.Message);
-                throw new InvalidOperationException("User role configuration error. Please contact support.");
+                throw new BusinessRuleException("User role configuration error. Please contact support.", "RoleMappingFailed", ex);
             }
         }
     }

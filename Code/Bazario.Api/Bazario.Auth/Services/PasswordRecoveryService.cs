@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Bazario.Auth.DTO;
 using Bazario.Auth.ServiceContracts;
 using Bazario.Email.ServiceContracts;
+using Bazario.Auth.Exceptions;
 
 namespace Bazario.Auth.Services
 {
@@ -37,16 +38,20 @@ namespace Bazario.Auth.Services
                 var user = await _userManager.FindByEmailAsync(email);
                 if (user == null)
                 {
-                    return false;
+                    throw new AuthException("User not found with this email address.", AuthException.ErrorCodes.UserNotFound);
                 }
 
                 var token = await _userManager.GeneratePasswordResetTokenAsync(user);
                 return await SendPasswordResetEmailAsync(user, token);
             }
+            catch (AuthException)
+            {
+                throw; // Re-throw our custom exceptions
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error in forgot password process for email: {Email}", email);
-                return false;
+                throw new AuthException("Failed to process password reset request.", AuthException.ErrorCodes.ValidationError, ex);
             }
         }
 
@@ -57,16 +62,30 @@ namespace Bazario.Auth.Services
                 var user = await _userManager.FindByEmailAsync(request.Email);
                 if (user == null)
                 {
-                    return false;
+                    throw new AuthException("User not found with this email address.", AuthException.ErrorCodes.UserNotFound);
                 }
 
                 var result = await _userManager.ResetPasswordAsync(user, request.Token, request.NewPassword);
-                return result.Succeeded;
+                if (!result.Succeeded)
+                {
+                    var errors = result.Errors.Select(e => e.Description).ToList();
+                    throw new ValidationException("Password reset failed. Please check your token and try again.", "PasswordReset", errors);
+                }
+                
+                return true;
+            }
+            catch (AuthException)
+            {
+                throw; // Re-throw our custom exceptions
+            }
+            catch (ValidationException)
+            {
+                throw; // Re-throw validation exceptions
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error resetting password for email: {Email}", request.Email);
-                return false;
+                throw new AuthException("Failed to reset password.", AuthException.ErrorCodes.ValidationError, ex);
             }
         }
 

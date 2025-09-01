@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using Bazario.Auth.DTO;
 using Bazario.Auth.ServiceContracts;
+using Bazario.Auth.Exceptions;
 
 namespace Bazario.Auth.Services
 {
@@ -52,16 +53,30 @@ namespace Bazario.Auth.Services
                 var user = await _userManager.FindByIdAsync(userId.ToString());
                 if (user == null)
                 {
-                    return false;
+                    throw new AuthException("User not found.", AuthException.ErrorCodes.UserNotFound);
                 }
 
                 var result = await _userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
-                return result.Succeeded;
+                if (!result.Succeeded)
+                {
+                    var errors = result.Errors.Select(e => e.Description).ToList();
+                    throw new ValidationException("Password change failed. Please check your current password.", "PasswordChange", errors);
+                }
+                
+                return true;
+            }
+            catch (AuthException)
+            {
+                throw; // Re-throw our custom exceptions
+            }
+            catch (ValidationException)
+            {
+                throw; // Re-throw validation exceptions
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error changing password for user ID: {UserId}", userId);
-                return false;
+                throw new AuthException("Failed to change password.", AuthException.ErrorCodes.ValidationError, ex);
             }
         }
 
@@ -74,7 +89,7 @@ namespace Bazario.Auth.Services
             catch (InvalidOperationException ex)
             {
                 _logger.LogError(ex, "Role mapping failed when getting current user {UserId}: {Message}", user.Id, ex.Message);
-                return null;
+                throw new BusinessRuleException("User role configuration error. Please contact support.", "RoleMappingFailed", ex);
             }
         }
     }

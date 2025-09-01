@@ -8,6 +8,7 @@ using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Auth.DTO;
 using Bazario.Auth.ServiceContracts;
 using Bazario.Email.ServiceContracts;
+using Bazario.Auth.Exceptions;
 
 namespace Bazario.Auth.Services
 {
@@ -51,33 +52,33 @@ namespace Bazario.Auth.Services
                 // Validate role
                 if (!IsValidRole(request.Role))
                 {
-                    return AuthResponse.Failure("Invalid role. Role must be either 'Customer' or 'Seller'.");
+                    throw new ValidationException("Invalid role. Role must be either 'Customer' or 'Seller'.", "Role", request.Role);
                 }
 
                 // Check if user already exists
                 var existingUser = await _userManager.FindByEmailAsync(request.Email);
                 if (existingUser != null)
                 {
-                    return AuthResponse.Failure("User with this email already exists.");
+                    throw new BusinessRuleException("User with this email already exists.", "UniqueEmailRule");
                 }
 
                 // Create and save user
                 var user = await CreateUserAsync(request);
                 if (user == null)
                 {
-                    return AuthResponse.Failure("Failed to create user.");
+                    throw new BusinessRuleException("Failed to create user account.", "UserCreationFailed");
                 }
 
                 // Ensure role exists and assign it
                 var roleName = request.Role.ToString();
                 if (!await EnsureRoleExistsAsync(roleName))
                 {
-                    return AuthResponse.Failure($"Failed to create role '{roleName}'.");
+                    throw new BusinessRuleException($"Failed to create role '{roleName}'.", "RoleCreationFailed");
                 }
 
                 if (!await AssignRoleToUserAsync(user, roleName))
                 {
-                    return AuthResponse.Failure($"Failed to assign role '{roleName}' to user.");
+                    throw new BusinessRuleException($"Failed to assign role '{roleName}' to user.", "RoleAssignmentFailed");
                 }
 
                 // Generate tokens
@@ -265,7 +266,7 @@ namespace Bazario.Auth.Services
             catch (InvalidOperationException ex)
             {
                 _logger.LogError(ex, "Role mapping failed during registration for user {Email}: {Message}", user.Email, ex.Message);
-                throw new InvalidOperationException("User role configuration error. Please contact support.");
+                throw new BusinessRuleException("User role configuration error. Please contact support.", "RoleMappingFailed", ex);
             }
         }
     }
