@@ -1,11 +1,10 @@
 using Bazario.Core.Domain.IdentityEntities;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Bazario.Auth.DTO;
 using Bazario.Auth.ServiceContracts;
-using Bazario.Email.ServiceContracts;
 using Bazario.Auth.Exceptions;
+using Bazario.Auth.Helpers;
 
 namespace Bazario.Auth.Services
 {
@@ -15,19 +14,16 @@ namespace Bazario.Auth.Services
     public class PasswordRecoveryService : IPasswordRecoveryService
     {
         private readonly UserManager<ApplicationUser> _userManager;
-        private readonly IConfiguration _configuration;
-        private readonly IEmailService _emailService;
+        private readonly IEmailHelper _emailHelper;
         private readonly ILogger<PasswordRecoveryService> _logger;
 
         public PasswordRecoveryService(
             UserManager<ApplicationUser> userManager,
-            IConfiguration configuration,
-            IEmailService emailService,
+            IEmailHelper emailHelper,
             ILogger<PasswordRecoveryService> logger)
         {
             _userManager = userManager;
-            _configuration = configuration;
-            _emailService = emailService;
+            _emailHelper = emailHelper;
             _logger = logger;
         }
 
@@ -42,7 +38,7 @@ namespace Bazario.Auth.Services
                 }
 
                 var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-                return await SendPasswordResetEmailAsync(user, token);
+                return await _emailHelper.SendPasswordResetEmailAsync(user, token);
             }
             catch (AuthException)
             {
@@ -87,64 +83,6 @@ namespace Bazario.Auth.Services
                 _logger.LogError(ex, "Password reset failed: {Email}", request.Email);
                 throw new AuthException("Failed to reset password.", AuthException.ErrorCodes.ValidationError, ex);
             }
-        }
-
-        private async Task<bool> SendPasswordResetEmailAsync(ApplicationUser user, string token)
-        {
-            try
-            {
-                // Check if user has a valid email
-                if (string.IsNullOrWhiteSpace(user.Email))
-                {
-                    _logger.LogWarning("Cannot send password reset email: User {UserId} has no email", user.Id);
-                    return false;
-                }
-
-                var resetUrl = _configuration["AppSettings:PasswordResetUrl"] ?? "https://localhost:5001/reset-password";
-                var userName = GetUserName(user);
-
-                return await _emailService.SendPasswordResetEmailAsync(
-                    user.Email,
-                    userName,
-                    token,
-                    resetUrl
-                );
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Password reset email failed: {Email}", user.Email ?? "unknown");
-                return false;
-            }
-        }
-
-        private static string GetUserName(ApplicationUser user)
-        {
-            // Try to get a meaningful name, fallback to email, then to generic "User"
-            if (!string.IsNullOrWhiteSpace(user.FirstName) && !string.IsNullOrWhiteSpace(user.LastName))
-            {
-                var fullName = $"{user.FirstName} {user.LastName}".Trim();
-                if (!string.IsNullOrWhiteSpace(fullName))
-                {
-                    return fullName;
-                }
-            }
-            
-            if (!string.IsNullOrWhiteSpace(user.FirstName))
-            {
-                return user.FirstName;
-            }
-            
-            if (!string.IsNullOrWhiteSpace(user.UserName))
-            {
-                return user.UserName;
-            }
-            
-            if (!string.IsNullOrWhiteSpace(user.Email))
-            {
-                return user.Email;
-            }
-            
-            return "User";
         }
     }
 }

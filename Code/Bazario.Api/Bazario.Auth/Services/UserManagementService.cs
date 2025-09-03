@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Bazario.Auth.DTO;
 using Bazario.Auth.ServiceContracts;
 using Bazario.Auth.Exceptions;
+using Bazario.Auth.Helpers;
 
 namespace Bazario.Auth.Services
 {
@@ -14,13 +15,16 @@ namespace Bazario.Auth.Services
     public class UserManagementService : IUserManagementService
     {
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly IRoleManagementHelper _roleManagementHelper;
         private readonly ILogger<UserManagementService> _logger;
 
         public UserManagementService(
             UserManager<ApplicationUser> userManager,
+            IRoleManagementHelper roleManagementHelper,
             ILogger<UserManagementService> logger)
         {
             _userManager = userManager;
+            _roleManagementHelper = roleManagementHelper;
             _logger = logger;
         }
 
@@ -34,7 +38,7 @@ namespace Bazario.Auth.Services
                     return UserResult.NotFound($"User with ID {userId} not found");
                 }
 
-                var roles = await _userManager.GetRolesAsync(user);
+                var roles = await _roleManagementHelper.GetUserRolesAsync(user);
                 var userResponse = CreateUserResponse(user, roles.ToList());
                 
                 return UserResult.Success(userResponse);

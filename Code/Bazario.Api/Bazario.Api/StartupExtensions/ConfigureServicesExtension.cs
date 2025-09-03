@@ -20,6 +20,8 @@ using Bazario.Auth.Domain.RepositoryContracts;
 using Bazario.Auth.ServiceContracts;
 using Bazario.Auth.Services;
 
+using Bazario.Auth.Helpers;
+
 namespace Bazario.Api.StartupExtensions
 {
     public static class ConfigureServicesExtension
@@ -58,6 +60,12 @@ namespace Bazario.Api.StartupExtensions
             // Register Core Services
             services.AddScoped<IJwtService, JwtService>();
             services.AddScoped<IEmailService, EmailService>();
+            
+            // Register Helper Classes (Business Logic Extraction)
+            services.AddScoped<ITokenHelper, TokenHelper>();
+            services.AddScoped<IUserCreationService, UserCreationService>();
+            services.AddScoped<IRoleManagementHelper, RoleManagementHelper>();
+            services.AddScoped<IEmailHelper, EmailHelper>();
             
             // Register Auth Services (Focused Services - Dependencies First)
             services.AddScoped<IUserRegistrationService, UserRegistrationService>();

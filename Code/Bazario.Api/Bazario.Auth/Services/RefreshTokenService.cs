@@ -4,12 +4,11 @@ using Bazario.Core.Domain.IdentityEntities;
 using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Helpers;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Bazario.Auth.ServiceContracts;
 using Bazario.Auth.Domain.Entities;
 using Bazario.Auth.Domain.RepositoryContracts;
-
+using Bazario.Auth.Helpers;
 
 namespace Bazario.Auth.Services
 {
@@ -20,24 +19,23 @@ namespace Bazario.Auth.Services
     {
         private readonly IRefreshTokenRepository _refreshTokenRepository;
         private readonly UserManager<ApplicationUser> _userManager;
-        private readonly IJwtService _jwtService;
-        private readonly IConfiguration _configuration;
+        private readonly ITokenHelper _tokenHelper;
+        private readonly IRoleManagementHelper _roleManagementHelper;
         private readonly ILogger<RefreshTokenService> _logger;
 
 
         public RefreshTokenService(
             IRefreshTokenRepository refreshTokenRepository,
             UserManager<ApplicationUser> userManager,
-            IJwtService jwtService,
-            IConfiguration configuration,
+            ITokenHelper tokenHelper,
+            IRoleManagementHelper roleManagementHelper,
             ILogger<RefreshTokenService> logger)
         {
             _refreshTokenRepository = refreshTokenRepository;
             _userManager = userManager;
-            _jwtService = jwtService;
-            _configuration = configuration;
+            _tokenHelper = tokenHelper;
+            _roleManagementHelper = roleManagementHelper;
             _logger = logger;
-
         }
 
         public async Task<bool> StoreRefreshTokenAsync(Guid userId, string refreshToken, DateTime accessTokenExpiresAt, DateTime refreshTokenExpiresAt)
@@ -54,16 +52,6 @@ namespace Bazario.Auth.Services
 
                 await _refreshTokenRepository.CreateAsync(tokenModel);
                 return true;
-            }
-            catch (ArgumentException ex)
-            {
-                _logger.LogError(ex, "Token storage failed (invalid argument): {UserId}", userId);
-                return false;
-            }
-            catch (InvalidOperationException ex)
-            {
-                _logger.LogError(ex, "Token storage failed (invalid operation): {UserId}", userId);
-                return false;
             }
             catch (Exception ex)
             {
@@ -94,16 +82,6 @@ namespace Bazario.Auth.Services
                 }
 
                 return tokenModel.UserId;
-            }
-            catch (ArgumentException ex)
-            {
-                _logger.LogError(ex, "Token validation failed (invalid argument)");
-                return null;
-            }
-            catch (InvalidOperationException ex)
-            {
-                _logger.LogError(ex, "Token validation failed (invalid operation)");
-                return null;
             }
             catch (Exception ex)
             {
@@ -141,18 +119,9 @@ namespace Bazario.Auth.Services
                     return AuthResponse.Failure("Account is locked.");
                 }
 
-                // Generate new tokens
-                var roles = await _userManager.GetRolesAsync(user);
-                var newAccessToken = _jwtService.GenerateAccessToken(user, roles);
-                var newRefreshToken = _jwtService.GenerateRefreshToken(user);
-
-                // Calculate expiration times
-                var accessTokenExpiration = DateTime.UtcNow.AddMinutes(
-                    int.Parse(_configuration["JwtSettings:AccessTokenExpirationMinutes"] ?? "60")
-                );
-                var refreshTokenExpiration = DateTime.UtcNow.AddDays(
-                    int.Parse(_configuration["JwtSettings:RefreshTokenExpirationDays"] ?? "7")
-                );
+                // Generate new tokens using TokenHelper
+                var roles = await _roleManagementHelper.GetUserRolesAsync(user);
+                var (newAccessToken, newRefreshToken, accessTokenExpiration, refreshTokenExpiration) = await _tokenHelper.GenerateTokensAsync(user, roles);
                 
                 // Store the new refresh token
                 await StoreRefreshTokenAsync(user.Id, newRefreshToken, accessTokenExpiration, refreshTokenExpiration);
@@ -183,19 +152,9 @@ namespace Bazario.Auth.Services
                     userResponse
                 );
             }
-            catch (ArgumentException ex)
-            {
-                _logger.LogError(ex, "Token refresh failed (invalid argument)");
-                return AuthResponse.Failure($"Token refresh failed: {ex.Message}");
-            }
-            catch (InvalidOperationException ex)
-            {
-                _logger.LogError(ex, "Token refresh failed (invalid operation)");
-                return AuthResponse.Failure($"Token refresh failed: {ex.Message}");
-            }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Token refresh failed");
+                _logger.LogError(ex, "Token refresh failed: {Message}", ex.Message);
                 return AuthResponse.Failure($"Token refresh failed: {ex.Message}");
             }
         }
@@ -210,16 +169,6 @@ namespace Bazario.Auth.Services
                 // Revoke the refresh token
                 var result = await RevokeRefreshTokenAsync(refreshToken, "User", "User requested revocation");
                 return result;
-            }
-            catch (ArgumentException ex)
-            {
-                _logger.LogError(ex, "Token revocation failed (invalid argument)");
-                return false;
-            }
-            catch (InvalidOperationException ex)
-            {
-                _logger.LogError(ex, "Token revocation failed (invalid operation)");
-                return false;
             }
             catch (Exception ex)
             {
@@ -241,16 +190,6 @@ namespace Bazario.Auth.Services
                 
                 return result;
             }
-            catch (ArgumentException ex)
-            {
-                _logger.LogError(ex, "Token revocation failed (invalid argument)");
-                return false;
-            }
-            catch (InvalidOperationException ex)
-            {
-                _logger.LogError(ex, "Token revocation failed (invalid operation)");
-                return false;
-            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Token revocation failed");
@@ -270,16 +209,6 @@ namespace Bazario.Auth.Services
                 }
                 
                 return result;
-            }
-            catch (ArgumentException ex)
-            {
-                _logger.LogError(ex, "Revoke all tokens failed (invalid argument): {UserId}", userId);
-                return false;
-            }
-            catch (InvalidOperationException ex)
-            {
-                _logger.LogError(ex, "Revoke all tokens failed (invalid operation): {UserId}", userId);
-                return false;
             }
             catch (Exception ex)
             {
@@ -301,16 +230,6 @@ namespace Bazario.Auth.Services
                 }
                 
                 return deletedCount;
-            }
-            catch (ArgumentException ex)
-            {
-                _logger.LogError(ex, "Token cleanup failed (invalid argument)");
-                return 0;
-            }
-            catch (InvalidOperationException ex)
-            {
-                _logger.LogError(ex, "Token cleanup failed (invalid operation)");
-                return 0;
             }
             catch (Exception ex)
             {

@@ -1,14 +1,13 @@
 using Bazario.Core.Domain.IdentityEntities;
-using Bazario.Core.Enums;
 using Bazario.Core.Helpers;
+using Bazario.Core.Models.User;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Auth.DTO;
 using Bazario.Auth.ServiceContracts;
-using Bazario.Email.ServiceContracts;
 using Bazario.Auth.Exceptions;
+using Bazario.Auth.Helpers;
+
 
 namespace Bazario.Auth.Services
 {
@@ -18,28 +17,25 @@ namespace Bazario.Auth.Services
     public class UserRegistrationService : IUserRegistrationService
     {
         private readonly UserManager<ApplicationUser> _userManager;
-        private readonly RoleManager<ApplicationRole> _roleManager;
-        private readonly IJwtService _jwtService;
-        private readonly IConfiguration _configuration;
-        private readonly IRefreshTokenService _refreshTokenService;
-        private readonly IEmailService _emailService;
+        private readonly IUserCreationService _userCreationService;
+        private readonly IRoleManagementHelper _roleManagementHelper;
+        private readonly ITokenHelper _tokenHelper;
+        private readonly IEmailHelper _emailHelper;
         private readonly ILogger<UserRegistrationService> _logger;
 
         public UserRegistrationService(
             UserManager<ApplicationUser> userManager,
-            RoleManager<ApplicationRole> roleManager,
-            IJwtService jwtService,
-            IConfiguration configuration,
-            IRefreshTokenService refreshTokenService,
-            IEmailService emailService,
+            IUserCreationService userCreationService,
+            IRoleManagementHelper roleManagementHelper,
+            ITokenHelper tokenHelper,
+            IEmailHelper emailHelper,
             ILogger<UserRegistrationService> logger)
         {
             _userManager = userManager;
-            _roleManager = roleManager;
-            _jwtService = jwtService;
-            _configuration = configuration;
-            _refreshTokenService = refreshTokenService;
-            _emailService = emailService;
+            _userCreationService = userCreationService;
+            _roleManagementHelper = roleManagementHelper;
+            _tokenHelper = tokenHelper;
+            _emailHelper = emailHelper;
             _logger = logger;
         }
 
@@ -50,7 +46,7 @@ namespace Bazario.Auth.Services
                 _logger.LogInformation("User registration started: {Email} ({Role})", request.Email, request.Role);
                 
                 // Validate role
-                if (!IsValidRole(request.Role))
+                if (!UserCreationHelper.IsValidRole(request.Role))
                 {
                     throw new ValidationException("Invalid role. Role must be either 'Customer' or 'Seller'.", "Role", request.Role);
                 }
@@ -63,7 +59,7 @@ namespace Bazario.Auth.Services
                 }
 
                 // Create and save user
-                var user = await CreateUserAsync(request);
+                var user = await _userCreationService.CreateUserAsync(request);
                 if (user == null)
                 {
                     throw new BusinessRuleException("Failed to create user account.", "UserCreationFailed");
@@ -71,22 +67,22 @@ namespace Bazario.Auth.Services
 
                 // Ensure role exists and assign it
                 var roleName = request.Role.ToString();
-                if (!await EnsureRoleExistsAsync(roleName))
+                if (!await _roleManagementHelper.EnsureRoleExistsAsync(roleName))
                 {
                     throw new BusinessRuleException($"Failed to create role '{roleName}'.", "RoleCreationFailed");
                 }
 
-                if (!await AssignRoleToUserAsync(user, roleName))
+                if (!await _roleManagementHelper.AssignRoleToUserAsync(user, roleName))
                 {
                     throw new BusinessRuleException($"Failed to assign role '{roleName}' to user.", "RoleAssignmentFailed");
                 }
 
                 // Generate tokens
-                var roles = await _userManager.GetRolesAsync(user);
-                var (accessToken, refreshToken, accessTokenExpiration, refreshTokenExpiration) = await GenerateTokensAsync(user, roles);
+                var roles = await _roleManagementHelper.GetUserRolesAsync(user);
+                var (accessToken, refreshToken, accessTokenExpiration, refreshTokenExpiration) = await _tokenHelper.GenerateTokensAsync(user, roles);
 
                 // Send confirmation email
-                await SendConfirmationEmailAsync(user);
+                await _emailHelper.SendConfirmationEmailAsync(user);
 
                 // Create user response
                 var userResponse = CreateUserResponse(user, roles.ToList());
@@ -109,145 +105,7 @@ namespace Bazario.Auth.Services
             }
         }
 
-        private bool IsValidRole(Role role)
-        {
-            return role == Role.Customer || role == Role.Seller;
-        }
-
-        private async Task<ApplicationUser?> CreateUserAsync(RegisterRequest request)
-        {
-            var user = new ApplicationUser
-            {
-                UserName = request.Email,
-                Email = request.Email,
-                FirstName = request.FirstName,
-                LastName = request.LastName,
-                Gender = request.Gender?.ToString(),
-                Age = request.Age,
-                DateOfBirth = request.DateOfBirth,
-                PhoneNumber = request.PhoneNumber,
-                EmailConfirmed = false,
-                PhoneNumberConfirmed = false,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            var result = await _userManager.CreateAsync(user, request.Password);
-            if (!result.Succeeded)
-            {
-                var errors = result.Errors.Select(e => e.Description).ToList();
-                _logger.LogError("User creation failed: {Email} - {Errors}", request.Email, string.Join(", ", errors));
-                return null;
-            }
-
-            return user;
-        }
-
-        private async Task<bool> EnsureRoleExistsAsync(string roleName)
-        {
-            if (await _roleManager.RoleExistsAsync(roleName))
-            {
-                return true;
-            }
-
-            var roleResult = await _roleManager.CreateAsync(new ApplicationRole { Name = roleName });
-            
-            if (!roleResult.Succeeded)
-            {
-                var roleErrors = roleResult.Errors.Select(e => e.Description).ToList();
-                _logger.LogError("Role creation failed: {Role} - {Errors}", roleName, string.Join(", ", roleErrors));
-                return false;
-            }
-
-            return true;
-        }
-
-        private async Task<bool> AssignRoleToUserAsync(ApplicationUser user, string roleName)
-        {
-            var roleAssignResult = await _userManager.AddToRoleAsync(user, roleName);
-            if (!roleAssignResult.Succeeded)
-            {
-                var roleErrors = roleAssignResult.Errors.Select(e => e.Description).ToList();
-                _logger.LogError("Role assignment failed: {Role} to {Email} - {Errors}", roleName, user.Email, string.Join(", ", roleErrors));
-                return false;
-            }
-            
-            return true;
-        }
-
-        private async Task<(string accessToken, string refreshToken, DateTime accessTokenExpiration, DateTime refreshTokenExpiration)> GenerateTokensAsync(ApplicationUser user, IList<string> roles)
-        {
-            var accessToken = _jwtService.GenerateAccessToken(user, roles);
-            var refreshToken = _jwtService.GenerateRefreshToken(user);
-
-            var accessTokenExpiration = DateTime.UtcNow.AddMinutes(
-                int.Parse(_configuration["JwtSettings:AccessTokenExpirationMinutes"] ?? "60")
-            );
-
-            var refreshTokenExpiration = DateTime.UtcNow.AddDays(
-                int.Parse(_configuration["JwtSettings:RefreshTokenExpirationDays"] ?? "7")
-            );
-
-            await _refreshTokenService.StoreRefreshTokenAsync(user.Id, refreshToken, accessTokenExpiration, refreshTokenExpiration);
-
-            return (accessToken, refreshToken, accessTokenExpiration, refreshTokenExpiration);
-        }
-
-        private async Task SendConfirmationEmailAsync(ApplicationUser user)
-        {
-            try
-            {
-                // Check if user has a valid email
-                if (string.IsNullOrWhiteSpace(user.Email))
-                {
-                    _logger.LogWarning("Cannot send confirmation email: User {UserId} has no email", user.Id);
-                    return;
-                }
-
-                var confirmationToken = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-                var confirmationUrl = _configuration["AppSettings:EmailConfirmationUrl"] ?? "https://yourapp.com/confirm-email";
-                
-                // Get a valid user name for the email
-                var userName = GetValidUserName(user);
-                
-                var emailSent = await _emailService.SendEmailConfirmationAsync(
-                    user.Email, 
-                    userName, 
-                    confirmationToken, 
-                    confirmationUrl);
-                
-                if (!emailSent)
-                {
-                    _logger.LogWarning("Failed to send confirmation email: {Email}", user.Email);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Confirmation email failed: {Email}", user.Email ?? "unknown");
-            }
-        }
-
-        private static string GetValidUserName(ApplicationUser user)
-        {
-            // Try to get a meaningful name, fallback to email, then to generic "User"
-            if (!string.IsNullOrWhiteSpace(user.FirstName))
-            {
-                return user.FirstName;
-            }
-            
-            if (!string.IsNullOrWhiteSpace(user.UserName))
-            {
-                return user.UserName;
-            }
-            
-            if (!string.IsNullOrWhiteSpace(user.Email))
-            {
-                return user.Email;
-            }
-            
-            return "User";
-        }
-
-        private object CreateUserResponse(ApplicationUser user, List<string> roles)
+        private UserResponse CreateUserResponse(ApplicationUser user, List<string> roles)
         {
             try
             {

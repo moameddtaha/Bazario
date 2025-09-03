@@ -1,12 +1,13 @@
 using Bazario.Core.Domain.IdentityEntities;
 using Bazario.Core.Helpers;
+using Bazario.Core.Models.User;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Auth.DTO;
 using Bazario.Auth.ServiceContracts;
 using Bazario.Auth.Exceptions;
+using Bazario.Auth.Helpers;
 
 namespace Bazario.Auth.Services
 {
@@ -17,9 +18,8 @@ namespace Bazario.Auth.Services
     {
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly SignInManager<ApplicationUser> _signInManager;
-        private readonly IJwtService _jwtService;
-        private readonly IConfiguration _configuration;
-        private readonly IRefreshTokenService _refreshTokenService;
+        private readonly ITokenHelper _tokenHelper;
+        private readonly IRoleManagementHelper _roleManagementHelper;
         private readonly ILogger<UserAuthenticationService> _logger;
         private readonly ICustomerRepository _customerRepository;
         private readonly ISellerRepository _sellerRepository;
@@ -28,9 +28,8 @@ namespace Bazario.Auth.Services
         public UserAuthenticationService(
             UserManager<ApplicationUser> userManager,
             SignInManager<ApplicationUser> signInManager,
-            IJwtService jwtService,
-            IConfiguration configuration,
-            IRefreshTokenService refreshTokenService,
+            ITokenHelper tokenHelper,
+            IRoleManagementHelper roleManagementHelper,
             ILogger<UserAuthenticationService> logger,
             ICustomerRepository customerRepository,
             ISellerRepository sellerRepository,
@@ -38,9 +37,8 @@ namespace Bazario.Auth.Services
         {
             _userManager = userManager;
             _signInManager = signInManager;
-            _jwtService = jwtService;
-            _configuration = configuration;
-            _refreshTokenService = refreshTokenService;
+            _tokenHelper = tokenHelper;
+            _roleManagementHelper = roleManagementHelper;
             _logger = logger;
             _customerRepository = customerRepository;
             _sellerRepository = sellerRepository;
@@ -72,14 +70,14 @@ namespace Bazario.Auth.Services
                 }
 
                 // Check email confirmation status
-                await CheckEmailConfirmationStatusAsync(user);
+                CheckEmailConfirmationStatus(user);
 
                 // Update last login and user data
                 await UpdateUserLoginInfoAsync(user);
 
                 // Generate tokens
-                var roles = await _userManager.GetRolesAsync(user);
-                var (accessToken, refreshToken, accessTokenExpiration, refreshTokenExpiration) = await GenerateTokensAsync(user, roles);
+                var roles = await _roleManagementHelper.GetUserRolesAsync(user);
+                var (accessToken, refreshToken, accessTokenExpiration, refreshTokenExpiration) = await _tokenHelper.GenerateTokensAsync(user, roles);
 
                 // Create user response
                 var userResponse = CreateUserResponse(user, roles.ToList());
@@ -111,7 +109,7 @@ namespace Bazario.Auth.Services
             return user;
         }
 
-        private async Task CheckEmailConfirmationStatusAsync(ApplicationUser user)
+        private void CheckEmailConfirmationStatus(ApplicationUser user)
         {
             if (!user.EmailConfirmed)
             {
@@ -122,7 +120,7 @@ namespace Bazario.Auth.Services
         private async Task UpdateUserLoginInfoAsync(ApplicationUser user)
         {
             user.LastLoginAt = DateTime.UtcNow;
-            var roles = await _userManager.GetRolesAsync(user);
+            var roles = await _roleManagementHelper.GetUserRolesAsync(user);
 
             // Update role-specific user data
             if (roles.Contains("Customer"))
@@ -138,26 +136,8 @@ namespace Bazario.Auth.Services
                 await _adminRepository.UpdateAdminAsync(user);
             }
         }
-
-        private async Task<(string accessToken, string refreshToken, DateTime accessTokenExpiration, DateTime refreshTokenExpiration)> GenerateTokensAsync(ApplicationUser user, IList<string> roles)
-        {
-            var accessToken = _jwtService.GenerateAccessToken(user, roles);
-            var refreshToken = _jwtService.GenerateRefreshToken(user);
-
-            var accessTokenExpiration = DateTime.UtcNow.AddMinutes(
-                int.Parse(_configuration["JwtSettings:AccessTokenExpirationMinutes"] ?? "60")
-            );
-
-            var refreshTokenExpiration = DateTime.UtcNow.AddDays(
-                int.Parse(_configuration["JwtSettings:RefreshTokenExpirationDays"] ?? "7")
-            );
-
-            await _refreshTokenService.StoreRefreshTokenAsync(user.Id, refreshToken, accessTokenExpiration, refreshTokenExpiration);
-
-            return (accessToken, refreshToken, accessTokenExpiration, refreshTokenExpiration);
-        }
-
-        private object CreateUserResponse(ApplicationUser user, List<string> roles)
+        
+        private UserResponse CreateUserResponse(ApplicationUser user, List<string> roles)
         {
             try
             {
