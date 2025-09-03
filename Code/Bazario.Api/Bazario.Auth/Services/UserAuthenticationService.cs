@@ -95,7 +95,7 @@ namespace Bazario.Auth.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Login failed for email: {Email}. Error: {ErrorMessage}", request.Email, ex.Message);
+                _logger.LogError(ex, "Login failed: {Email}", request.Email);
                 return AuthResponse.Failure($"Login failed: {ex.Message}");
             }
         }
@@ -115,7 +115,7 @@ namespace Bazario.Auth.Services
         {
             if (!user.EmailConfirmed)
             {
-                _logger.LogWarning("User {Email} logged in with unconfirmed email. Consider prompting for email verification.", user.Email);
+                _logger.LogWarning("Unconfirmed email login: {Email}", user.Email);
             }
         }
 
@@ -165,7 +165,7 @@ namespace Bazario.Auth.Services
             }
             catch (InvalidOperationException ex)
             {
-                _logger.LogError(ex, "Role mapping failed during login for user {Email}: {Message}", user.Email, ex.Message);
+                _logger.LogError(ex, "Role mapping failed: {Email}", user.Email);
                 throw new BusinessRuleException("User role configuration error. Please contact support.", "RoleMappingFailed", ex);
             }
         }

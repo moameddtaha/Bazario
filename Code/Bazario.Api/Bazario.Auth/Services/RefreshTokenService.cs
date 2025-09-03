@@ -44,8 +44,6 @@ namespace Bazario.Auth.Services
         {
             try
             {
-                _logger.LogInformation("Storing refresh token for user {UserId}", userId);
-                
                 var tokenModel = new RefreshToken
                 {
                     Token = refreshToken,
@@ -55,24 +53,22 @@ namespace Bazario.Auth.Services
                 };
 
                 await _refreshTokenRepository.CreateAsync(tokenModel);
-                _logger.LogInformation("Successfully stored refresh token for user {UserId}", userId);
                 return true;
             }
             catch (ArgumentException ex)
             {
-                _logger.LogError(ex, "Invalid argument during refresh token storage for user {UserId}: {Message}", userId, ex.Message);
-                return false; // Bad input data
+                _logger.LogError(ex, "Token storage failed (invalid argument): {UserId}", userId);
+                return false;
             }
             catch (InvalidOperationException ex)
             {
-                _logger.LogError(ex, "Invalid operation during refresh token storage for user {UserId}: {Message}", userId, ex.Message);
-                return false; // Business rule violation
+                _logger.LogError(ex, "Token storage failed (invalid operation): {UserId}", userId);
+                return false;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Database or unexpected error during refresh token storage for user {UserId}. Exception type: {ExceptionType}, Message: {Message}", 
-                    userId, ex.GetType().Name, ex.Message);
-                return false; // Database or unexpected error
+                _logger.LogError(ex, "Token storage failed: {UserId}", userId);
+                return false;
             }
         }
 
@@ -80,47 +76,39 @@ namespace Bazario.Auth.Services
         {
             try
             {
-                _logger.LogDebug("Validating refresh token: {TokenPrefix}...", refreshToken.Substring(0, Math.Min(8, refreshToken.Length)));
-                
                 var tokenModel = await _refreshTokenRepository.GetByTokenAsync(refreshToken);
                 if (tokenModel == null)
                 {
-                    _logger.LogWarning("Refresh token not found: {TokenPrefix}...", refreshToken.Substring(0, Math.Min(8, refreshToken.Length)));
                     return null;
                 }
                 
                 if (tokenModel.IsRevoked)
                 {
-                    _logger.LogWarning("Refresh token is revoked for user {UserId}: {TokenPrefix}...", tokenModel.UserId, refreshToken.Substring(0, Math.Min(8, refreshToken.Length)));
+                    _logger.LogWarning("Token revoked: {UserId}", tokenModel.UserId);
                     return null;
                 }
                 
                 if (tokenModel.RefreshTokenExpiresAt <= DateTime.UtcNow)
                 {
-                    _logger.LogInformation("Refresh token expired for user {UserId}: {TokenPrefix}...", tokenModel.UserId, refreshToken.Substring(0, Math.Min(8, refreshToken.Length)));
                     return null;
                 }
 
-                _logger.LogDebug("Refresh token validated successfully for user {UserId}", tokenModel.UserId);
                 return tokenModel.UserId;
             }
             catch (ArgumentException ex)
             {
-                _logger.LogError(ex, "Invalid argument during refresh token validation: {TokenPrefix}... Error: {Message}", 
-                    refreshToken.Substring(0, Math.Min(8, refreshToken.Length)), ex.Message);
-                return null; // Bad input data
+                _logger.LogError(ex, "Token validation failed (invalid argument)");
+                return null;
             }
             catch (InvalidOperationException ex)
             {
-                _logger.LogError(ex, "Invalid operation during refresh token validation: {TokenPrefix}... Error: {Message}", 
-                    refreshToken.Substring(0, Math.Min(8, refreshToken.Length)), ex.Message);
-                return null; // Business rule violation
+                _logger.LogError(ex, "Token validation failed (invalid operation)");
+                return null;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Database or unexpected error during refresh token validation: {TokenPrefix}... Exception type: {ExceptionType}, Message: {Message}", 
-                    refreshToken.Substring(0, Math.Min(8, refreshToken.Length)), ex.GetType().Name, ex.Message);
-                return null; // Database or unexpected error
+                _logger.LogError(ex, "Token validation failed");
+                return null;
             }
         }
 
@@ -131,15 +119,10 @@ namespace Bazario.Auth.Services
         {
             try
             {
-                _logger.LogInformation("Starting token refresh process for token: {TokenPrefix}...", 
-                    refreshToken.Substring(0, Math.Min(8, refreshToken.Length)));
-                
                 // Validate the refresh token
                 var userId = await ValidateRefreshTokenAsync(refreshToken);
                 if (userId == null)
                 {
-                    _logger.LogWarning("Token refresh failed: Invalid or expired refresh token: {TokenPrefix}...", 
-                        refreshToken.Substring(0, Math.Min(8, refreshToken.Length)));
                     return AuthResponse.Failure("Invalid or expired refresh token.");
                 }
 
@@ -147,16 +130,14 @@ namespace Bazario.Auth.Services
                 var user = await _userManager.FindByIdAsync(userId.Value.ToString());
                 if (user == null)
                 {
-                    _logger.LogError("Token refresh failed: User {UserId} not found for valid refresh token: {TokenPrefix}...", 
-                        userId.Value, refreshToken.Substring(0, Math.Min(8, refreshToken.Length)));
+                    _logger.LogError("Token refresh failed: User {UserId} not found", userId.Value);
                     return AuthResponse.Failure("User not found.");
                 }
 
                 // Check if user is still active
                 if (user.LockoutEnd.HasValue && user.LockoutEnd.Value > DateTime.UtcNow)
                 {
-                    _logger.LogWarning("Token refresh failed: Account {UserId} is locked. Token: {TokenPrefix}...", 
-                        userId.Value, refreshToken.Substring(0, Math.Min(8, refreshToken.Length)));
+                    _logger.LogWarning("Token refresh failed: Account {UserId} is locked", userId.Value);
                     return AuthResponse.Failure("Account is locked.");
                 }
 
@@ -187,14 +168,11 @@ namespace Bazario.Auth.Services
                 }
                 catch (InvalidOperationException ex)
                 {
-                    _logger.LogError(ex, "Role mapping failed during token refresh for user {UserId}: {Message}", userId.Value, ex.Message);
+                    _logger.LogError(ex, "Role mapping failed: {UserId}", userId.Value);
                     return AuthResponse.Failure("User role configuration error. Please contact support.");
                 }
 
-                _logger.LogInformation("Successfully refreshed tokens for user {UserId}. Old token: {OldTokenPrefix}..., New token: {NewTokenPrefix}...", 
-                    userId.Value, 
-                    refreshToken.Substring(0, Math.Min(8, refreshToken.Length)),
-                    newRefreshToken.Substring(0, Math.Min(8, newRefreshToken.Length)));
+                _logger.LogInformation("Tokens refreshed: {UserId}", userId.Value);
                 
                 return AuthResponse.Success(
                     "Token refreshed successfully.",
@@ -207,21 +185,18 @@ namespace Bazario.Auth.Services
             }
             catch (ArgumentException ex)
             {
-                _logger.LogError(ex, "Invalid argument during token refresh: {TokenPrefix}... Error: {Message}", 
-                    refreshToken.Substring(0, Math.Min(8, refreshToken.Length)), ex.Message);
-                return AuthResponse.Failure($"Token refresh failed: {ex.Message}"); // Bad input data
+                _logger.LogError(ex, "Token refresh failed (invalid argument)");
+                return AuthResponse.Failure($"Token refresh failed: {ex.Message}");
             }
             catch (InvalidOperationException ex)
             {
-                _logger.LogError(ex, "Invalid operation during token refresh: {TokenPrefix}... Error: {Message}", 
-                    refreshToken.Substring(0, Math.Min(8, refreshToken.Length)), ex.Message);
-                return AuthResponse.Failure($"Token refresh failed: {ex.Message}"); // Business rule violation
+                _logger.LogError(ex, "Token refresh failed (invalid operation)");
+                return AuthResponse.Failure($"Token refresh failed: {ex.Message}");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Database or unexpected error during token refresh: {TokenPrefix}... Exception type: {ExceptionType}, Message: {Message}", 
-                    refreshToken.Substring(0, Math.Min(8, refreshToken.Length)), ex.GetType().Name, ex.Message);
-                return AuthResponse.Failure($"Token refresh failed: {ex.Message}"); // Database or unexpected error
+                _logger.LogError(ex, "Token refresh failed");
+                return AuthResponse.Failure($"Token refresh failed: {ex.Message}");
             }
         }
 
@@ -232,30 +207,24 @@ namespace Bazario.Auth.Services
         {
             try
             {
-                _logger.LogInformation("User requested revocation of refresh token: {TokenPrefix}...", 
-                    refreshToken.Substring(0, Math.Min(8, refreshToken.Length)));
-                
                 // Revoke the refresh token
                 var result = await RevokeRefreshTokenAsync(refreshToken, "User", "User requested revocation");
                 return result;
             }
             catch (ArgumentException ex)
             {
-                _logger.LogError(ex, "Invalid argument during user-requested token revocation: {TokenPrefix}... Error: {Message}", 
-                    refreshToken.Substring(0, Math.Min(8, refreshToken.Length)), ex.Message);
-                return false; // Bad input data
+                _logger.LogError(ex, "Token revocation failed (invalid argument)");
+                return false;
             }
             catch (InvalidOperationException ex)
             {
-                _logger.LogError(ex, "Invalid operation during user-requested token revocation: {TokenPrefix}... Error: {Message}", 
-                    refreshToken.Substring(0, Math.Min(8, refreshToken.Length)), ex.Message);
-                return false; // Business rule violation
+                _logger.LogError(ex, "Token revocation failed (invalid operation)");
+                return false;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Database or unexpected error during user-requested token revocation: {TokenPrefix}... Exception type: {ExceptionType}, Message: {Message}", 
-                    refreshToken.Substring(0, Math.Min(8, refreshToken.Length)), ex.GetType().Name, ex.Message);
-                return false; // Database or unexpected error
+                _logger.LogError(ex, "Token revocation failed");
+                return false;
             }
         }
 
@@ -263,40 +232,29 @@ namespace Bazario.Auth.Services
         {
             try
             {
-                _logger.LogInformation("Revoking refresh token: {TokenPrefix}... by {RevokedBy}. Reason: {Reason}", 
-                    refreshToken.Substring(0, Math.Min(8, refreshToken.Length)), revokedBy, reason ?? "No reason provided");
-                
                 var result = await _refreshTokenRepository.RevokeTokenAsync(refreshToken, revokedBy, reason);
                 
-                if (result)
+                if (!result)
                 {
-                    _logger.LogInformation("Successfully revoked refresh token: {TokenPrefix}...", refreshToken.Substring(0, Math.Min(8, refreshToken.Length)));
-                }
-                else
-                {
-                    _logger.LogWarning("Failed to revoke refresh token: {TokenPrefix}... (token may not exist or already revoked)", 
-                        refreshToken.Substring(0, Math.Min(8, refreshToken.Length)));
+                    _logger.LogWarning("Token revocation failed (token may not exist or already revoked)");
                 }
                 
                 return result;
             }
             catch (ArgumentException ex)
             {
-                _logger.LogError(ex, "Invalid argument while revoking refresh token: {TokenPrefix}... Error: {Message}", 
-                    refreshToken.Substring(0, Math.Min(8, refreshToken.Length)), ex.Message);
-                return false; // Bad input data
+                _logger.LogError(ex, "Token revocation failed (invalid argument)");
+                return false;
             }
             catch (InvalidOperationException ex)
             {
-                _logger.LogError(ex, "Invalid operation while revoking refresh token: {TokenPrefix}... Error: {Message}", 
-                    refreshToken.Substring(0, Math.Min(8, refreshToken.Length)), ex.Message);
-                return false; // Business rule violation
+                _logger.LogError(ex, "Token revocation failed (invalid operation)");
+                return false;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Database or unexpected error while revoking refresh token: {TokenPrefix}... Exception type: {ExceptionType}, Message: {Message}", 
-                    refreshToken.Substring(0, Math.Min(8, refreshToken.Length)), ex.GetType().Name, ex.Message);
-                return false; // Database or unexpected error
+                _logger.LogError(ex, "Token revocation failed");
+                return false;
             }
         }
 
@@ -304,37 +262,29 @@ namespace Bazario.Auth.Services
         {
             try
             {
-                _logger.LogInformation("Revoking all refresh tokens for user {UserId} by {RevokedBy}. Reason: {Reason}", 
-                    userId, revokedBy, reason ?? "No reason provided");
-                
                 var result = await _refreshTokenRepository.RevokeAllUserTokensAsync(userId, revokedBy, reason);
                 
-                if (result)
+                if (!result)
                 {
-                    _logger.LogInformation("Successfully revoked all refresh tokens for user {UserId}", userId);
-                }
-                else
-                {
-                    _logger.LogWarning("No refresh tokens were revoked for user {UserId} (user may not have any active tokens)", userId);
+                    _logger.LogWarning("No tokens revoked for user {UserId}", userId);
                 }
                 
                 return result;
             }
             catch (ArgumentException ex)
             {
-                _logger.LogError(ex, "Invalid argument while revoking all tokens for user {UserId}: {Message}", userId, ex.Message);
-                return false; // Bad input data
+                _logger.LogError(ex, "Revoke all tokens failed (invalid argument): {UserId}", userId);
+                return false;
             }
             catch (InvalidOperationException ex)
             {
-                _logger.LogError(ex, "Invalid operation while revoking all tokens for user {UserId}: {Message}", userId, ex.Message);
-                return false; // Business rule violation
+                _logger.LogError(ex, "Revoke all tokens failed (invalid operation): {UserId}", userId);
+                return false;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Database or unexpected error while revoking all tokens for user {UserId}. Exception type: {ExceptionType}, Message: {Message}", 
-                    userId, ex.GetType().Name, ex.Message);
-                return false; // Database or unexpected error
+                _logger.LogError(ex, "Revoke all tokens failed: {UserId}", userId);
+                return false;
             }
         }
 
@@ -342,37 +292,30 @@ namespace Bazario.Auth.Services
         {
             try
             {
-                _logger.LogInformation("Starting cleanup of expired refresh tokens");
-                
                 // Delete expired tokens from database
                 var deletedCount = await _refreshTokenRepository.DeleteExpiredAsync();
                 
                 if (deletedCount > 0)
                 {
-                    _logger.LogInformation("Successfully cleaned up {DeletedCount} expired refresh tokens", deletedCount);
-                }
-                else
-                {
-                    _logger.LogDebug("No expired refresh tokens found during cleanup");
+                    _logger.LogInformation("Cleaned up {DeletedCount} expired tokens", deletedCount);
                 }
                 
                 return deletedCount;
             }
             catch (ArgumentException ex)
             {
-                _logger.LogError(ex, "Invalid argument during cleanup of expired refresh tokens: {Message}", ex.Message);
-                return 0; // Bad input data
+                _logger.LogError(ex, "Token cleanup failed (invalid argument)");
+                return 0;
             }
             catch (InvalidOperationException ex)
             {
-                _logger.LogError(ex, "Invalid operation during cleanup of expired refresh tokens: {Message}", ex.Message);
-                return 0; // Business rule violation
+                _logger.LogError(ex, "Token cleanup failed (invalid operation)");
+                return 0;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Database or unexpected error during cleanup of expired refresh tokens. Exception type: {ExceptionType}, Message: {Message}", 
-                    ex.GetType().Name, ex.Message);
-                return 0; // Database or unexpected error
+                _logger.LogError(ex, "Token cleanup failed");
+                return 0;
             }
         }
     }

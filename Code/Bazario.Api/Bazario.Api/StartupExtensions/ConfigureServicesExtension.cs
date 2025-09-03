@@ -57,9 +57,17 @@ namespace Bazario.Api.StartupExtensions
 
             // Register Core Services
             services.AddScoped<IJwtService, JwtService>();
-            services.AddScoped<IAuthService, AuthService>();
-            services.AddScoped<IRefreshTokenService, RefreshTokenService>();
             services.AddScoped<IEmailService, EmailService>();
+            
+            // Register Auth Services (Focused Services - Dependencies First)
+            services.AddScoped<IUserRegistrationService, UserRegistrationService>();
+            services.AddScoped<IUserAuthenticationService, UserAuthenticationService>();
+            services.AddScoped<IUserManagementService, UserManagementService>();
+            services.AddScoped<IPasswordRecoveryService, PasswordRecoveryService>();
+            services.AddScoped<IRefreshTokenService, RefreshTokenService>();
+            
+            // Register Coordinating Auth Service (Depends on Focused Services)
+            services.AddScoped<IAuthService, AuthService>();
 
             // Memory Cache removed - using database for refresh token storage
 

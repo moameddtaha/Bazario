@@ -47,7 +47,7 @@ namespace Bazario.Auth.Services
         {
             try
             {
-                _logger.LogInformation("Starting user registration for email: {Email} with role: {Role}", request.Email, request.Role);
+                _logger.LogInformation("User registration started: {Email} ({Role})", request.Email, request.Role);
                 
                 // Validate role
                 if (!IsValidRole(request.Role))
@@ -91,7 +91,7 @@ namespace Bazario.Auth.Services
                 // Create user response
                 var userResponse = CreateUserResponse(user, roles.ToList());
 
-                _logger.LogInformation("User registration completed successfully for email: {Email} with role: {Role}", request.Email, roleName);
+                _logger.LogInformation("User registration completed: {Email} ({Role})", request.Email, roleName);
                 
                 return AuthResponse.Success(
                     $"User registered successfully as {roleName}. Please check your email to confirm your account before logging in.",
@@ -104,7 +104,7 @@ namespace Bazario.Auth.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Registration failed unexpectedly for email: {Email}. Error: {ErrorMessage}", request.Email, ex.Message);
+                _logger.LogError(ex, "Registration failed: {Email}", request.Email);
                 return AuthResponse.Failure($"Registration failed: {ex.Message}");
             }
         }
@@ -135,11 +135,10 @@ namespace Bazario.Auth.Services
             if (!result.Succeeded)
             {
                 var errors = result.Errors.Select(e => e.Description).ToList();
-                _logger.LogError("User creation failed for email: {Email}. Errors: {Errors}", request.Email, string.Join(", ", errors));
+                _logger.LogError("User creation failed: {Email} - {Errors}", request.Email, string.Join(", ", errors));
                 return null;
             }
 
-            _logger.LogInformation("User account created successfully for email: {Email} with ID: {UserId}", request.Email, user.Id);
             return user;
         }
 
@@ -150,33 +149,28 @@ namespace Bazario.Auth.Services
                 return true;
             }
 
-            _logger.LogInformation("Role '{Role}' does not exist, creating it now", roleName);
             var roleResult = await _roleManager.CreateAsync(new ApplicationRole { Name = roleName });
             
             if (!roleResult.Succeeded)
             {
                 var roleErrors = roleResult.Errors.Select(e => e.Description).ToList();
-                _logger.LogError("Failed to create role '{Role}'. Errors: {Errors}", roleName, string.Join(", ", roleErrors));
+                _logger.LogError("Role creation failed: {Role} - {Errors}", roleName, string.Join(", ", roleErrors));
                 return false;
             }
 
-            _logger.LogInformation("Role '{Role}' created successfully", roleName);
             return true;
         }
 
         private async Task<bool> AssignRoleToUserAsync(ApplicationUser user, string roleName)
         {
-            _logger.LogInformation("Assigning role '{Role}' to user {Email}", roleName, user.Email);
-            
             var roleAssignResult = await _userManager.AddToRoleAsync(user, roleName);
             if (!roleAssignResult.Succeeded)
             {
                 var roleErrors = roleAssignResult.Errors.Select(e => e.Description).ToList();
-                _logger.LogError("Failed to assign role '{Role}' to user {Email}. Errors: {Errors}", roleName, user.Email, string.Join(", ", roleErrors));
+                _logger.LogError("Role assignment failed: {Role} to {Email} - {Errors}", roleName, user.Email, string.Join(", ", roleErrors));
                 return false;
             }
             
-            _logger.LogInformation("Role '{Role}' assigned successfully to user {Email}", roleName, user.Email);
             return true;
         }
 
@@ -205,7 +199,7 @@ namespace Bazario.Auth.Services
                 // Check if user has a valid email
                 if (string.IsNullOrWhiteSpace(user.Email))
                 {
-                    _logger.LogWarning("Cannot send confirmation email: User {UserId} has no valid email address", user.Id);
+                    _logger.LogWarning("Cannot send confirmation email: User {UserId} has no email", user.Id);
                     return;
                 }
 
@@ -221,18 +215,14 @@ namespace Bazario.Auth.Services
                     confirmationToken, 
                     confirmationUrl);
                 
-                if (emailSent)
+                if (!emailSent)
                 {
-                    _logger.LogInformation("Confirmation email sent successfully to user {Email}", user.Email);
-                }
-                else
-                {
-                    _logger.LogWarning("Failed to send confirmation email to user {UserId} at {Email}", user.Id, user.Email);
+                    _logger.LogWarning("Failed to send confirmation email: {Email}", user.Email);
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error sending confirmation email to user {UserId} at {Email}", user.Id, user.Email ?? "unknown");
+                _logger.LogError(ex, "Confirmation email failed: {Email}", user.Email ?? "unknown");
             }
         }
 
@@ -265,7 +255,7 @@ namespace Bazario.Auth.Services
             }
             catch (InvalidOperationException ex)
             {
-                _logger.LogError(ex, "Role mapping failed during registration for user {Email}: {Message}", user.Email, ex.Message);
+                _logger.LogError(ex, "Role mapping failed: {Email}", user.Email);
                 throw new BusinessRuleException("User role configuration error. Please contact support.", "RoleMappingFailed", ex);
             }
         }

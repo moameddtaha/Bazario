@@ -41,7 +41,7 @@ namespace Bazario.Auth.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting current user for ID: {UserId}", userId);
+                _logger.LogError(ex, "GetCurrentUser failed: {UserId}", userId);
                 return UserResult.Error($"Failed to retrieve user: {ex.Message}");
             }
         }
@@ -75,7 +75,7 @@ namespace Bazario.Auth.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error changing password for user ID: {UserId}", userId);
+                _logger.LogError(ex, "Password change failed: {UserId}", userId);
                 throw new AuthException("Failed to change password.", AuthException.ErrorCodes.ValidationError, ex);
             }
         }
@@ -88,7 +88,7 @@ namespace Bazario.Auth.Services
             }
             catch (InvalidOperationException ex)
             {
-                _logger.LogError(ex, "Role mapping failed when getting current user {UserId}: {Message}", user.Id, ex.Message);
+                _logger.LogError(ex, "Role mapping failed: {UserId}", user.Id);
                 throw new BusinessRuleException("User role configuration error. Please contact support.", "RoleMappingFailed", ex);
             }
         }

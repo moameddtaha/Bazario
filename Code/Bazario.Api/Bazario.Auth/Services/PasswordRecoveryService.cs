@@ -50,7 +50,7 @@ namespace Bazario.Auth.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error in forgot password process for email: {Email}", email);
+                _logger.LogError(ex, "Forgot password failed: {Email}", email);
                 throw new AuthException("Failed to process password reset request.", AuthException.ErrorCodes.ValidationError, ex);
             }
         }
@@ -84,7 +84,7 @@ namespace Bazario.Auth.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error resetting password for email: {Email}", request.Email);
+                _logger.LogError(ex, "Password reset failed: {Email}", request.Email);
                 throw new AuthException("Failed to reset password.", AuthException.ErrorCodes.ValidationError, ex);
             }
         }
@@ -96,7 +96,7 @@ namespace Bazario.Auth.Services
                 // Check if user has a valid email
                 if (string.IsNullOrWhiteSpace(user.Email))
                 {
-                    _logger.LogWarning("Cannot send password reset email: User {UserId} has no valid email address", user.Id);
+                    _logger.LogWarning("Cannot send password reset email: User {UserId} has no email", user.Id);
                     return false;
                 }
 
@@ -112,7 +112,7 @@ namespace Bazario.Auth.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error sending password reset email to user {UserId} at {Email}", user.Id, user.Email ?? "unknown");
+                _logger.LogError(ex, "Password reset email failed: {Email}", user.Email ?? "unknown");
                 return false;
             }
         }
