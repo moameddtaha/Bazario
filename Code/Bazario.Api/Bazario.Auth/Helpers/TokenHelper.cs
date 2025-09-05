@@ -31,13 +31,7 @@ namespace Bazario.Auth.Helpers
             var accessToken = _jwtService.GenerateAccessToken(user, roles);
             var refreshToken = _jwtService.GenerateRefreshToken(user);
 
-            var accessTokenExpiration = DateTime.UtcNow.AddMinutes(
-                int.Parse(_configuration["JwtSettings:AccessTokenExpirationMinutes"] ?? "60")
-            );
-
-            var refreshTokenExpiration = DateTime.UtcNow.AddDays(
-                int.Parse(_configuration["JwtSettings:RefreshTokenExpirationDays"] ?? "7")
-            );
+            var (accessTokenExpiration, refreshTokenExpiration) = GetTokenExpirationTimes();
 
             await _refreshTokenService.StoreRefreshTokenAsync(user.Id, refreshToken, accessTokenExpiration, refreshTokenExpiration);
 
