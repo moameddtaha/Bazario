@@ -17,25 +17,16 @@ namespace Bazario.Auth.Services
     public class UserRegistrationService : IUserRegistrationService
     {
         private readonly UserManager<ApplicationUser> _userManager;
-        private readonly IUserCreationService _userCreationService;
-        private readonly IRoleManagementHelper _roleManagementHelper;
-        private readonly ITokenHelper _tokenHelper;
-        private readonly IEmailHelper _emailHelper;
+        private readonly IUserRegistrationDependencies _deps;
         private readonly ILogger<UserRegistrationService> _logger;
 
         public UserRegistrationService(
             UserManager<ApplicationUser> userManager,
-            IUserCreationService userCreationService,
-            IRoleManagementHelper roleManagementHelper,
-            ITokenHelper tokenHelper,
-            IEmailHelper emailHelper,
+            IUserRegistrationDependencies deps,
             ILogger<UserRegistrationService> logger)
         {
             _userManager = userManager;
-            _userCreationService = userCreationService;
-            _roleManagementHelper = roleManagementHelper;
-            _tokenHelper = tokenHelper;
-            _emailHelper = emailHelper;
+            _deps = deps;
             _logger = logger;
         }
 
@@ -59,7 +50,7 @@ namespace Bazario.Auth.Services
                 }
 
                 // Create and save user
-                var user = await _userCreationService.CreateUserAsync(request);
+                var user = await _deps.UserCreationService.CreateUserAsync(request);
                 if (user == null)
                 {
                     throw new BusinessRuleException("Failed to create user account.", "UserCreationFailed");
@@ -67,22 +58,22 @@ namespace Bazario.Auth.Services
 
                 // Ensure role exists and assign it
                 var roleName = request.Role.ToString();
-                if (!await _roleManagementHelper.EnsureRoleExistsAsync(roleName))
+                if (!await _deps.RoleManagementHelper.EnsureRoleExistsAsync(roleName))
                 {
                     throw new BusinessRuleException($"Failed to create role '{roleName}'.", "RoleCreationFailed");
                 }
 
-                if (!await _roleManagementHelper.AssignRoleToUserAsync(user, roleName))
+                if (!await _deps.RoleManagementHelper.AssignRoleToUserAsync(user, roleName))
                 {
                     throw new BusinessRuleException($"Failed to assign role '{roleName}' to user.", "RoleAssignmentFailed");
                 }
 
                 // Generate tokens
-                var roles = await _roleManagementHelper.GetUserRolesAsync(user);
-                var (accessToken, refreshToken, accessTokenExpiration, refreshTokenExpiration) = await _tokenHelper.GenerateTokensAsync(user, roles);
+                var roles = await _deps.RoleManagementHelper.GetUserRolesAsync(user);
+                var (accessToken, refreshToken, accessTokenExpiration, refreshTokenExpiration) = await _deps.TokenHelper.GenerateTokensAsync(user, roles);
 
                 // Send confirmation email
-                await _emailHelper.SendConfirmationEmailAsync(user);
+                await _deps.EmailHelper.SendConfirmationEmailAsync(user);
 
                 // Create user response
                 var userResponse = CreateUserResponse(user, roles.ToList());

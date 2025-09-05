@@ -67,6 +67,10 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<IRoleManagementHelper, RoleManagementHelper>();
             services.AddScoped<IEmailHelper, EmailHelper>();
             
+            // Register Service Aggregators (Dependency Bundling)
+            services.AddScoped<IUserAuthenticationDependencies, UserAuthenticationDependencies>();
+            services.AddScoped<IUserRegistrationDependencies, UserRegistrationDependencies>();
+            
             // Register Auth Services (Focused Services - Dependencies First)
             services.AddScoped<IUserRegistrationService, UserRegistrationService>();
             services.AddScoped<IUserAuthenticationService, UserAuthenticationService>();

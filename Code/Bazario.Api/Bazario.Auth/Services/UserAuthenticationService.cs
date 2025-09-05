@@ -18,31 +18,19 @@ namespace Bazario.Auth.Services
     {
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly SignInManager<ApplicationUser> _signInManager;
-        private readonly ITokenHelper _tokenHelper;
-        private readonly IRoleManagementHelper _roleManagementHelper;
+        private readonly IUserAuthenticationDependencies _deps;
         private readonly ILogger<UserAuthenticationService> _logger;
-        private readonly ICustomerRepository _customerRepository;
-        private readonly ISellerRepository _sellerRepository;
-        private readonly IAdminRepository _adminRepository;
 
         public UserAuthenticationService(
             UserManager<ApplicationUser> userManager,
             SignInManager<ApplicationUser> signInManager,
-            ITokenHelper tokenHelper,
-            IRoleManagementHelper roleManagementHelper,
-            ILogger<UserAuthenticationService> logger,
-            ICustomerRepository customerRepository,
-            ISellerRepository sellerRepository,
-            IAdminRepository adminRepository)
+            IUserAuthenticationDependencies deps,
+            ILogger<UserAuthenticationService> logger)
         {
             _userManager = userManager;
             _signInManager = signInManager;
-            _tokenHelper = tokenHelper;
-            _roleManagementHelper = roleManagementHelper;
+            _deps = deps;
             _logger = logger;
-            _customerRepository = customerRepository;
-            _sellerRepository = sellerRepository;
-            _adminRepository = adminRepository;
         }
 
         public async Task<AuthResponse> LoginAsync(LoginRequest request)
@@ -76,8 +64,8 @@ namespace Bazario.Auth.Services
                 await UpdateUserLoginInfoAsync(user);
 
                 // Generate tokens
-                var roles = await _roleManagementHelper.GetUserRolesAsync(user);
-                var (accessToken, refreshToken, accessTokenExpiration, refreshTokenExpiration) = await _tokenHelper.GenerateTokensAsync(user, roles);
+                var roles = await _deps.RoleManagementHelper.GetUserRolesAsync(user);
+                var (accessToken, refreshToken, accessTokenExpiration, refreshTokenExpiration) = await _deps.TokenHelper.GenerateTokensAsync(user, roles);
 
                 // Create user response
                 var userResponse = CreateUserResponse(user, roles.ToList());
@@ -120,20 +108,20 @@ namespace Bazario.Auth.Services
         private async Task UpdateUserLoginInfoAsync(ApplicationUser user)
         {
             user.LastLoginAt = DateTime.UtcNow;
-            var roles = await _roleManagementHelper.GetUserRolesAsync(user);
+            var roles = await _deps.RoleManagementHelper.GetUserRolesAsync(user);
 
             // Update role-specific user data
             if (roles.Contains("Customer"))
             {
-                await _customerRepository.UpdateCustomerAsync(user);
+                await _deps.CustomerRepository.UpdateCustomerAsync(user);
             }
             else if (roles.Contains("Seller"))
             {
-                await _sellerRepository.UpdateSellerAsync(user);
+                await _deps.SellerRepository.UpdateSellerAsync(user);
             }
             else if (roles.Contains("Admin"))
             {
-                await _adminRepository.UpdateAdminAsync(user);
+                await _deps.AdminRepository.UpdateAdminAsync(user);
             }
         }
         
