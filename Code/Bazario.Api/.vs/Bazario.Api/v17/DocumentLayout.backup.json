@@ -3,8 +3,12 @@
   "WorkspaceRootPath": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{C1A81843-27A6-4613-8065-663283676E6B}|Bazario.Api\\Bazario.Api.csproj|d:\\mohamed taha\\private projects\\bazario\\code\\bazario.api\\bazario.api\\startupextensions\\configureservicesextension.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{C1A81843-27A6-4613-8065-663283676E6B}|Bazario.Api\\Bazario.Api.csproj|solutionrelative:bazario.api\\startupextensions\\configureservicesextension.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{8F86507F-2AF2-4748-9ED0-B97A9BB39D9B}|Bazario.Email\\Bazario.Email.csproj|d:\\mohamed taha\\private projects\\bazario\\code\\bazario.api\\bazario.email\\services\\emailtemplateservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{8F86507F-2AF2-4748-9ED0-B97A9BB39D9B}|Bazario.Email\\Bazario.Email.csproj|solutionrelative:bazario.email\\services\\emailtemplateservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{8F86507F-2AF2-4748-9ED0-B97A9BB39D9B}|Bazario.Email\\Bazario.Email.csproj|d:\\mohamed taha\\private projects\\bazario\\code\\bazario.api\\bazario.email\\bazario.email.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
+      "RelativeMoniker": "D:0:0:{8F86507F-2AF2-4748-9ED0-B97A9BB39D9B}|Bazario.Email\\Bazario.Email.csproj|solutionrelative:bazario.email\\bazario.email.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
     }
   ],
   "DocumentGroupContainers": [
@@ -14,19 +18,32 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 0,
+          "SelectedChildIndex": 1,
           "Children": [
             {
               "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "Bazario.Email",
+              "DocumentMoniker": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Email\\Bazario.Email.csproj",
+              "RelativeDocumentMoniker": "Bazario.Email\\Bazario.Email.csproj",
+              "ToolTip": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Email\\Bazario.Email.csproj",
+              "RelativeToolTip": "Bazario.Email\\Bazario.Email.csproj",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABQAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
+              "WhenOpened": "2025-09-06T04:33:01.351Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
               "DocumentIndex": 0,
-              "Title": "ConfigureServicesExtension.cs",
-              "DocumentMoniker": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Api\\StartupExtensions\\ConfigureServicesExtension.cs",
-              "RelativeDocumentMoniker": "Bazario.Api\\StartupExtensions\\ConfigureServicesExtension.cs",
-              "ToolTip": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Api\\StartupExtensions\\ConfigureServicesExtension.cs",
-              "RelativeToolTip": "Bazario.Api\\StartupExtensions\\ConfigureServicesExtension.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAkAAAAAAAAAAAAAAA==",
+              "Title": "EmailTemplateService.cs",
+              "DocumentMoniker": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Email\\Services\\EmailTemplateService.cs",
+              "RelativeDocumentMoniker": "Bazario.Email\\Services\\EmailTemplateService.cs",
+              "ToolTip": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Email\\Services\\EmailTemplateService.cs",
+              "RelativeToolTip": "Bazario.Email\\Services\\EmailTemplateService.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-08-31T04:40:13.39Z",
+              "WhenOpened": "2025-09-06T04:23:40.191Z",
               "EditorCaption": ""
             }
           ]

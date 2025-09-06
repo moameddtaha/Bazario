@@ -12,6 +12,7 @@ namespace Bazario.Email.Models
         public bool EnableSsl { get; set; }
         public string FromEmail { get; set; } = string.Empty;
         public string FromName { get; set; } = string.Empty;
+        public string TemplatesPath { get; set; } = string.Empty;
         public int TimeoutSeconds { get; set; } = 30;
         public bool UseDefaultCredentials { get; set; } = false;
     }

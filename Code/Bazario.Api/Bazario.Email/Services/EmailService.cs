@@ -20,15 +20,18 @@ namespace Bazario.Email.Services
         private readonly ILogger<EmailService> _logger;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly EmailSettings _emailSettings;
+        private readonly EmailTemplateService _templateService;
 
         public EmailService(
             ILogger<EmailService> logger, 
             UserManager<ApplicationUser> userManager,
-            IOptions<EmailSettings> emailSettings)
+            IOptions<EmailSettings> emailSettings,
+            EmailTemplateService templateService)
         {
             _logger = logger;
             _userManager = userManager;
             _emailSettings = emailSettings.Value;
+            _templateService = templateService;
         }
 
         public async Task<bool> SendPasswordResetEmailAsync(string toEmail, string userName, string resetToken, string resetUrl)
@@ -36,7 +39,7 @@ namespace Bazario.Email.Services
             try
             {
                 var subject = "Password Reset Request - Bazario";
-                var body = GeneratePasswordResetEmailBody(userName, resetUrl, resetToken);
+                var body = await _templateService.RenderPasswordResetEmailAsync(userName, resetUrl, resetToken);
                 
                 var result = await SendEmailAsync(toEmail, subject, body);
                 
@@ -63,7 +66,7 @@ namespace Bazario.Email.Services
             try
             {
                 var subject = "Confirm Your Email Address - Bazario";
-                var body = GenerateEmailConfirmationBody(userName, confirmationUrl, confirmationToken);
+                var body = await _templateService.RenderEmailConfirmationAsync(userName, confirmationUrl, confirmationToken);
                 
                 var result = await SendEmailAsync(toEmail, subject, body);
                 
@@ -171,114 +174,5 @@ namespace Bazario.Email.Services
             }
         }
 
-        /// <summary>
-        /// Generates HTML body for password reset email
-        /// </summary>
-        private string GeneratePasswordResetEmailBody(string userName, string resetUrl, string resetToken)
-        {
-            return $@"
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset='utf-8'>
-    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-    <title>Password Reset Request</title>
-    <style>
-        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background-color: #007bff; color: white; padding: 20px; text-align: center; }}
-        .content {{ padding: 20px; background-color: #f8f9fa; }}
-        .button {{ display: inline-block; padding: 12px 24px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }}
-        .footer {{ text-align: center; padding: 20px; color: #666; font-size: 14px; }}
-        .warning {{ background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0; }}
-    </style>
-</head>
-<body>
-    <div class='container'>
-        <div class='header'>
-            <h1>Bazario</h1>
-            <h2>Password Reset Request</h2>
-        </div>
-        <div class='content'>
-            <p>Hello {userName},</p>
-            <p>You have requested to reset your password. Please click the button below to reset your password:</p>
-            
-            <div style='text-align: center;'>
-                <a href='{resetUrl}?token={resetToken}' class='button'>Reset Password</a>
-            </div>
-            
-            <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
-            <p style='word-break: break-all;'>{resetUrl}?token={resetToken}</p>
-            
-            <div class='warning'>
-                <strong>Important:</strong> This link will expire in 1 hour for security reasons.
-            </div>
-            
-            <p>If you didn't request this password reset, please ignore this email. Your password will remain unchanged.</p>
-            
-            <p>Best regards,<br>The Bazario Team</p>
-        </div>
-        <div class='footer'>
-            <p>This is an automated email. Please do not reply to this message.</p>
-        </div>
-    </div>
-</body>
-</html>";
-        }
-
-        /// <summary>
-        /// Generates HTML body for email confirmation
-        /// </summary>
-        private string GenerateEmailConfirmationBody(string userName, string confirmationUrl, string confirmationToken)
-        {
-            return $@"
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset='utf-8'>
-    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-    <title>Confirm Your Email Address</title>
-    <style>
-        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background-color: #28a745; color: white; padding: 20px; text-align: center; }}
-        .content {{ padding: 20px; background-color: #f8f9fa; }}
-        .button {{ display: inline-block; padding: 12px 24px; background-color: #28a745; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }}
-        .footer {{ text-align: center; padding: 20px; color: #666; font-size: 14px; }}
-        .info {{ background-color: #d1ecf1; border: 1px solid #bee5eb; padding: 15px; border-radius: 5px; margin: 20px 0; }}
-    </style>
-</head>
-<body>
-    <div class='container'>
-        <div class='header'>
-            <h1>Bazario</h1>
-            <h2>Email Confirmation</h2>
-        </div>
-        <div class='content'>
-            <p>Hello {userName},</p>
-            <p>Welcome to Bazario! Please confirm your email address by clicking the button below:</p>
-            
-            <div style='text-align: center;'>
-                <a href='{confirmationUrl}?token={confirmationToken}' class='button'>Confirm Email</a>
-            </div>
-            
-            <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
-            <p style='word-break: break-all;'>{confirmationUrl}?token={confirmationToken}</p>
-            
-            <div class='info'>
-                <strong>Note:</strong> This link will expire in 24 hours.
-            </div>
-            
-            <p>Once confirmed, you'll have full access to your Bazario account.</p>
-            
-            <p>Best regards,<br>The Bazario Team</p>
-        </div>
-        <div class='footer'>
-            <p>This is an automated email. Please do not reply to this message.</p>
-        </div>
-    </div>
-</body>
-</html>";
-        }
     }
 }

@@ -2,6 +2,7 @@
 using Bazario.Infrastructure.DbContext.Configurations;
 using Bazario.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -59,6 +60,23 @@ namespace Bazario.Api.StartupExtensions
 
             // Register Core Services
             services.AddScoped<IJwtService, JwtService>();
+            
+            // Configure EmailSettings
+            services.Configure<EmailSettings>(configuration.GetSection("EmailSettings"));
+            
+            // Register Email Services with factory pattern
+            services.AddScoped<EmailTemplateService>(sp =>
+            {
+                var logger = sp.GetRequiredService<ILogger<EmailTemplateService>>();
+                var env = sp.GetRequiredService<IWebHostEnvironment>();
+                var emailSettings = sp.GetRequiredService<IOptions<EmailSettings>>();
+                
+                var templatesPath = !string.IsNullOrEmpty(emailSettings.Value.TemplatesPath)
+                    ? Path.Combine(env.ContentRootPath, emailSettings.Value.TemplatesPath)
+                    : Path.Combine(env.ContentRootPath, "..", "Bazario.Email", "Templates");
+                
+                return new EmailTemplateService(logger, templatesPath);
+            });
             services.AddScoped<IEmailService, EmailService>();
             
             // Register Helper Classes (Business Logic Extraction)
