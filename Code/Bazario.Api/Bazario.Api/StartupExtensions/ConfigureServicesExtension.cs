@@ -65,7 +65,7 @@ namespace Bazario.Api.StartupExtensions
             services.Configure<EmailSettings>(configuration.GetSection("EmailSettings"));
             
             // Register Email Services with factory pattern
-            services.AddScoped<EmailTemplateService>(sp =>
+            services.AddScoped<IEmailTemplateService>(sp =>
             {
                 var logger = sp.GetRequiredService<ILogger<EmailTemplateService>>();
                 var env = sp.GetRequiredService<IWebHostEnvironment>();
@@ -78,7 +78,8 @@ namespace Bazario.Api.StartupExtensions
                 return new EmailTemplateService(logger, templatesPath);
             });
             services.AddScoped<IEmailService, EmailService>();
-            
+            services.AddScoped<IEmailSender, EmailSender>();
+
             // Register Helper Classes (Business Logic Extraction)
             services.AddScoped<ITokenHelper, TokenHelper>();
             services.AddScoped<IUserCreationService, UserCreationService>();

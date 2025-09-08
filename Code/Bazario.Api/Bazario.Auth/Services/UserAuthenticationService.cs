@@ -65,7 +65,10 @@ namespace Bazario.Auth.Services
 
                 // Generate tokens
                 var roles = await _deps.RoleManagementHelper.GetUserRolesAsync(user);
-                var (accessToken, refreshToken, accessTokenExpiration, refreshTokenExpiration) = await _deps.TokenHelper.GenerateTokensAsync(user, roles);
+                var (accessToken, refreshToken, accessTokenExpiration, refreshTokenExpiration) = _deps.TokenHelper.GenerateTokens(user, roles);
+                
+                // Store refresh token
+                await _deps.RefreshTokenService.StoreRefreshTokenAsync(user.Id, refreshToken, accessTokenExpiration, refreshTokenExpiration);
 
                 // Create user response
                 var userResponse = CreateUserResponse(user, roles.ToList());

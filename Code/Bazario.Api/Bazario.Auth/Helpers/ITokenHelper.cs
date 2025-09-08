@@ -8,9 +8,9 @@ namespace Bazario.Auth.Helpers
     public interface ITokenHelper
     {
         /// <summary>
-        /// Generates access and refresh tokens for a user
+        /// Generates access and refresh tokens for a user (without storing refresh token)
         /// </summary>
-        Task<(string accessToken, string refreshToken, DateTime accessTokenExpiration, DateTime refreshTokenExpiration)> GenerateTokensAsync(ApplicationUser user, IList<string> roles);
+        (string accessToken, string refreshToken, DateTime accessTokenExpiration, DateTime refreshTokenExpiration) GenerateTokens(ApplicationUser user, IList<string> roles);
 
         /// <summary>
         /// Gets token expiration times from configuration

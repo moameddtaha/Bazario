@@ -5,6 +5,7 @@ using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Helpers;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 using Bazario.Auth.ServiceContracts;
 using Bazario.Auth.Domain.Entities;
 using Bazario.Auth.Domain.RepositoryContracts;
@@ -19,23 +20,26 @@ namespace Bazario.Auth.Services
     {
         private readonly IRefreshTokenRepository _refreshTokenRepository;
         private readonly UserManager<ApplicationUser> _userManager;
-        private readonly ITokenHelper _tokenHelper;
+        private readonly IJwtService _jwtService;
         private readonly IRoleManagementHelper _roleManagementHelper;
         private readonly ILogger<RefreshTokenService> _logger;
+        private readonly IConfiguration _configuration;
 
 
         public RefreshTokenService(
             IRefreshTokenRepository refreshTokenRepository,
             UserManager<ApplicationUser> userManager,
-            ITokenHelper tokenHelper,
+            IJwtService jwtService,
             IRoleManagementHelper roleManagementHelper,
-            ILogger<RefreshTokenService> logger)
+            ILogger<RefreshTokenService> logger,
+            IConfiguration configuration)
         {
             _refreshTokenRepository = refreshTokenRepository;
             _userManager = userManager;
-            _tokenHelper = tokenHelper;
+            _jwtService = jwtService;
             _roleManagementHelper = roleManagementHelper;
             _logger = logger;
+            _configuration = configuration;
         }
 
         public async Task<bool> StoreRefreshTokenAsync(Guid userId, string refreshToken, DateTime accessTokenExpiresAt, DateTime refreshTokenExpiresAt)
@@ -119,9 +123,9 @@ namespace Bazario.Auth.Services
                     return AuthResponse.Failure("Account is locked.");
                 }
 
-                // Generate new tokens using TokenHelper
+                // Generate new tokens
                 var roles = await _roleManagementHelper.GetUserRolesAsync(user);
-                var (newAccessToken, newRefreshToken, accessTokenExpiration, refreshTokenExpiration) = await _tokenHelper.GenerateTokensAsync(user, roles);
+                var (newAccessToken, newRefreshToken, accessTokenExpiration, refreshTokenExpiration) = GenerateTokens(user, roles);
                 
                 // Store the new refresh token
                 await StoreRefreshTokenAsync(user.Id, newRefreshToken, accessTokenExpiration, refreshTokenExpiration);
@@ -236,6 +240,25 @@ namespace Bazario.Auth.Services
                 _logger.LogError(ex, "Token cleanup failed");
                 return 0;
             }
+        }
+
+        /// <summary>
+        /// Generates access and refresh tokens for a user
+        /// </summary>
+        private (string accessToken, string refreshToken, DateTime accessTokenExpiration, DateTime refreshTokenExpiration) GenerateTokens(ApplicationUser user, IList<string> roles)
+        {
+            var accessToken = _jwtService.GenerateAccessToken(user, roles);
+            var refreshToken = _jwtService.GenerateRefreshToken(user);
+
+            var accessTokenExpiration = DateTime.UtcNow.AddMinutes(
+                int.Parse(_configuration["JwtSettings:AccessTokenExpirationMinutes"] ?? "60")
+            );
+
+            var refreshTokenExpiration = DateTime.UtcNow.AddDays(
+                int.Parse(_configuration["JwtSettings:RefreshTokenExpirationDays"] ?? "7")
+            );
+
+            return (accessToken, refreshToken, accessTokenExpiration, refreshTokenExpiration);
         }
     }
 }

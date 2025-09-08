@@ -32,5 +32,10 @@ namespace Bazario.Auth.ServiceContracts
         /// Repository for admin-specific operations
         /// </summary>
         IAdminRepository AdminRepository { get; }
+        
+        /// <summary>
+        /// Service for refresh token operations
+        /// </summary>
+        IRefreshTokenService RefreshTokenService { get; }
     }
 }

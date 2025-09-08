@@ -12,17 +12,20 @@ namespace Bazario.Auth.Services
         public IRoleManagementHelper RoleManagementHelper { get; }
         public ITokenHelper TokenHelper { get; }
         public IEmailHelper EmailHelper { get; }
+        public IRefreshTokenService RefreshTokenService { get; }
 
         public UserRegistrationDependencies(
             IUserCreationService userCreationService,
             IRoleManagementHelper roleManagementHelper,
             ITokenHelper tokenHelper,
-            IEmailHelper emailHelper)
+            IEmailHelper emailHelper,
+            IRefreshTokenService refreshTokenService)
         {
             UserCreationService = userCreationService;
             RoleManagementHelper = roleManagementHelper;
             TokenHelper = tokenHelper;
             EmailHelper = emailHelper;
+            RefreshTokenService = refreshTokenService;
         }
     }
 }

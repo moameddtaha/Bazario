@@ -26,5 +26,10 @@ namespace Bazario.Auth.ServiceContracts
         /// Helper for email operations
         /// </summary>
         IEmailHelper EmailHelper { get; }
+        
+        /// <summary>
+        /// Service for refresh token operations
+        /// </summary>
+        IRefreshTokenService RefreshTokenService { get; }
     }
 }

@@ -10,30 +10,25 @@ namespace Bazario.Auth.Helpers
     public class TokenHelper : ITokenHelper
     {
         private readonly IJwtService _jwtService;
-        private readonly IRefreshTokenService _refreshTokenService;
         private readonly IConfiguration _configuration;
 
         public TokenHelper(
             IJwtService jwtService,
-            IRefreshTokenService refreshTokenService,
             IConfiguration configuration)
         {
             _jwtService = jwtService;
-            _refreshTokenService = refreshTokenService;
             _configuration = configuration;
         }
 
         /// <summary>
-        /// Generates access and refresh tokens for a user
+        /// Generates access and refresh tokens for a user (without storing refresh token)
         /// </summary>
-        public async Task<(string accessToken, string refreshToken, DateTime accessTokenExpiration, DateTime refreshTokenExpiration)> GenerateTokensAsync(ApplicationUser user, IList<string> roles)
+        public (string accessToken, string refreshToken, DateTime accessTokenExpiration, DateTime refreshTokenExpiration) GenerateTokens(ApplicationUser user, IList<string> roles)
         {
             var accessToken = _jwtService.GenerateAccessToken(user, roles);
             var refreshToken = _jwtService.GenerateRefreshToken(user);
 
             var (accessTokenExpiration, refreshTokenExpiration) = GetTokenExpirationTimes();
-
-            await _refreshTokenService.StoreRefreshTokenAsync(user.Id, refreshToken, accessTokenExpiration, refreshTokenExpiration);
 
             return (accessToken, refreshToken, accessTokenExpiration, refreshTokenExpiration);
         }

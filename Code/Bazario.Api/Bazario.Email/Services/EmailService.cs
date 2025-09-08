@@ -3,7 +3,6 @@ using Bazario.Core.Domain.IdentityEntities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using MailKit.Net.Smtp;
 using MailKit.Security;
 using MimeKit;
 using MimeKit.Text;
@@ -19,19 +18,19 @@ namespace Bazario.Email.Services
     {
         private readonly ILogger<EmailService> _logger;
         private readonly UserManager<ApplicationUser> _userManager;
-        private readonly EmailSettings _emailSettings;
-        private readonly EmailTemplateService _templateService;
+        private readonly IEmailTemplateService _templateService;
+        private readonly IEmailSender _emailSender;
 
         public EmailService(
             ILogger<EmailService> logger, 
             UserManager<ApplicationUser> userManager,
-            IOptions<EmailSettings> emailSettings,
-            EmailTemplateService templateService)
+            IEmailTemplateService templateService,
+            IEmailSender emailSender)
         {
             _logger = logger;
             _userManager = userManager;
-            _emailSettings = emailSettings.Value;
             _templateService = templateService;
+            _emailSender = emailSender;
         }
 
         public async Task<bool> SendPasswordResetEmailAsync(string toEmail, string userName, string resetToken, string resetUrl)
@@ -41,7 +40,7 @@ namespace Bazario.Email.Services
                 var subject = "Password Reset Request - Bazario";
                 var body = await _templateService.RenderPasswordResetEmailAsync(userName, resetUrl, resetToken);
                 
-                var result = await SendEmailAsync(toEmail, subject, body);
+                var result = await _emailSender.SendEmailAsync(toEmail, subject, body);
                 
                 if (result)
                 {
@@ -68,7 +67,7 @@ namespace Bazario.Email.Services
                 var subject = "Confirm Your Email Address - Bazario";
                 var body = await _templateService.RenderEmailConfirmationAsync(userName, confirmationUrl, confirmationToken);
                 
-                var result = await SendEmailAsync(toEmail, subject, body);
+                var result = await _emailSender.SendEmailAsync(toEmail, subject, body);
                 
                 if (result)
                 {
@@ -121,58 +120,5 @@ namespace Bazario.Email.Services
                 return false;
             }
         }
-
-        /// <summary>
-        /// Sends an email using SMTP
-        /// </summary>
-        private async Task<bool> SendEmailAsync(string toEmail, string subject, string body)
-        {
-            try
-            {
-                // Validate email settings
-                if (string.IsNullOrEmpty(_emailSettings.SmtpServer) || 
-                    string.IsNullOrEmpty(_emailSettings.Username) || 
-                    string.IsNullOrEmpty(_emailSettings.Password))
-                {
-                    _logger.LogError("Email settings are not properly configured");
-                    return false;
-                }
-
-                var email = new MimeMessage();
-                email.From.Add(new MailboxAddress(_emailSettings.FromName, _emailSettings.FromEmail));
-                email.To.Add(new MailboxAddress("", toEmail));
-                email.Subject = subject;
-
-                // Create HTML body
-                email.Body = new TextPart(TextFormat.Html)
-                {
-                    Text = body
-                };
-
-                using var smtp = new SmtpClient();
-                
-                // Configure SMTP client
-                await smtp.ConnectAsync(
-                    _emailSettings.SmtpServer, 
-                    _emailSettings.SmtpPort, 
-                    _emailSettings.EnableSsl ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls
-                );
-
-                // Authenticate
-                await smtp.AuthenticateAsync(_emailSettings.Username, _emailSettings.Password);
-
-                // Send email
-                await smtp.SendAsync(email);
-                await smtp.DisconnectAsync(true);
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to send email to {Email} via SMTP", toEmail);
-                return false;
-            }
-        }
-
     }
 }

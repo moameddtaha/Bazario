@@ -3,12 +3,20 @@
   "WorkspaceRootPath": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\",
   "Documents": [
     {
+      "AbsoluteMoniker": "D:0:0:{36F1E41E-721B-439F-BA3E-2CCC4BD303BD}|Bazario.Email.ServiceTests\\Bazario.Email.ServiceTests.csproj|d:\\mohamed taha\\private projects\\bazario\\code\\bazario.api\\bazario.email.servicetests\\emailservicetest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{36F1E41E-721B-439F-BA3E-2CCC4BD303BD}|Bazario.Email.ServiceTests\\Bazario.Email.ServiceTests.csproj|solutionrelative:bazario.email.servicetests\\emailservicetest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{8F86507F-2AF2-4748-9ED0-B97A9BB39D9B}|Bazario.Email\\Bazario.Email.csproj|d:\\mohamed taha\\private projects\\bazario\\code\\bazario.api\\bazario.email\\services\\emailservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{8F86507F-2AF2-4748-9ED0-B97A9BB39D9B}|Bazario.Email\\Bazario.Email.csproj|solutionrelative:bazario.email\\services\\emailservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{8F86507F-2AF2-4748-9ED0-B97A9BB39D9B}|Bazario.Email\\Bazario.Email.csproj|d:\\mohamed taha\\private projects\\bazario\\code\\bazario.api\\bazario.email\\services\\emailtemplateservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{8F86507F-2AF2-4748-9ED0-B97A9BB39D9B}|Bazario.Email\\Bazario.Email.csproj|solutionrelative:bazario.email\\services\\emailtemplateservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{8F86507F-2AF2-4748-9ED0-B97A9BB39D9B}|Bazario.Email\\Bazario.Email.csproj|d:\\mohamed taha\\private projects\\bazario\\code\\bazario.api\\bazario.email\\bazario.email.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
-      "RelativeMoniker": "D:0:0:{8F86507F-2AF2-4748-9ED0-B97A9BB39D9B}|Bazario.Email\\Bazario.Email.csproj|solutionrelative:bazario.email\\bazario.email.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
+      "AbsoluteMoniker": "D:0:0:{8F86507F-2AF2-4748-9ED0-B97A9BB39D9B}|Bazario.Email\\Bazario.Email.csproj|d:\\mohamed taha\\private projects\\bazario\\code\\bazario.api\\bazario.email\\services\\emailsender.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{8F86507F-2AF2-4748-9ED0-B97A9BB39D9B}|Bazario.Email\\Bazario.Email.csproj|solutionrelative:bazario.email\\services\\emailsender.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     }
   ],
   "DocumentGroupContainers": [
@@ -18,31 +26,61 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 1,
+          "SelectedChildIndex": 0,
           "Children": [
             {
               "$type": "Document",
-              "DocumentIndex": 1,
-              "Title": "Bazario.Email.csproj",
-              "DocumentMoniker": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Email\\Bazario.Email.csproj",
-              "RelativeDocumentMoniker": "Bazario.Email\\Bazario.Email.csproj",
-              "ToolTip": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Email\\Bazario.Email.csproj",
-              "RelativeToolTip": "Bazario.Email\\Bazario.Email.csproj",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAABQAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
-              "WhenOpened": "2025-09-06T04:33:01.351Z"
+              "DocumentIndex": 0,
+              "Title": "EmailServiceTest.cs",
+              "DocumentMoniker": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Email.ServiceTests\\EmailServiceTest.cs",
+              "RelativeDocumentMoniker": "Bazario.Email.ServiceTests\\EmailServiceTest.cs",
+              "ToolTip": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Email.ServiceTests\\EmailServiceTest.cs",
+              "RelativeToolTip": "Bazario.Email.ServiceTests\\EmailServiceTest.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAFMAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-09-07T05:10:36.803Z",
+              "IsPinned": true,
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 1,
+              "Title": "EmailService.cs",
+              "DocumentMoniker": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Email\\Services\\EmailService.cs",
+              "RelativeDocumentMoniker": "Bazario.Email\\Services\\EmailService.cs",
+              "ToolTip": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Email\\Services\\EmailService.cs",
+              "RelativeToolTip": "Bazario.Email\\Services\\EmailService.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABYAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-09-07T05:11:47.894Z",
+              "IsPinned": true,
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
               "Title": "EmailTemplateService.cs",
               "DocumentMoniker": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Email\\Services\\EmailTemplateService.cs",
               "RelativeDocumentMoniker": "Bazario.Email\\Services\\EmailTemplateService.cs",
               "ToolTip": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Email\\Services\\EmailTemplateService.cs",
               "RelativeToolTip": "Bazario.Email\\Services\\EmailTemplateService.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABIAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-06T04:23:40.191Z",
+              "WhenOpened": "2025-09-07T14:20:47.389Z",
+              "IsPinned": true,
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "EmailSender.cs",
+              "DocumentMoniker": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Email\\Services\\EmailSender.cs",
+              "RelativeDocumentMoniker": "Bazario.Email\\Services\\EmailSender.cs",
+              "ToolTip": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Email\\Services\\EmailSender.cs",
+              "RelativeToolTip": "Bazario.Email\\Services\\EmailSender.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABoAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-09-07T23:35:04.162Z",
               "EditorCaption": ""
             }
           ]

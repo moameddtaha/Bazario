@@ -14,19 +14,22 @@ namespace Bazario.Auth.Services
         public ICustomerRepository CustomerRepository { get; }
         public ISellerRepository SellerRepository { get; }
         public IAdminRepository AdminRepository { get; }
+        public IRefreshTokenService RefreshTokenService { get; }
 
         public UserAuthenticationDependencies(
             ITokenHelper tokenHelper,
             IRoleManagementHelper roleManagementHelper,
             ICustomerRepository customerRepository,
             ISellerRepository sellerRepository,
-            IAdminRepository adminRepository)
+            IAdminRepository adminRepository,
+            IRefreshTokenService refreshTokenService)
         {
             TokenHelper = tokenHelper;
             RoleManagementHelper = roleManagementHelper;
             CustomerRepository = customerRepository;
             SellerRepository = sellerRepository;
             AdminRepository = adminRepository;
+            RefreshTokenService = refreshTokenService;
         }
     }
 }
