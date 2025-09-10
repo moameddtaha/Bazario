@@ -37,6 +37,15 @@ namespace Bazario.Email.Services
         {
             try
             {
+                if (string.IsNullOrWhiteSpace(toEmail) || 
+                    string.IsNullOrWhiteSpace(userName) ||
+                    string.IsNullOrWhiteSpace(resetToken) ||
+                    string.IsNullOrWhiteSpace(resetUrl))
+                {
+                    _logger.LogWarning("Invalid parameters for SendPasswordResetEmailAsync");
+                    return false;
+                }
+
                 var subject = "Password Reset Request - Bazario";
                 var body = await _templateService.RenderPasswordResetEmailAsync(userName, resetUrl, resetToken);
                 
