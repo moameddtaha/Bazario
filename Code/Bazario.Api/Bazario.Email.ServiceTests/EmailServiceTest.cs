@@ -225,12 +225,34 @@ namespace Bazario.Email.ServiceTests
         }
 
         [Fact]
-        public async Task SendEmailConfirmationAsync_WhenExceptionThrown_ReturnsFalse()
+        public async Task SendEmailConfirmationAsync_WhenTemplateServiceThrowsException_ReturnsFalse()
         {
             // Arrange
             _templateServiceMock
                 .Setup(t => t.RenderEmailConfirmationAsync(TestUserName, TestUrl, TestToken))
                 .ThrowsAsync(new Exception("Template rendering failed"));
+
+            var emailService = CreateEmailService();
+
+            // Act
+            var result = await emailService.SendEmailConfirmationAsync(TestEmail, TestUserName, TestToken, TestUrl);
+
+            // Assert
+            Assert.False(result);
+        }
+        
+        [Fact]
+        public async Task SendEmailConfirmationAsync_WhenEmailSenderThrowsException_ReturnsFalse()
+        {
+            // Arrange
+            _templateServiceMock
+                .Setup(t => t.RenderEmailConfirmationAsync(TestUserName, TestUrl, TestToken))
+                .ReturnsAsync(TestHtmlBody);
+
+            var emailSenderMock = new Mock<IEmailSender>();
+            emailSenderMock
+                .Setup(es => es.SendEmailAsync(TestEmail, It.IsAny<string>(), It.IsAny<string>()))
+                .ThrowsAsync(new Exception("SMTP server error"));
 
             var emailService = CreateEmailService();
 
