@@ -249,8 +249,7 @@ namespace Bazario.Email.ServiceTests
                 .Setup(t => t.RenderEmailConfirmationAsync(TestUserName, TestUrl, TestToken))
                 .ReturnsAsync(TestHtmlBody);
 
-            var emailSenderMock = new Mock<IEmailSender>();
-            emailSenderMock
+            _emailSenderMock
                 .Setup(es => es.SendEmailAsync(TestEmail, It.IsAny<string>(), It.IsAny<string>()))
                 .ThrowsAsync(new Exception("SMTP server error"));
 
@@ -258,6 +257,27 @@ namespace Bazario.Email.ServiceTests
 
             // Act
             var result = await emailService.SendEmailConfirmationAsync(TestEmail, TestUserName, TestToken, TestUrl);
+
+            // Assert
+            Assert.False(result);
+        }
+
+        [Theory]
+        [InlineData(null, TestUserName, TestToken, TestUrl)]
+        [InlineData("", TestUserName, TestToken, TestUrl)]
+        [InlineData(TestEmail, null, TestToken, TestUrl)]
+        [InlineData(TestEmail, "", TestToken, TestUrl)]
+        [InlineData(TestEmail, TestUserName, null, TestUrl)]
+        [InlineData(TestEmail, TestUserName, "", TestUrl)]
+        [InlineData(TestEmail, TestUserName, TestToken, null)]
+        [InlineData(TestEmail, TestUserName, TestToken, "")]
+        public async Task SendEmailConfirmationAsync_WithInvalidParameters_ReturnsFalse(string email, string userName, string token, string url)
+        {
+            // Arrange
+            var emailService = CreateEmailService();
+
+            // Act
+            var result = await emailService.SendEmailConfirmationAsync(email, userName, token, url);
 
             // Assert
             Assert.False(result);
