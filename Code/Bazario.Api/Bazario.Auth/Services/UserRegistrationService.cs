@@ -34,6 +34,12 @@ namespace Bazario.Auth.Services
         {
             try
             {
+                // Validate request is not null
+                if (request == null)
+                {
+                    throw new ArgumentNullException(nameof(request), "Registration request cannot be null.");
+                }
+
                 _logger.LogInformation("User registration started: {Email} ({Role})", request.Email, request.Role);
                 
                 // Validate role
@@ -94,7 +100,9 @@ namespace Bazario.Auth.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Registration failed: {Email}", request.Email);
+                var email = request?.Email ?? "N/A"; // Safe fallback
+                _logger.LogError(ex, "Registration failed: {Email}", email);
+
                 return AuthResponse.Failure($"Registration failed: {ex.Message}");
             }
         }

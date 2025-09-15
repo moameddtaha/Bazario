@@ -18,7 +18,7 @@ namespace Bazario.Auth.Services
 
         public JwtService(IConfiguration configuration)
         {
-            _configuration = configuration;
+            _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration), "Configuration cannot be null.");
         }
 
         /// <summary>
@@ -26,8 +26,20 @@ namespace Bazario.Auth.Services
         /// </summary>
         public string GenerateAccessToken(ApplicationUser user, IList<string> roles)
         {
+            if (user == null)
+            {
+                throw new ArgumentNullException(nameof(user), "User cannot be null.");
+            }
+
             var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.UTF8.GetBytes(_configuration["JwtSettings:SecretKey"] ?? "");
+            var secretKey = _configuration["JwtSettings:SecretKey"];
+            
+            if (string.IsNullOrWhiteSpace(secretKey))
+            {
+                throw new ArgumentException("JWT SecretKey cannot be null or empty.", nameof(_configuration));
+            }
+            
+            var key = Encoding.UTF8.GetBytes(secretKey);
 
             var claims = new List<Claim>
             {
@@ -43,9 +55,15 @@ namespace Bazario.Auth.Services
             };
 
             // Add roles to claims
-            foreach (var role in roles)
+            if (roles != null)
             {
-                claims.Add(new Claim(ClaimTypes.Role, role));
+                foreach (var role in roles)
+                {
+                    if (!string.IsNullOrWhiteSpace(role))
+                    {
+                        claims.Add(new Claim(ClaimTypes.Role, role));
+                    }
+                }
             }
 
             var tokenDescriptor = new SecurityTokenDescriptor
@@ -71,6 +89,11 @@ namespace Bazario.Auth.Services
         /// </summary>
         public string GenerateRefreshToken(ApplicationUser user)
         {
+            if (user == null)
+            {
+                throw new ArgumentNullException(nameof(user), "User cannot be null.");
+            }
+
             var randomNumber = new byte[64];
             using var rng = RandomNumberGenerator.Create();
             rng.GetBytes(randomNumber);

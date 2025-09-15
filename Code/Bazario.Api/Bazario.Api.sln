@@ -19,6 +19,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{29383622
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Bazario.Email.ServiceTests", "Bazario.Email.ServiceTests\Bazario.Email.ServiceTests.csproj", "{36F1E41E-721B-439F-BA3E-2CCC4BD303BD}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Bazario.Auth.ServiceTests", "Bazario.Auth.ServiceTests\Bazario.Auth.ServiceTests.csproj", "{6B99DDD7-6A3D-4A92-8317-88E57E4C7B72}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -49,6 +51,10 @@ Global
 		{36F1E41E-721B-439F-BA3E-2CCC4BD303BD}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{36F1E41E-721B-439F-BA3E-2CCC4BD303BD}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{36F1E41E-721B-439F-BA3E-2CCC4BD303BD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6B99DDD7-6A3D-4A92-8317-88E57E4C7B72}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6B99DDD7-6A3D-4A92-8317-88E57E4C7B72}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6B99DDD7-6A3D-4A92-8317-88E57E4C7B72}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6B99DDD7-6A3D-4A92-8317-88E57E4C7B72}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -60,6 +66,7 @@ Global
 		{31A815B3-0DE0-4A09-9539-C0AD781177E3} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 		{8F86507F-2AF2-4748-9ED0-B97A9BB39D9B} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 		{36F1E41E-721B-439F-BA3E-2CCC4BD303BD} = {29383622-8442-431F-A7DC-538382742FEE}
+		{6B99DDD7-6A3D-4A92-8317-88E57E4C7B72} = {29383622-8442-431F-A7DC-538382742FEE}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {972A8496-6189-4BF2-B72D-B0215E52E8A5}

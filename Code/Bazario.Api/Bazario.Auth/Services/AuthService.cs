@@ -27,11 +27,19 @@ namespace Bazario.Auth.Services
 
         public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
         {
+            if (request == null)
+            {
+                throw new ArgumentNullException(nameof(request), "Registration request cannot be null.");
+            }
             return await _userRegistrationService.RegisterAsync(request);
         }
 
         public async Task<AuthResponse> LoginAsync(LoginRequest request)
         {
+            if (request == null)
+            {
+                throw new ArgumentNullException(nameof(request), "Login request cannot be null.");
+            }
             return await _userAuthenticationService.LoginAsync(request);
         }
 
@@ -42,6 +50,10 @@ namespace Bazario.Auth.Services
 
         public async Task<bool> ChangePasswordAsync(Guid userId, ChangePasswordRequest request)
         {
+            if (request == null)
+            {
+                throw new ArgumentNullException(nameof(request), "Change password request cannot be null.");
+            }
             return await _userManagementService.ChangePasswordAsync(userId, request);
         }
 
@@ -52,6 +64,10 @@ namespace Bazario.Auth.Services
 
         public async Task<bool> ResetPasswordAsync(ResetPasswordRequest request)
         {
+            if (request == null)
+            {
+                throw new ArgumentNullException(nameof(request), "Reset password request cannot be null.");
+            }
             return await _passwordRecoveryService.ResetPasswordAsync(request);
         }
     }

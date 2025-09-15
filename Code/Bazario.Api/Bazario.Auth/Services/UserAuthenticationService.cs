@@ -37,6 +37,12 @@ namespace Bazario.Auth.Services
         {
             try
             {
+                // Validate request is not null
+                if (request == null)
+                {
+                    throw new ArgumentNullException(nameof(request), "Login request cannot be null.");
+                }
+
                 // Find and validate user
                 var user = await FindAndValidateUserAsync(request);
                 if (user == null)
@@ -84,7 +90,8 @@ namespace Bazario.Auth.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Login failed: {Email}", request.Email);
+                var email = request?.Email ?? "N/A"; // Safe fallback for null request
+                _logger.LogError(ex, "Login failed: {Email}", email);
                 return AuthResponse.Failure($"Login failed: {ex.Message}");
             }
         }
