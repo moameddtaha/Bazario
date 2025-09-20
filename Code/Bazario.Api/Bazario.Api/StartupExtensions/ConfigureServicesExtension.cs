@@ -10,6 +10,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
 using Bazario.Core.ServiceContracts;
+using Bazario.Core.ServiceContracts.Store;
 using Bazario.Core.Domain.IdentityEntities;
 using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Services;
@@ -61,7 +62,13 @@ namespace Bazario.Api.StartupExtensions
 
             // Register Core Services
             services.AddScoped<IJwtService, JwtService>();
-            services.AddScoped<IStoreService, Bazario.Core.Services.StoreService>();
+            
+            // Register Store Services (SOLID principle separation)
+            services.AddScoped<IStoreValidationService, StoreValidationService>();
+            services.AddScoped<IStoreQueryService, StoreQueryService>();
+            services.AddScoped<IStoreAnalyticsService, StoreAnalyticsService>();
+            services.AddScoped<IStoreManagementService, StoreManagementService>();
+            services.AddScoped<IStoreService, StoreService>(); // Composite interface
             
             // Configure EmailSettings
             services.Configure<EmailSettings>(configuration.GetSection("EmailSettings"));

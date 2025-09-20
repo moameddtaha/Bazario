@@ -1,600 +1,129 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Bazario.Core.Domain.Entities;
-using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.DTO;
-using Bazario.Core.Extensions;
 using Bazario.Core.Models.Order;
 using Bazario.Core.Models.Shared;
 using Bazario.Core.Models.Store;
-using Bazario.Core.ServiceContracts;
+using Bazario.Core.ServiceContracts.Store;
 using Microsoft.Extensions.Logging;
 
 namespace Bazario.Core.Services
 {
     /// <summary>
-    /// Service implementation for store management operations
-    /// Handles store CRUD, analytics, and business logic
+    /// Composite service implementation for store operations
+    /// Delegates to specialized services following SOLID principles
+    /// Use sparingly - prefer specific interfaces (IStoreManagementService, IStoreQueryService, etc.)
     /// </summary>
     public class StoreService : IStoreService
     {
-        private readonly IStoreRepository _storeRepository;
-        private readonly ISellerRepository _sellerRepository;
-        private readonly IProductRepository _productRepository;
-        private readonly IOrderRepository _orderRepository;
+        private readonly IStoreManagementService _managementService;
+        private readonly IStoreQueryService _queryService;
+        private readonly IStoreAnalyticsService _analyticsService;
+        private readonly IStoreValidationService _validationService;
         private readonly ILogger<StoreService> _logger;
 
         public StoreService(
-            IStoreRepository storeRepository,
-            ISellerRepository sellerRepository,
-            IProductRepository productRepository,
-            IOrderRepository orderRepository,
+            IStoreManagementService managementService,
+            IStoreQueryService queryService,
+            IStoreAnalyticsService analyticsService,
+            IStoreValidationService validationService,
             ILogger<StoreService> logger)
         {
-            _storeRepository = storeRepository ?? throw new ArgumentNullException(nameof(storeRepository));
-            _sellerRepository = sellerRepository ?? throw new ArgumentNullException(nameof(sellerRepository));
-            _productRepository = productRepository ?? throw new ArgumentNullException(nameof(productRepository));
-            _orderRepository = orderRepository ?? throw new ArgumentNullException(nameof(orderRepository));
+            _managementService = managementService ?? throw new ArgumentNullException(nameof(managementService));
+            _queryService = queryService ?? throw new ArgumentNullException(nameof(queryService));
+            _analyticsService = analyticsService ?? throw new ArgumentNullException(nameof(analyticsService));
+            _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
+        #region IStoreManagementService Implementation
+
         public async Task<StoreResponse> CreateStoreAsync(StoreAddRequest storeAddRequest, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Starting store creation for seller: {SellerId}", storeAddRequest?.SellerId);
-
-            try
-            {
-                // Validate input
-                if (storeAddRequest == null)
-                {
-                    _logger.LogWarning("Store creation attempted with null request");
-                    throw new ArgumentNullException(nameof(storeAddRequest));
-                }
-
-                // Validate seller exists
-                var seller = await _sellerRepository.GetSellerByIdAsync(storeAddRequest.SellerId, cancellationToken);
-                if (seller == null)
-                {
-                    _logger.LogWarning("Store creation failed: Seller not found. SellerId: {SellerId}", storeAddRequest.SellerId);
-                    throw new InvalidOperationException($"Seller with ID {storeAddRequest.SellerId} not found");
-                }
-
-                // Validate store creation eligibility
-                var validationResult = await ValidateStoreCreationAsync(storeAddRequest.SellerId, storeAddRequest.Name!, cancellationToken);
-                if (!validationResult.IsValid)
-                {
-                    _logger.LogWarning("Store creation validation failed for seller: {SellerId}. Errors: {Errors}", 
-                        storeAddRequest.SellerId, string.Join(", ", validationResult.ValidationErrors));
-                    throw new InvalidOperationException($"Store creation validation failed: {string.Join(", ", validationResult.ValidationErrors)}");
-                }
-
-                // Create store entity
-                var store = storeAddRequest.ToStore();
-                store.StoreId = Guid.NewGuid();
-
-                _logger.LogDebug("Creating store with ID: {StoreId}, Name: {StoreName}", store.StoreId, store.Name);
-
-                // Save to repository
-                var createdStore = await _storeRepository.AddStoreAsync(store, cancellationToken);
-
-                _logger.LogInformation("Successfully created store. StoreId: {StoreId}, Name: {StoreName}", 
-                    createdStore.StoreId, createdStore.Name);
-
-                return createdStore.ToStoreResponse();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to create store for seller: {SellerId}", storeAddRequest?.SellerId);
-                throw;
-            }
+            _logger.LogDebug("Delegating store creation to management service");
+            return await _managementService.CreateStoreAsync(storeAddRequest, cancellationToken);
         }
 
         public async Task<StoreResponse> UpdateStoreAsync(StoreUpdateRequest storeUpdateRequest, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Starting store update for store: {StoreId}", storeUpdateRequest?.StoreId);
-
-            try
-            {
-                // Validate input
-                if (storeUpdateRequest == null)
-                {
-                    _logger.LogWarning("Store update attempted with null request");
-                    throw new ArgumentNullException(nameof(storeUpdateRequest));
-                }
-
-                // Get existing store
-                var existingStore = await _storeRepository.GetStoreByIdAsync(storeUpdateRequest.StoreId, cancellationToken);
-                if (existingStore == null)
-                {
-                    _logger.LogWarning("Store update failed: Store not found. StoreId: {StoreId}", storeUpdateRequest.StoreId);
-                    throw new InvalidOperationException($"Store with ID {storeUpdateRequest.StoreId} not found");
-                }
-
-                // Check if name is changing and validate uniqueness for the seller
-                if (!string.Equals(existingStore.Name, storeUpdateRequest.Name, StringComparison.OrdinalIgnoreCase))
-                {
-                    var sellerStores = await _storeRepository.GetStoresBySellerIdAsync(existingStore.SellerId, cancellationToken);
-                    if (sellerStores.Any(s => s.StoreId != existingStore.StoreId && 
-                                            string.Equals(s.Name, storeUpdateRequest.Name, StringComparison.OrdinalIgnoreCase)))
-                    {
-                        _logger.LogWarning("Store update failed: Store name already exists for seller. Name: {StoreName}", storeUpdateRequest.Name);
-                        throw new InvalidOperationException($"Store name '{storeUpdateRequest.Name}' already exists for this seller");
-                    }
-                }
-
-                // Update store properties
-                existingStore.Name = storeUpdateRequest.Name;
-                existingStore.Description = storeUpdateRequest.Description;
-                existingStore.Category = storeUpdateRequest.Category;
-                existingStore.Logo = storeUpdateRequest.Logo;
-
-                _logger.LogDebug("Updating store with ID: {StoreId}, Name: {StoreName}", existingStore.StoreId, existingStore.Name);
-
-                // Save to repository
-                var updatedStore = await _storeRepository.UpdateStoreAsync(existingStore, cancellationToken);
-
-                _logger.LogInformation("Successfully updated store. StoreId: {StoreId}, Name: {StoreName}", 
-                    updatedStore.StoreId, updatedStore.Name);
-
-                return updatedStore.ToStoreResponse();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to update store: {StoreId}", storeUpdateRequest?.StoreId);
-                throw;
-            }
+            _logger.LogDebug("Delegating store update to management service");
+            return await _managementService.UpdateStoreAsync(storeUpdateRequest, cancellationToken);
         }
 
         public async Task<bool> DeleteStoreAsync(Guid storeId, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Starting store deletion for store: {StoreId}", storeId);
-
-            try
-            {
-                // Validate store exists
-                var store = await _storeRepository.GetStoreByIdAsync(storeId, cancellationToken);
-                if (store == null)
-                {
-                    _logger.LogWarning("Store deletion failed: Store not found. StoreId: {StoreId}", storeId);
-                    throw new InvalidOperationException($"Store with ID {storeId} not found");
-                }
-
-                // Check if store has active products
-                var productCount = await _storeRepository.GetProductCountByStoreIdAsync(storeId, cancellationToken);
-                if (productCount > 0)
-                {
-                    _logger.LogWarning("Store deletion failed: Store has active products. StoreId: {StoreId}, ProductCount: {ProductCount}", 
-                        storeId, productCount);
-                    throw new InvalidOperationException($"Cannot delete store with {productCount} active products. Please remove all products first.");
-                }
-
-                // Check if store has pending orders (basic check - could be enhanced)
-                // Note: This is a simplified check - in reality we'd need to join through OrderItems to get store-related orders
-                var allOrders = await _orderRepository.GetAllOrdersAsync(cancellationToken);
-                var pendingOrders = allOrders.Where(o => o.Status == Core.Enums.OrderStatus.Pending.ToString() || 
-                                                        o.Status == Core.Enums.OrderStatus.Processing.ToString()).ToList();
-                
-                if (pendingOrders.Any())
-                {
-                    _logger.LogWarning("Store deletion failed: Store has pending orders. StoreId: {StoreId}, PendingOrderCount: {PendingOrderCount}", 
-                        storeId, pendingOrders.Count);
-                    throw new InvalidOperationException($"Cannot delete store with {pendingOrders.Count} pending orders. Please complete or cancel all pending orders first.");
-                }
-
-                _logger.LogDebug("Deleting store with ID: {StoreId}", storeId);
-
-                // Delete store
-                var result = await _storeRepository.DeleteStoreByIdAsync(storeId, cancellationToken);
-
-                if (result)
-                {
-                    _logger.LogInformation("Successfully deleted store. StoreId: {StoreId}", storeId);
-                }
-                else
-                {
-                    _logger.LogWarning("Store deletion returned false. StoreId: {StoreId}", storeId);
-                }
-
-                return result;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to delete store: {StoreId}", storeId);
-                throw;
-            }
-        }
-
-        public async Task<StoreResponse?> GetStoreByIdAsync(Guid storeId, CancellationToken cancellationToken = default)
-        {
-            _logger.LogDebug("Retrieving store by ID: {StoreId}", storeId);
-
-            try
-            {
-                var store = await _storeRepository.GetStoreByIdAsync(storeId, cancellationToken);
-                
-                if (store == null)
-                {
-                    _logger.LogDebug("Store not found. StoreId: {StoreId}", storeId);
-                    return null;
-                }
-
-                _logger.LogDebug("Successfully retrieved store. StoreId: {StoreId}, Name: {StoreName}", store.StoreId, store.Name);
-                return store.ToStoreResponse();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to retrieve store by ID: {StoreId}", storeId);
-                throw;
-            }
-        }
-
-        public async Task<List<StoreResponse>> GetStoresBySellerIdAsync(Guid sellerId, CancellationToken cancellationToken = default)
-        {
-            _logger.LogDebug("Retrieving stores for seller: {SellerId}", sellerId);
-
-            try
-            {
-                var stores = await _storeRepository.GetStoresBySellerIdAsync(sellerId, cancellationToken);
-                var storeResponses = stores.Select(s => s.ToStoreResponse()).ToList();
-
-                _logger.LogDebug("Successfully retrieved {StoreCount} stores for seller: {SellerId}", storeResponses.Count, sellerId);
-                return storeResponses;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to retrieve stores for seller: {SellerId}", sellerId);
-                throw;
-            }
-        }
-
-        public async Task<PagedResponse<StoreResponse>> SearchStoresAsync(StoreSearchCriteria searchCriteria, CancellationToken cancellationToken = default)
-        {
-            _logger.LogDebug("Searching stores with criteria: {SearchTerm}, Category: {Category}", 
-                searchCriteria?.SearchTerm, searchCriteria?.Category);
-
-            try
-            {
-                if (searchCriteria == null)
-                {
-                    searchCriteria = new StoreSearchCriteria();
-                }
-
-                // Build filter predicate
-                var allStores = await _storeRepository.GetAllStoresAsync(cancellationToken);
-                var filteredStores = allStores.AsQueryable();
-
-                // Apply filters
-                if (!string.IsNullOrWhiteSpace(searchCriteria.SearchTerm))
-                {
-                    filteredStores = filteredStores.Where(s => 
-                        (s.Name != null && s.Name.Contains(searchCriteria.SearchTerm, StringComparison.OrdinalIgnoreCase)) ||
-                        (s.Description != null && s.Description.Contains(searchCriteria.SearchTerm, StringComparison.OrdinalIgnoreCase)));
-                }
-
-                if (!string.IsNullOrWhiteSpace(searchCriteria.Category))
-                {
-                    filteredStores = filteredStores.Where(s => 
-                        string.Equals(s.Category, searchCriteria.Category, StringComparison.OrdinalIgnoreCase));
-                }
-
-                if (searchCriteria.SellerId.HasValue)
-                {
-                    filteredStores = filteredStores.Where(s => s.SellerId == searchCriteria.SellerId.Value);
-                }
-
-                // Apply sorting
-                filteredStores = searchCriteria.SortBy?.ToLower() switch
-                {
-                    "name" => searchCriteria.SortDescending ? 
-                        filteredStores.OrderByDescending(s => s.Name) : 
-                        filteredStores.OrderBy(s => s.Name),
-                    "createdat" => searchCriteria.SortDescending ? 
-                        filteredStores.OrderByDescending(s => s.CreatedAt) : 
-                        filteredStores.OrderBy(s => s.CreatedAt),
-                    _ => filteredStores.OrderBy(s => s.Name)
-                };
-
-                // Get total count
-                var totalCount = filteredStores.Count();
-
-                // Apply pagination
-                var pagedStores = filteredStores
-                    .Skip((searchCriteria.PageNumber - 1) * searchCriteria.PageSize)
-                    .Take(searchCriteria.PageSize)
-                    .Select(s => s.ToStoreResponse())
-                    .ToList();
-
-                var result = new PagedResponse<StoreResponse>
-                {
-                    Items = pagedStores,
-                    TotalCount = totalCount,
-                    PageNumber = searchCriteria.PageNumber,
-                    PageSize = searchCriteria.PageSize
-                };
-
-                _logger.LogDebug("Successfully searched stores. Found {TotalCount} stores, returning page {PageNumber} with {ItemCount} items", 
-                    totalCount, searchCriteria.PageNumber, pagedStores.Count);
-
-                return result;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to search stores");
-                throw;
-            }
-        }
-
-        public async Task<StoreAnalytics> GetStoreAnalyticsAsync(Guid storeId, DateRange? dateRange = null, CancellationToken cancellationToken = default)
-        {
-            _logger.LogDebug("Getting analytics for store: {StoreId}", storeId);
-
-            try
-            {
-                // Validate store exists
-                var store = await _storeRepository.GetStoreByIdAsync(storeId, cancellationToken);
-                if (store == null)
-                {
-                    throw new InvalidOperationException($"Store with ID {storeId} not found");
-                }
-
-                // Set default date range if not provided
-                dateRange ??= new DateRange();
-
-                // This is a simplified implementation - in a real scenario, you'd have more complex analytics
-                var analytics = new StoreAnalytics
-                {
-                    StoreId = storeId,
-                    StoreName = store.Name,
-                    AnalyticsPeriod = dateRange,
-                    // TODO: Implement actual analytics calculations
-                    TotalProducts = await _storeRepository.GetProductCountByStoreIdAsync(storeId, cancellationToken),
-                    ActiveProducts = await _storeRepository.GetProductCountByStoreIdAsync(storeId, cancellationToken), // Simplified
-                    TotalOrders = 0, // TODO: Calculate from orders
-                    TotalRevenue = 0, // TODO: Calculate from orders
-                    AverageOrderValue = 0, // TODO: Calculate
-                    TotalCustomers = 0, // TODO: Calculate unique customers
-                    RepeatCustomers = 0, // TODO: Calculate
-                    CustomerRetentionRate = 0, // TODO: Calculate
-                    AverageRating = 0, // TODO: Calculate from reviews
-                    TotalReviews = 0, // TODO: Calculate from reviews
-                    TopProducts = new List<ProductPerformance>(), // TODO: Implement
-                    MonthlyData = new List<MonthlyStoreData>() // TODO: Implement
-                };
-
-                _logger.LogDebug("Successfully retrieved analytics for store: {StoreId}", storeId);
-                return analytics;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to get analytics for store: {StoreId}", storeId);
-                throw;
-            }
-        }
-
-        public async Task<StorePerformance> GetStorePerformanceAsync(Guid storeId, CancellationToken cancellationToken = default)
-        {
-            _logger.LogDebug("Getting performance data for store: {StoreId}", storeId);
-
-            try
-            {
-                var store = await _storeRepository.GetStoreByIdAsync(storeId, cancellationToken);
-                if (store == null)
-                {
-                    throw new InvalidOperationException($"Store with ID {storeId} not found");
-                }
-
-                // Simplified performance calculation - would be more complex in real implementation
-                var performance = new StorePerformance
-                {
-                    StoreId = storeId,
-                    StoreName = store.Name,
-                    Category = store.Category,
-                    CreatedAt = store.CreatedAt ?? DateTime.UtcNow,
-                    IsActive = true, // TODO: Add IsActive field to Store entity
-                    ProductCount = await _storeRepository.GetProductCountByStoreIdAsync(storeId, cancellationToken),
-                    TotalRevenue = 0, // TODO: Calculate from orders
-                    TotalOrders = 0, // TODO: Calculate from orders
-                    AverageRating = 0, // TODO: Calculate from reviews
-                    ReviewCount = 0, // TODO: Calculate from reviews
-                    Rank = 0 // TODO: Calculate ranking
-                };
-
-                _logger.LogDebug("Successfully retrieved performance data for store: {StoreId}", storeId);
-                return performance;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to get performance data for store: {StoreId}", storeId);
-                throw;
-            }
-        }
-
-        public async Task<PagedResponse<StorePerformance>> GetTopPerformingStoresAsync(PerformanceCriteria criteria = PerformanceCriteria.Revenue, int pageNumber = 1, int pageSize = 10, CancellationToken cancellationToken = default)
-        {
-            _logger.LogDebug("Getting top performing stores with criteria: {Criteria}, Page: {PageNumber}, Size: {PageSize}", 
-                criteria, pageNumber, pageSize);
-
-            try
-            {
-                var allStores = await _storeRepository.GetAllStoresAsync(cancellationToken);
-                var storePerformances = new List<StorePerformance>();
-
-                foreach (var store in allStores)
-                {
-                    var performance = await GetStorePerformanceAsync(store.StoreId, cancellationToken);
-                    storePerformances.Add(performance);
-                }
-
-                // Sort by criteria
-                var sortedStores = criteria switch
-                {
-                    PerformanceCriteria.Revenue => storePerformances.OrderByDescending(s => s.TotalRevenue),
-                    PerformanceCriteria.Orders => storePerformances.OrderByDescending(s => s.TotalOrders),
-                    PerformanceCriteria.Rating => storePerformances.OrderByDescending(s => s.AverageRating),
-                    PerformanceCriteria.ProductCount => storePerformances.OrderByDescending(s => s.ProductCount),
-                    PerformanceCriteria.CustomerCount => storePerformances.OrderByDescending(s => s.ReviewCount), // Using ReviewCount as proxy for customer activity
-                    _ => storePerformances.OrderByDescending(s => s.TotalRevenue)
-                };
-
-                var totalCount = sortedStores.Count();
-                var pagedStores = sortedStores
-                    .Skip((pageNumber - 1) * pageSize)
-                    .Take(pageSize)
-                    .ToList();
-
-                // Assign rankings
-                for (int i = 0; i < pagedStores.Count; i++)
-                {
-                    pagedStores[i].Rank = ((pageNumber - 1) * pageSize) + i + 1;
-                }
-
-                var result = new PagedResponse<StorePerformance>
-                {
-                    Items = pagedStores,
-                    TotalCount = totalCount,
-                    PageNumber = pageNumber,
-                    PageSize = pageSize
-                };
-
-                _logger.LogDebug("Successfully retrieved top performing stores. Found {TotalCount} stores", totalCount);
-                return result;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to get top performing stores");
-                throw;
-            }
-        }
-
-        public async Task<StoreValidationResult> ValidateStoreCreationAsync(Guid sellerId, string storeName, CancellationToken cancellationToken = default)
-        {
-            _logger.LogDebug("Validating store creation for seller: {SellerId}, StoreName: {StoreName}", sellerId, storeName);
-
-            try
-            {
-                var result = new StoreValidationResult();
-
-                // Check if seller exists
-                var seller = await _sellerRepository.GetSellerByIdAsync(sellerId, cancellationToken);
-                result.SellerEligible = seller != null;
-
-                if (!result.SellerEligible)
-                {
-                    result.ValidationErrors.Add("Seller not found or not eligible");
-                }
-
-                // Check seller's current store count
-                var sellerStores = await _storeRepository.GetStoresBySellerIdAsync(sellerId, cancellationToken);
-                result.SellerStoreCount = sellerStores.Count;
-
-                if (result.SellerStoreCount >= result.MaxAllowedStores)
-                {
-                    result.ValidationErrors.Add($"Seller has reached maximum allowed stores ({result.MaxAllowedStores})");
-                }
-
-                // Check if store name is available for this seller
-                result.NameAvailable = !sellerStores.Any(s => 
-                    string.Equals(s.Name, storeName, StringComparison.OrdinalIgnoreCase));
-
-                if (!result.NameAvailable)
-                {
-                    result.ValidationErrors.Add($"Store name '{storeName}' is already used by this seller");
-                }
-
-                // Validate store name
-                if (string.IsNullOrWhiteSpace(storeName))
-                {
-                    result.ValidationErrors.Add("Store name cannot be empty");
-                }
-                else if (storeName.Length > 30)
-                {
-                    result.ValidationErrors.Add("Store name cannot exceed 30 characters");
-                }
-
-                result.IsValid = result.ValidationErrors.Count == 0;
-
-                _logger.LogDebug("Store creation validation completed for seller: {SellerId}. IsValid: {IsValid}, Errors: {ErrorCount}", 
-                    sellerId, result.IsValid, result.ValidationErrors.Count);
-
-                return result;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to validate store creation for seller: {SellerId}", sellerId);
-                throw;
-            }
-        }
-
-        public async Task<PagedResponse<StoreResponse>> GetStoresByCategoryAsync(string category, int pageNumber = 1, int pageSize = 20, CancellationToken cancellationToken = default)
-        {
-            _logger.LogDebug("Getting stores by category: {Category}, Page: {PageNumber}, Size: {PageSize}", 
-                category, pageNumber, pageSize);
-
-            try
-            {
-                var stores = await _storeRepository.GetStoresByCategoryAsync(category, cancellationToken);
-                var totalCount = stores.Count;
-
-                var pagedStores = stores
-                    .Skip((pageNumber - 1) * pageSize)
-                    .Take(pageSize)
-                    .Select(s => s.ToStoreResponse())
-                    .ToList();
-
-                var result = new PagedResponse<StoreResponse>
-                {
-                    Items = pagedStores,
-                    TotalCount = totalCount,
-                    PageNumber = pageNumber,
-                    PageSize = pageSize
-                };
-
-                _logger.LogDebug("Successfully retrieved stores by category: {Category}. Found {TotalCount} stores", 
-                    category, totalCount);
-
-                return result;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to get stores by category: {Category}", category);
-                throw;
-            }
+            _logger.LogDebug("Delegating store deletion to management service");
+            return await _managementService.DeleteStoreAsync(storeId, cancellationToken);
         }
 
         public async Task<StoreResponse> UpdateStoreStatusAsync(Guid storeId, bool isActive, string? reason = null, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Updating store status for store: {StoreId}, NewStatus: {IsActive}, Reason: {Reason}", 
-                storeId, isActive, reason);
-
-            try
-            {
-                var store = await _storeRepository.GetStoreByIdAsync(storeId, cancellationToken);
-                if (store == null)
-                {
-                    throw new InvalidOperationException($"Store with ID {storeId} not found");
-                }
-
-                // Note: The Store entity doesn't have an IsActive field in the current model
-                // This would need to be added to the Store entity and database schema
-                // For now, we'll just return the store as-is and log the status change request
-
-                _logger.LogWarning("Store status update requested but Store entity doesn't have IsActive field. StoreId: {StoreId}", storeId);
-                
-                // TODO: Add IsActive field to Store entity and update this implementation
-                // store.IsActive = isActive;
-                // var updatedStore = await _storeRepository.UpdateStoreAsync(store, cancellationToken);
-
-                _logger.LogInformation("Store status update logged for store: {StoreId}", storeId);
-                return store.ToStoreResponse();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to update store status for store: {StoreId}", storeId);
-                throw;
-            }
+            _logger.LogDebug("Delegating store status update to management service");
+            return await _managementService.UpdateStoreStatusAsync(storeId, isActive, reason, cancellationToken);
         }
+
+        #endregion
+
+        #region IStoreQueryService Implementation
+
+        public async Task<StoreResponse?> GetStoreByIdAsync(Guid storeId, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Delegating store retrieval to query service");
+            return await _queryService.GetStoreByIdAsync(storeId, cancellationToken);
+        }
+
+        public async Task<List<StoreResponse>> GetStoresBySellerIdAsync(Guid sellerId, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Delegating seller stores retrieval to query service");
+            return await _queryService.GetStoresBySellerIdAsync(sellerId, cancellationToken);
+        }
+
+        public async Task<PagedResponse<StoreResponse>> SearchStoresAsync(StoreSearchCriteria searchCriteria, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Delegating store search to query service");
+            return await _queryService.SearchStoresAsync(searchCriteria, cancellationToken);
+        }
+
+        public async Task<PagedResponse<StoreResponse>> GetStoresByCategoryAsync(string category, int pageNumber = 1, int pageSize = 20, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Delegating category stores retrieval to query service");
+            return await _queryService.GetStoresByCategoryAsync(category, pageNumber, pageSize, cancellationToken);
+        }
+
+        #endregion
+
+        #region IStoreAnalyticsService Implementation
+
+        public async Task<StoreAnalytics> GetStoreAnalyticsAsync(Guid storeId, DateRange? dateRange = null, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Delegating store analytics to analytics service");
+            return await _analyticsService.GetStoreAnalyticsAsync(storeId, dateRange, cancellationToken);
+        }
+
+        public async Task<StorePerformance> GetStorePerformanceAsync(Guid storeId, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Delegating store performance to analytics service");
+            return await _analyticsService.GetStorePerformanceAsync(storeId, cancellationToken);
+        }
+
+        public async Task<PagedResponse<StorePerformance>> GetTopPerformingStoresAsync(PerformanceCriteria criteria = PerformanceCriteria.Revenue, int pageNumber = 1, int pageSize = 10, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Delegating top performing stores to analytics service");
+            return await _analyticsService.GetTopPerformingStoresAsync(criteria, pageNumber, pageSize, cancellationToken);
+        }
+
+        #endregion
+
+        #region IStoreValidationService Implementation
+
+        public async Task<StoreValidationResult> ValidateStoreCreationAsync(Guid sellerId, string storeName, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Delegating store validation to validation service");
+            return await _validationService.ValidateStoreCreationAsync(sellerId, storeName, cancellationToken);
+        }
+
+        #endregion
     }
 }
