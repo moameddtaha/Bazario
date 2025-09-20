@@ -12,6 +12,7 @@ using System.Text;
 using Bazario.Core.ServiceContracts;
 using Bazario.Core.Domain.IdentityEntities;
 using Bazario.Core.Domain.RepositoryContracts;
+using Bazario.Core.Services;
 
 using Bazario.Email.Models;
 using Bazario.Email.Services;
@@ -60,6 +61,7 @@ namespace Bazario.Api.StartupExtensions
 
             // Register Core Services
             services.AddScoped<IJwtService, JwtService>();
+            services.AddScoped<IStoreService, Bazario.Core.Services.StoreService>();
             
             // Configure EmailSettings
             services.Configure<EmailSettings>(configuration.GetSection("EmailSettings"));

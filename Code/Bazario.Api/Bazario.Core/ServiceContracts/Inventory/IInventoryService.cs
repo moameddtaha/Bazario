@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Bazario.Core.DTO;
 using Bazario.Core.Models.Inventory;
 using Bazario.Core.Models.Store;
+using Bazario.Core.Models.Shared;
 
 namespace Bazario.Core.ServiceContracts
 {

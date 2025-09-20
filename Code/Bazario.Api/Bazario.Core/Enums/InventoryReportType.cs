@@ -1,4 +1,4 @@
-namespace Bazario.Core.Models.Inventory
+namespace Bazario.Core.Enums
 {
     /// <summary>
     /// Inventory report types

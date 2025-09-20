@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using Bazario.Core.Models.Store;
+using Bazario.Core.Models.Shared;
+using Bazario.Core.Enums;
 
 namespace Bazario.Core.Models.Inventory
 {

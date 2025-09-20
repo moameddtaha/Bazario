@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Bazario.Core.Models.Shared;
 
 namespace Bazario.Core.Models.Store
 {

@@ -1,6 +1,6 @@
 using System;
 
-namespace Bazario.Core.Models.Store
+namespace Bazario.Core.Models.Shared
 {
     /// <summary>
     /// Date range for analytics
