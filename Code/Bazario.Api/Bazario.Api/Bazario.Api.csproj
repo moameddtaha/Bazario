@@ -31,7 +31,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Bazario.Core\Bazario.Core.csproj" />
-    <ProjectReference Include="..\Bazario.Email\Bazario.Email.csproj" />
     <ProjectReference Include="..\Bazario.Infrastructure\Bazario.Infrastructure.csproj" />
   </ItemGroup>
 

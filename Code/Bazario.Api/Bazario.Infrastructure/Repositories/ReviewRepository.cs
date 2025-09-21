@@ -92,9 +92,16 @@ namespace Bazario.Infrastructure.Repositories
                 _logger.LogDebug("Updating review properties. ReviewId: {ReviewId}, Rating: {Rating}", 
                     review.ReviewId, review.Rating);
 
-                // Update only specific properties (not foreign keys or primary key)
-                existingReview.Rating = review.Rating;
-                existingReview.Comment = review.Comment;
+                // Update only specific properties (not foreign keys or primary key) - only if provided
+                if (review.Rating > 0 && review.Rating <= 5) // Only update if rating is provided and valid
+                {
+                    existingReview.Rating = review.Rating;
+                }
+
+                if (review.Comment != null) // Only update if comment is provided
+                {
+                    existingReview.Comment = review.Comment;
+                }
                 
                 await _context.SaveChangesAsync(cancellationToken);
 

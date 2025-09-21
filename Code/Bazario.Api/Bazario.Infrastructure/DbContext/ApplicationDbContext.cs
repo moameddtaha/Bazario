@@ -4,7 +4,6 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
-using Bazario.Auth.Domain.Entities;
 using Bazario.Core.Domain.Entities;
 using Bazario.Core.Domain.IdentityEntities;
 using Microsoft.AspNetCore.Identity;

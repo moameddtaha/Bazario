@@ -5,8 +5,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.Entities;
+using StoreEntity = Bazario.Core.Domain.Entities.Store;
 
-namespace Bazario.Core.DTO
+namespace Bazario.Core.DTO.Store
 {
     public class StoreAddRequest
     {
@@ -29,9 +30,9 @@ namespace Bazario.Core.DTO
         [Display(Name = "Logo")]
         public string? Logo { get; set; }
 
-        public Store ToStore()
+        public StoreEntity ToStore()
         {
-            return new Store
+            return new StoreEntity
             {
                 SellerId = SellerId,
                 Name = Name,

@@ -119,14 +119,17 @@ namespace Bazario.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<DateTime>("CreatedAt")
+                    b.Property<DateTime>("AccessTokenExpiresAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<DateTime>("ExpiresAt")
+                    b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<bool>("IsRevoked")
                         .HasColumnType("bit");
+
+                    b.Property<DateTime>("RefreshTokenExpiresAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("RevocationReason")
                         .HasMaxLength(200)
@@ -197,9 +200,22 @@ namespace Bazario.Infrastructure.Migrations
                     b.Property<DateTime?>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeletedReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<string>("Description")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
 
                     b.Property<string>("Logo")
                         .HasColumnType("nvarchar(max)");
@@ -474,7 +490,7 @@ namespace Bazario.Infrastructure.Migrations
                     b.HasOne("Bazario.Core.Domain.Entities.Store", "Store")
                         .WithMany("Products")
                         .HasForeignKey("StoreId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Store");

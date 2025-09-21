@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.Entities;
 using Bazario.Core.DTO;
+using Bazario.Core.DTO.Store;
 
 namespace Bazario.Core.Extensions
 {
@@ -20,7 +21,13 @@ namespace Bazario.Core.Extensions
                 Description = store.Description,
                 Category = store.Category,
                 Logo = store.Logo,
-                CreatedAt = store.CreatedAt
+                CreatedAt = store.CreatedAt,
+                IsActive = store.IsActive,
+                // Soft deletion properties
+                IsDeleted = store.IsDeleted,
+                DeletedAt = store.DeletedAt,
+                DeletedBy = store.DeletedBy,
+                DeletedReason = store.DeletedReason
             };
         }
     }

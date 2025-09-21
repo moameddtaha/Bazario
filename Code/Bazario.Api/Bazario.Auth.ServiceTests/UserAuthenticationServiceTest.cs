@@ -1,12 +1,10 @@
-using Bazario.Auth.DTO;
-using Bazario.Auth.Exceptions;
-using Bazario.Auth.Helpers;
-using Bazario.Auth.ServiceContracts;
-using Bazario.Auth.Services;
 using Bazario.Core.Domain.IdentityEntities;
 using Bazario.Core.Domain.RepositoryContracts;
+using Bazario.Core.DTO.Auth;
 using Bazario.Core.Enums;
 using Bazario.Core.Models.User;
+using Bazario.Core.ServiceContracts.Auth;
+using Bazario.Core.Services.Auth;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;

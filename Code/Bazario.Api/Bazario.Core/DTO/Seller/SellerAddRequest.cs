@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using Bazario.Core.Domain.IdentityEntities;
 using Bazario.Core.Enums;
 
-namespace Bazario.Core.DTO
+namespace Bazario.Core.DTO.Seller
 {
     public class SellerAddRequest
     {

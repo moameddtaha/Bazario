@@ -1,7 +1,7 @@
-using Bazario.Auth.DTO;
-using Bazario.Auth.ServiceContracts;
-using Bazario.Auth.Services;
+using Bazario.Core.DTO.Auth;
 using Bazario.Core.Enums;
+using Bazario.Core.ServiceContracts.Auth;
+using Bazario.Core.Services.Auth;
 using Moq;
 
 namespace Bazario.Auth.ServiceTests

@@ -8,7 +8,7 @@ using Bazario.Core.Models.Inventory;
 using Bazario.Core.Models.Store;
 using Bazario.Core.Models.Shared;
 
-namespace Bazario.Core.ServiceContracts
+namespace Bazario.Core.ServiceContracts.Inventory
 {
     /// <summary>
     /// Service contract for inventory management operations

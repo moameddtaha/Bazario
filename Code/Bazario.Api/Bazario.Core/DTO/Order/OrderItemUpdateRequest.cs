@@ -6,7 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.Entities;
 
-namespace Bazario.Core.DTO
+namespace Bazario.Core.DTO.Order
 {
     public class OrderItemUpdateRequest
     {

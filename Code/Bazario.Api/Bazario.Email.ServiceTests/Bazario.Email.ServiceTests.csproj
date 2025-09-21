@@ -18,7 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Bazario.Email\Bazario.Email.csproj" />
+    <ProjectReference Include="..\Bazario.Core\Bazario.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

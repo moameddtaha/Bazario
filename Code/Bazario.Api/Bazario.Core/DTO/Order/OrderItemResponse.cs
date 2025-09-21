@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Bazario.Core.DTO
+namespace Bazario.Core.DTO.Order
 {
     public class OrderItemResponse
     {

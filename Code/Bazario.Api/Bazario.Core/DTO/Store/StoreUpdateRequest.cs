@@ -5,15 +5,15 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.Entities;
+using StoreEntity = Bazario.Core.Domain.Entities.Store;
 
-namespace Bazario.Core.DTO
+namespace Bazario.Core.DTO.Store
 {
     public class StoreUpdateRequest
     {
         [Required(ErrorMessage = "Store Id cannot be blank")]
         public Guid StoreId { get; set; }
 
-        [Required(ErrorMessage = "Name cannot be blank")]
         [StringLength(30, ErrorMessage = "Name cannot exceed 30 characters")]
         [Display(Name = "Store Name")]
         public string? Name { get; set; }
@@ -28,15 +28,19 @@ namespace Bazario.Core.DTO
         [Display(Name = "Logo")]
         public string? Logo { get; set; }
 
-        public Store ToStore()
+        [Display(Name = "Is Active")]
+        public bool? IsActive { get; set; }
+
+        public StoreEntity ToStore()
         {
-            return new Store
+            return new StoreEntity
             {
                 StoreId = StoreId,
-                Name = Name,
-                Description = Description,
-                Category = Category,
-                Logo = Logo
+                Name = Name ?? string.Empty, // Provide default if null
+                Description = Description ?? string.Empty, // Provide default if null
+                Category = Category ?? string.Empty, // Provide default if null
+                Logo = Logo ?? string.Empty, // Provide default if null
+                IsActive = IsActive ?? true // Default to true if not specified
             };
         }
     }

@@ -34,5 +34,7 @@ namespace Bazario.Core.Domain.RepositoryContracts
         Task<decimal> GetTotalRevenueByDateRangeAsync(DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default);
 
         Task<int> GetOrderCountByStatusAsync(OrderStatus status, CancellationToken cancellationToken = default);
+
+        Task<int> GetOrderCountByStoreIdAsync(Guid storeId, CancellationToken cancellationToken = default);
     }
 }

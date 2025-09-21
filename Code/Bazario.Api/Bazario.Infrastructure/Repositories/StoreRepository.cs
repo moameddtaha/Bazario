@@ -89,19 +89,20 @@ namespace Bazario.Infrastructure.Repositories
                     throw new InvalidOperationException($"Store with ID {store.StoreId} not found");
                 }
 
-                _logger.LogDebug("Updating store properties. StoreId: {StoreId}, Name: {Name}, Category: {Category}", 
-                    store.StoreId, store.Name, store.Category);
+                _logger.LogDebug("Updating store properties. StoreId: {StoreId}, Name: {Name}, Category: {Category}, IsActive: {IsActive}", 
+                    store.StoreId, store.Name, store.Category, store.IsActive);
 
                 // Update only specific properties (not foreign keys or primary key)
                 existingStore.Name = store.Name;
                 existingStore.Description = store.Description;
                 existingStore.Category = store.Category;
                 existingStore.Logo = store.Logo;
+                existingStore.IsActive = store.IsActive;
                 
                 await _context.SaveChangesAsync(cancellationToken);
 
-                _logger.LogInformation("Successfully updated store. StoreId: {StoreId}, Name: {Name}, Category: {Category}", 
-                    store.StoreId, store.Name, store.Category);
+                _logger.LogInformation("Successfully updated store. StoreId: {StoreId}, Name: {Name}, Category: {Category}, IsActive: {IsActive}", 
+                    store.StoreId, store.Name, store.Category, store.IsActive);
 
                 return existingStore;
             }
@@ -124,7 +125,7 @@ namespace Bazario.Infrastructure.Repositories
 
         public async Task<bool> DeleteStoreByIdAsync(Guid storeId, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Starting to delete store: {StoreId}", storeId);
+            _logger.LogWarning("Hard delete method called for store: {StoreId}. Consider using SoftDeleteStoreAsync instead.", storeId);
             
             try
             {
@@ -135,30 +136,189 @@ namespace Bazario.Infrastructure.Repositories
                     return false; // Invalid ID
                 }
 
-                _logger.LogDebug("Checking if store exists for deletion. StoreId: {StoreId}", storeId);
+                _logger.LogDebug("Checking if store exists for hard deletion. StoreId: {StoreId}", storeId);
 
-                // Use FindAsync for simple PK lookup (no navigation properties needed for delete)
-                var store = await _context.Stores.FindAsync(new object[] { storeId }, cancellationToken);
+                // Use IgnoreQueryFilters to find even soft-deleted stores for hard delete
+                var store = await _context.Stores
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(s => s.StoreId == storeId, cancellationToken);
+                
                 if (store == null)
                 {
-                    _logger.LogWarning("Store not found for deletion. StoreId: {StoreId}", storeId);
+                    _logger.LogWarning("Store not found for hard deletion. StoreId: {StoreId}", storeId);
                     return false; // Store not found
                 }
 
-                _logger.LogDebug("Removing store from database context. StoreId: {StoreId}, Name: {StoreName}", storeId, store.Name);
+                _logger.LogDebug("Hard deleting store from database. StoreId: {StoreId}, Name: {StoreName}", storeId, store.Name);
 
-                // Delete the store
+                // Hard delete the store (permanent removal)
                 _context.Stores.Remove(store);
                 await _context.SaveChangesAsync(cancellationToken);
 
-                _logger.LogInformation("Successfully deleted store. StoreId: {StoreId}, Name: {StoreName}", storeId, store.Name);
+                _logger.LogInformation("Successfully hard deleted store. StoreId: {StoreId}, Name: {StoreName}", storeId, store.Name);
 
                 return true;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unexpected error while deleting store: {StoreId}", storeId);
-                throw new InvalidOperationException($"Unexpected error while deleting store with ID {storeId}: {ex.Message}", ex);
+                _logger.LogError(ex, "Unexpected error while hard deleting store: {StoreId}", storeId);
+                throw new InvalidOperationException($"Unexpected error while hard deleting store with ID {storeId}: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<bool> SoftDeleteStoreAsync(Guid storeId, Guid deletedBy, string? reason = null, CancellationToken cancellationToken = default)
+        {
+            _logger.LogInformation("Starting soft delete for store: {StoreId}, DeletedBy: {DeletedBy}, Reason: {Reason}", storeId, deletedBy, reason);
+            
+            try
+            {
+                // Validate input
+                if (storeId == Guid.Empty)
+                {
+                    _logger.LogWarning("Attempted to soft delete store with empty ID");
+                    return false;
+                }
+
+                if (deletedBy == Guid.Empty)
+                {
+                    _logger.LogWarning("Attempted to soft delete store without valid DeletedBy user ID");
+                    return false;
+                }
+
+                _logger.LogDebug("Checking if store exists for soft deletion. StoreId: {StoreId}", storeId);
+
+                // Find the store (should be active, not already deleted)
+                var store = await _context.Stores
+                .IgnoreQueryFilters() // This allows finding deleted stores
+                .FirstOrDefaultAsync(s => s.StoreId == storeId, cancellationToken);
+                
+                if (store == null)
+                {
+                    _logger.LogWarning("Store not found for soft deletion. StoreId: {StoreId}", storeId);
+                    return false;
+                }
+
+                if (store.IsDeleted)
+                {
+                    _logger.LogWarning("Store is already soft deleted. StoreId: {StoreId}", storeId);
+                    return false;
+                }
+
+                _logger.LogDebug("Soft deleting store. StoreId: {StoreId}, Name: {StoreName}", storeId, store.Name);
+
+                // Set soft delete properties
+                store.IsDeleted = true;
+                store.DeletedAt = DateTime.UtcNow;
+                store.DeletedBy = deletedBy;
+                store.DeletedReason = reason;
+
+                // Update the store
+                _context.Stores.Update(store);
+                await _context.SaveChangesAsync(cancellationToken);
+
+                _logger.LogInformation("Successfully soft deleted store. StoreId: {StoreId}, Name: {StoreName}, DeletedBy: {DeletedBy}", 
+                    storeId, store.Name, deletedBy);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error while soft deleting store: {StoreId}", storeId);
+                throw new InvalidOperationException($"Unexpected error while soft deleting store with ID {storeId}: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<bool> RestoreStoreAsync(Guid storeId, CancellationToken cancellationToken = default)
+        {
+            _logger.LogInformation("Starting restore for soft deleted store: {StoreId}", storeId);
+            
+            try
+            {
+                // Validate input
+                if (storeId == Guid.Empty)
+                {
+                    _logger.LogWarning("Attempted to restore store with empty ID");
+                    return false;
+                }
+
+                _logger.LogDebug("Checking if soft deleted store exists for restore. StoreId: {StoreId}", storeId);
+
+                // Find the store including soft deleted ones
+                var store = await _context.Stores
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(s => s.StoreId == storeId, cancellationToken);
+                
+                if (store == null)
+                {
+                    _logger.LogWarning("Store not found for restore. StoreId: {StoreId}", storeId);
+                    return false;
+                }
+
+                if (!store.IsDeleted)
+                {
+                    _logger.LogWarning("Store is not soft deleted, cannot restore. StoreId: {StoreId}", storeId);
+                    return false;
+                }
+
+                _logger.LogDebug("Restoring soft deleted store. StoreId: {StoreId}, Name: {StoreName}", storeId, store.Name);
+
+                // Clear soft delete properties
+                store.IsDeleted = false;
+                store.DeletedAt = null;
+                store.DeletedBy = null;
+                store.DeletedReason = null;
+
+                // Update the store
+                _context.Stores.Update(store);
+                await _context.SaveChangesAsync(cancellationToken);
+
+                _logger.LogInformation("Successfully restored store. StoreId: {StoreId}, Name: {StoreName}", storeId, store.Name);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error while restoring store: {StoreId}", storeId);
+                throw new InvalidOperationException($"Unexpected error while restoring store with ID {storeId}: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<Store?> GetStoreByIdIncludeDeletedAsync(Guid storeId, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                // Validate input
+                if (storeId == Guid.Empty)
+                {
+                    _logger.LogWarning("Attempted to retrieve store with empty ID");
+                    return null;
+                }
+
+                _logger.LogDebug("Retrieving store including soft deleted. StoreId: {StoreId}", storeId);
+
+                // Query with navigation properties, ignoring soft delete filter
+                var store = await _context.Stores
+                    .IgnoreQueryFilters()
+                    .Include(s => s.Seller)
+                    .Include(s => s.Products)
+                    .FirstOrDefaultAsync(s => s.StoreId == storeId, cancellationToken);
+
+                if (store != null)
+                {
+                    _logger.LogDebug("Successfully retrieved store including deleted. StoreId: {StoreId}, Name: {StoreName}, IsDeleted: {IsDeleted}", 
+                        storeId, store.Name, store.IsDeleted);
+                }
+                else
+                {
+                    _logger.LogDebug("Store not found including deleted. StoreId: {StoreId}", storeId);
+                }
+
+                return store;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to retrieve store including deleted: {StoreId}", storeId);
+                throw new InvalidOperationException($"Failed to retrieve store with ID {storeId}: {ex.Message}", ex);
             }
         }
 
@@ -339,6 +499,31 @@ namespace Bazario.Infrastructure.Repositories
             {
                 _logger.LogError(ex, "Failed to count products for store: {StoreId}", storeId);
                 throw new InvalidOperationException($"Failed to count products for store {storeId}: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<List<Store>> GetActiveStoresAsync(CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Starting to retrieve active stores");
+            
+            try
+            {
+                _logger.LogDebug("Querying active stores with navigation properties");
+
+                var stores = await _context.Stores
+                    .Include(s => s.Seller)
+                    .Include(s => s.Products)
+                    .Where(s => s.IsActive && !s.IsDeleted)
+                    .ToListAsync(cancellationToken);
+
+                _logger.LogDebug("Successfully retrieved {StoreCount} active stores", stores.Count);
+
+                return stores;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to retrieve active stores");
+                throw new InvalidOperationException($"Failed to retrieve active stores: {ex.Message}", ex);
             }
         }
     }

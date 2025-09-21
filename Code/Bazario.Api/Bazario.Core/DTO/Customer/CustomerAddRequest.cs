@@ -8,7 +8,7 @@ using System.Xml.Linq;
 using Bazario.Core.Domain.IdentityEntities;
 using Bazario.Core.Enums;
 
-namespace Bazario.Core.DTO
+namespace Bazario.Core.DTO.Customer
 {
     public class CustomerAddRequest
     {

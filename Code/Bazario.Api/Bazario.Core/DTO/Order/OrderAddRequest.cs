@@ -6,8 +6,9 @@ using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.Entities;
 using Bazario.Core.Enums;
+using OrderEntity = Bazario.Core.Domain.Entities.Order;
 
-namespace Bazario.Core.DTO
+namespace Bazario.Core.DTO.Order
 {
     public class OrderAddRequest
     {
@@ -29,9 +30,9 @@ namespace Bazario.Core.DTO
         [Display(Name = "Order Status")]
         public OrderStatus Status { get; set; }
 
-        public Order ToOrder()
+        public OrderEntity ToOrder()
         {
-            return new Order
+            return new OrderEntity
             {
                 CustomerId = CustomerId,
                 Date = Date,

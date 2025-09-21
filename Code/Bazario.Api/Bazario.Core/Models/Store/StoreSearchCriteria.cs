@@ -15,5 +15,9 @@ namespace Bazario.Core.Models.Store
         public bool SortDescending { get; set; } = false;
         public int PageNumber { get; set; } = 1;
         public int PageSize { get; set; } = 20;
+        
+        // Soft deletion options
+        public bool IncludeDeleted { get; set; } = false;
+        public bool OnlyDeleted { get; set; } = false;
     }
 }

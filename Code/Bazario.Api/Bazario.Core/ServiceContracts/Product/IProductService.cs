@@ -4,10 +4,11 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.DTO;
+using Bazario.Core.DTO.Product;
 using Bazario.Core.Models.Order;
 using Bazario.Core.Models.Product;
 
-namespace Bazario.Core.ServiceContracts
+namespace Bazario.Core.ServiceContracts.Product
 {
     /// <summary>
     /// Service contract for product management operations

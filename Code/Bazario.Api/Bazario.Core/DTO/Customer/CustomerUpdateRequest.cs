@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using Bazario.Core.Domain.IdentityEntities;
 using Bazario.Core.Enums;
 
-namespace Bazario.Core.DTO
+namespace Bazario.Core.DTO.Customer
 {
     public class CustomerUpdateRequest
     {
@@ -53,9 +53,6 @@ namespace Bazario.Core.DTO
         [Display(Name = "Phone Number Confirmed")]
         public bool? PhoneNumberConfirmed { get; set; }
 
-        [Display(Name = "User Role")]
-        public Role Role { get; set; }
-
         [Display(Name = "Last Login At")]
         [DataType(DataType.DateTime)]
         public DateTime? LastLoginAt { get; set; }
@@ -76,6 +73,7 @@ namespace Bazario.Core.DTO
                 EmailConfirmed = EmailConfirmed ?? false,
                 PhoneNumberConfirmed = PhoneNumberConfirmed ?? false,
                 LastLoginAt = LastLoginAt
+                // Note: Role is not set here as it's managed by UserManager
             };
         }
     }

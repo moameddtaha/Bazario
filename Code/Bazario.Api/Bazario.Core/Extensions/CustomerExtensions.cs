@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.IdentityEntities;
 using Bazario.Core.DTO;
+using Bazario.Core.DTO.Customer;
 using Bazario.Core.Enums;
 
 namespace Bazario.Core.Extensions

@@ -6,8 +6,9 @@ using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.Entities;
 using Bazario.Core.Enums;
+using ProductEntity = Bazario.Core.Domain.Entities.Product;
 
-namespace Bazario.Core.DTO
+namespace Bazario.Core.DTO.Product
 {
     public class ProductAddRequest
     {
@@ -41,9 +42,9 @@ namespace Bazario.Core.DTO
         [Display(Name = "Category")]
         public Category Category { get; set; }
 
-        public Product ToProduct()
+        public ProductEntity ToProduct()
         {
-            return new Product
+            return new ProductEntity
             {
                 StoreId = StoreId,
                 Name = Name,

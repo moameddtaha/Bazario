@@ -6,7 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.Enums;
 
-namespace Bazario.Core.DTO
+namespace Bazario.Core.DTO.Customer
 {
     public class CustomerResponse
     {

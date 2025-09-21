@@ -5,8 +5,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.Entities;
+using ReviewEntity = Bazario.Core.Domain.Entities.Review;
 
-namespace Bazario.Core.DTO
+namespace Bazario.Core.DTO.Review
 {
     public class ReviewAddRequest
     {
@@ -27,9 +28,9 @@ namespace Bazario.Core.DTO
         [Display(Name = "Comment")]
         public string? Comment { get; set; }
 
-        public Review ToReview()
+        public ReviewEntity ToReview()
         {
-            return new Review
+            return new ReviewEntity
             {
                 CustomerId = CustomerId,
                 ProductId = ProductId,

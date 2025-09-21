@@ -92,13 +92,36 @@ namespace Bazario.Infrastructure.Repositories
                 _logger.LogInformation("Found product for update. Current: {CurrentName} -> New: {NewName}", 
                     existingProduct.Name, product.Name);
 
-                // Update only specific properties (not foreign keys or primary key)
-                existingProduct.Name = product.Name;
-                existingProduct.Description = product.Description;
-                existingProduct.Price = product.Price;
-                existingProduct.StockQuantity = product.StockQuantity;
-                existingProduct.Image = product.Image;
-                existingProduct.Category = product.Category;
+                // Update only specific properties (not foreign keys or primary key) - only if provided
+                if (!string.IsNullOrEmpty(product.Name))
+                {
+                    existingProduct.Name = product.Name;
+                }
+
+                if (product.Description != null)
+                {
+                    existingProduct.Description = product.Description;
+                }
+
+                if (product.Price > 0) // Only update if price is provided and valid
+                {
+                    existingProduct.Price = product.Price;
+                }
+
+                if (product.StockQuantity >= 0) // Only update if stock quantity is provided and valid
+                {
+                    existingProduct.StockQuantity = product.StockQuantity;
+                }
+
+                if (product.Image != null)
+                {
+                    existingProduct.Image = product.Image;
+                }
+
+                if (!string.IsNullOrEmpty(product.Category))
+                {
+                    existingProduct.Category = product.Category;
+                }
                 
                 await _context.SaveChangesAsync(cancellationToken);
 

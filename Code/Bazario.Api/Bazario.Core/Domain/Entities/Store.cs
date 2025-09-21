@@ -32,6 +32,39 @@ namespace Bazario.Core.Domain.Entities
         [DataType(DataType.DateTime)]
         public DateTime? CreatedAt { get; set; }
 
+        // ---------- Store Status Properties ----------
+        
+        /// <summary>
+        /// Indicates if the store is active and available for business
+        /// </summary>
+        [DefaultValue(true)]
+        public bool IsActive { get; set; } = true;
+
+        // ---------- Soft Deletion Properties ----------
+        
+        /// <summary>
+        /// Indicates if the store has been soft deleted
+        /// </summary>
+        [DefaultValue(false)]
+        public bool IsDeleted { get; set; } = false;
+
+        /// <summary>
+        /// Timestamp when the store was soft deleted
+        /// </summary>
+        [DataType(DataType.DateTime)]
+        public DateTime? DeletedAt { get; set; }
+
+        /// <summary>
+        /// ID of the user who deleted the store (for audit trail)
+        /// </summary>
+        public Guid? DeletedBy { get; set; }
+
+        /// <summary>
+        /// Reason provided for deleting the store
+        /// </summary>
+        [StringLength(500)]
+        public string? DeletedReason { get; set; }
+
         // ---------- Navigation Properties ----------
 
         public ApplicationUser? Seller { get; set; }

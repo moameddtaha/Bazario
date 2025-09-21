@@ -4,10 +4,11 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.DTO;
+using Bazario.Core.DTO.Order;
 using Bazario.Core.Enums;
 using Bazario.Core.Models.Order;
 
-namespace Bazario.Core.ServiceContracts
+namespace Bazario.Core.ServiceContracts.Order
 {
     /// <summary>
     /// Service contract for order management operations

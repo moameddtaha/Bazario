@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.Entities;
 using Bazario.Core.DTO;
+using Bazario.Core.DTO.Order;
 
 namespace Bazario.Core.Extensions
 {

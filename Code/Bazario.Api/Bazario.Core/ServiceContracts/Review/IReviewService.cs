@@ -4,10 +4,11 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.DTO;
+using Bazario.Core.DTO.Review;
 using Bazario.Core.Models.Order;
 using Bazario.Core.Models.Review;
 
-namespace Bazario.Core.ServiceContracts
+namespace Bazario.Core.ServiceContracts.Review
 {
     /// <summary>
     /// Service contract for review management operations

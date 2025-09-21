@@ -9,21 +9,19 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
-using Bazario.Core.ServiceContracts;
+using Bazario.Core.Helpers.Store;
 using Bazario.Core.ServiceContracts.Store;
 using Bazario.Core.Domain.IdentityEntities;
 using Bazario.Core.Domain.RepositoryContracts;
-using Bazario.Core.Services;
 
-using Bazario.Email.Models;
-using Bazario.Email.Services;
-using Bazario.Email.ServiceContracts;
-
-using Bazario.Auth.Domain.RepositoryContracts;
-using Bazario.Auth.ServiceContracts;
-using Bazario.Auth.Services;
-
-using Bazario.Auth.Helpers;
+using Bazario.Core.Services.Store;
+using Bazario.Core.Models.Email;
+using Bazario.Core.ServiceContracts.Auth;
+using Bazario.Core.Services.Auth;
+using Bazario.Core.ServiceContracts.Email;
+using Bazario.Core.Services.Email;
+using Bazario.Core.Helpers.Auth;
+using Bazario.Core.Helpers.Email;
 
 namespace Bazario.Api.StartupExtensions
 {
@@ -69,6 +67,9 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<IStoreAnalyticsService, StoreAnalyticsService>();
             services.AddScoped<IStoreManagementService, StoreManagementService>();
             services.AddScoped<IStoreService, StoreService>(); // Composite interface
+            
+            // Register Store Helpers
+            services.AddScoped<IStoreManagementHelper, StoreManagementHelper>();
             
             // Configure EmailSettings
             services.Configure<EmailSettings>(configuration.GetSection("EmailSettings"));

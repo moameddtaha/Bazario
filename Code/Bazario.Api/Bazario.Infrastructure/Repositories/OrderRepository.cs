@@ -93,10 +93,17 @@ namespace Bazario.Infrastructure.Repositories
                 _logger.LogDebug("Updating order properties. OrderId: {OrderId}, Date: {Date}, TotalAmount: {TotalAmount}, Status: {Status}", 
                     order.OrderId, order.Date, order.TotalAmount, order.Status);
 
-                // Update only specific properties (not foreign keys or primary key)
                 existingOrder.Date = order.Date;
-                existingOrder.TotalAmount = order.TotalAmount;
-                existingOrder.Status = order.Status;
+
+                if (order.TotalAmount > 0) // Only update if total amount is valid
+                {
+                    existingOrder.TotalAmount = order.TotalAmount;
+                }
+
+                if (!string.IsNullOrEmpty(order.Status)) // Only update if status is provided
+                {
+                    existingOrder.Status = order.Status;
+                }
                 
                 await _context.SaveChangesAsync(cancellationToken);
 
@@ -432,6 +439,30 @@ namespace Bazario.Infrastructure.Repositories
             {
                 _logger.LogError(ex, "Failed to count orders with status: {Status}", status);
                 throw new InvalidOperationException($"Failed to count orders with status {status}: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<int> GetOrderCountByStoreIdAsync(Guid storeId, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Starting to count orders for store: {StoreId}", storeId);
+            
+            try
+            {
+                // Count orders that have order items with products from this store
+                // Order -> OrderItem -> Product -> Store
+                var count = await _context.Orders
+                    .Where(o => o.OrderItems != null && 
+                               o.OrderItems.Any(oi => oi.Product != null && oi.Product.StoreId == storeId))
+                    .CountAsync(cancellationToken);
+
+                _logger.LogDebug("Successfully counted orders for store {StoreId}: {Count}", storeId, count);
+
+                return count;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to count orders for store: {StoreId}", storeId);
+                throw new InvalidOperationException($"Failed to count orders for store {storeId}: {ex.Message}", ex);
             }
         }
     }

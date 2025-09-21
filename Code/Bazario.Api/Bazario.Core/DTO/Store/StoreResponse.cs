@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Bazario.Core.DTO
+namespace Bazario.Core.DTO.Store
 {
     public class StoreResponse
     {
@@ -30,6 +30,24 @@ namespace Bazario.Core.DTO
         [DataType(DataType.DateTime)]
         public DateTime? CreatedAt { get; set; }
 
+        [Display(Name = "Is Active")]
+        public bool IsActive { get; set; }
+
+        // ---------- Soft Deletion Properties ----------
+        
+        [Display(Name = "Is Deleted")]
+        public bool IsDeleted { get; set; }
+
+        [Display(Name = "Deleted At")]
+        [DataType(DataType.DateTime)]
+        public DateTime? DeletedAt { get; set; }
+
+        [Display(Name = "Deleted By")]
+        public Guid? DeletedBy { get; set; }
+
+        [Display(Name = "Deleted Reason")]
+        public string? DeletedReason { get; set; }
+
         public override bool Equals(object? obj)
         {
             return obj is StoreResponse response &&
@@ -39,7 +57,12 @@ namespace Bazario.Core.DTO
                    Description == response.Description &&
                    Category == response.Category &&
                    Logo == response.Logo &&
-                   CreatedAt == response.CreatedAt;
+                   CreatedAt == response.CreatedAt &&
+                   IsActive == response.IsActive &&
+                   IsDeleted == response.IsDeleted &&
+                   DeletedAt == response.DeletedAt &&
+                   DeletedBy == response.DeletedBy &&
+                   DeletedReason == response.DeletedReason;
         }
 
         public override int GetHashCode()
@@ -52,12 +75,18 @@ namespace Bazario.Core.DTO
             hash.Add(Category);
             hash.Add(Logo);
             hash.Add(CreatedAt);
+            hash.Add(IsActive);
+            hash.Add(IsDeleted);
+            hash.Add(DeletedAt);
+            hash.Add(DeletedBy);
+            hash.Add(DeletedReason);
             return hash.ToHashCode();
         }
 
         public override string ToString()
         {
-            return $"Store: ID: {StoreId}, Name: {Name}, Category: {Category}, Seller ID: {SellerId}";
+            var status = IsDeleted ? " (DELETED)" : IsActive ? " (ACTIVE)" : " (INACTIVE)";
+            return $"Store: ID: {StoreId}, Name: {Name}, Category: {Category}, Seller ID: {SellerId}{status}";
         }
 
         public StoreUpdateRequest ToStoreUpdateRequest()
