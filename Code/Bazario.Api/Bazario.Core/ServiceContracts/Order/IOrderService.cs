@@ -7,6 +7,7 @@ using Bazario.Core.DTO;
 using Bazario.Core.DTO.Order;
 using Bazario.Core.Enums;
 using Bazario.Core.Models.Order;
+using Bazario.Core.Models.Shared;
 
 namespace Bazario.Core.ServiceContracts.Order
 {

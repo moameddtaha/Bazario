@@ -17,6 +17,7 @@ namespace Bazario.Core.Models.Product
         public int CurrentStock { get; set; }
         public int ViewCount { get; set; }
         public Dictionary<int, int> RatingDistribution { get; set; } = new();
-        public List<MonthlySalesData> MonthlySales { get; set; } = new();
+        public List<MonthlySalesData> MonthlySalesData { get; set; } = new();
+        public DateTime LastUpdated { get; set; }
     }
 }

@@ -19,6 +19,9 @@ namespace Bazario.Infrastructure.DbContext.Configurations
                 .WithOne(e => e.Product) // OrderItem has one Product
                 .HasForeignKey(e => e.ProductId) // The foreign key is ProductId
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // Add soft delete filter
+            builder.HasQueryFilter(p => !p.IsDeleted);
         }
     }
 }

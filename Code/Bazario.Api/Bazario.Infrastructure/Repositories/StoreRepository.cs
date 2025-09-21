@@ -81,8 +81,9 @@ namespace Bazario.Infrastructure.Repositories
 
                 _logger.LogDebug("Checking if store exists in database. StoreId: {StoreId}", store.StoreId);
 
-                // Check if store exists (use FindAsync for simple PK lookup)
-                var existingStore = await _context.Stores.FindAsync(new object[] { store.StoreId }, cancellationToken);
+                // Check if store exists (respects query filter - won't find soft-deleted stores)
+                var existingStore = await _context.Stores
+                    .FirstOrDefaultAsync(s => s.StoreId == store.StoreId, cancellationToken);
                 if (existingStore == null)
                 {
                     _logger.LogWarning("Store not found for update. StoreId: {StoreId}", store.StoreId);

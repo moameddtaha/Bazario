@@ -109,7 +109,7 @@ namespace Bazario.Core.DTO.Seller
                 DateOfBirth = DateOfBirth,
                 EmailConfirmed = EmailConfirmed,
                 PhoneNumberConfirmed = PhoneNumberConfirmed,
-                Role = Role,
+                // Role is managed by UserManager, not included in DTOs
                 LastLoginAt = LastLoginAt
             };
         }

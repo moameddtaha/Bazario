@@ -24,7 +24,12 @@ namespace Bazario.Core.Extensions
                 StockQuantity = product.StockQuantity,
                 Image = product.Image,
                 Category = Enum.TryParse<Category>(product.Category, out var category) ? category : Category.uncategorized,
-                CreatedAt = product.CreatedAt
+                CreatedAt = product.CreatedAt,
+                // Soft Deletion Properties
+                IsDeleted = product.IsDeleted,
+                DeletedAt = product.DeletedAt,
+                DeletedBy = product.DeletedBy,
+                DeletedReason = product.DeletedReason
             };
         }
     }

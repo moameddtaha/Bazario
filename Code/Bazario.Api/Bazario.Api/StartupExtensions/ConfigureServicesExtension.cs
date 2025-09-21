@@ -11,10 +11,12 @@ using System.Text;
 
 using Bazario.Core.Helpers.Store;
 using Bazario.Core.ServiceContracts.Store;
+using Bazario.Core.ServiceContracts.Product;
 using Bazario.Core.Domain.IdentityEntities;
 using Bazario.Core.Domain.RepositoryContracts;
 
 using Bazario.Core.Services.Store;
+using Bazario.Core.Services.Product;
 using Bazario.Core.Models.Email;
 using Bazario.Core.ServiceContracts.Auth;
 using Bazario.Core.Services.Auth;
@@ -70,6 +72,14 @@ namespace Bazario.Api.StartupExtensions
             
             // Register Store Helpers
             services.AddScoped<IStoreManagementHelper, StoreManagementHelper>();
+            
+            // Register Product Services (SOLID principle separation)
+            services.AddScoped<IProductManagementService, ProductManagementService>();
+            services.AddScoped<IProductQueryService, ProductQueryService>();
+            services.AddScoped<IProductInventoryService, ProductInventoryService>();
+            services.AddScoped<IProductAnalyticsService, ProductAnalyticsService>();
+            services.AddScoped<IProductValidationService, ProductValidationService>();
+            services.AddScoped<IProductService, ProductService>(); // Composite interface
             
             // Configure EmailSettings
             services.Configure<EmailSettings>(configuration.GetSection("EmailSettings"));

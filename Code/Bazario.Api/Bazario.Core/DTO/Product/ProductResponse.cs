@@ -37,6 +37,20 @@ namespace Bazario.Core.DTO.Product
         [DataType(DataType.DateTime)]
         public DateTime? CreatedAt { get; set; }
 
+        // ---------- Soft Deletion Properties ----------
+        [Display(Name = "Is Deleted")]
+        public bool IsDeleted { get; set; }
+
+        [Display(Name = "Deleted At")]
+        [DataType(DataType.DateTime)]
+        public DateTime? DeletedAt { get; set; }
+
+        [Display(Name = "Deleted By")]
+        public Guid? DeletedBy { get; set; }
+
+        [Display(Name = "Deleted Reason")]
+        public string? DeletedReason { get; set; }
+
         [Display(Name = "In Stock")]
         public bool IsInStock => StockQuantity > 0;
 
@@ -51,7 +65,11 @@ namespace Bazario.Core.DTO.Product
                    StockQuantity == response.StockQuantity &&
                    Image == response.Image &&
                    Category == response.Category &&
-                   CreatedAt == response.CreatedAt;
+                   CreatedAt == response.CreatedAt &&
+                   IsDeleted == response.IsDeleted &&
+                   DeletedAt == response.DeletedAt &&
+                   DeletedBy == response.DeletedBy &&
+                   DeletedReason == response.DeletedReason;
         }
 
         public override int GetHashCode()
@@ -66,12 +84,16 @@ namespace Bazario.Core.DTO.Product
             hash.Add(Image);
             hash.Add(Category);
             hash.Add(CreatedAt);
+            hash.Add(IsDeleted);
+            hash.Add(DeletedAt);
+            hash.Add(DeletedBy);
+            hash.Add(DeletedReason);
             return hash.ToHashCode();
         }
 
         public override string ToString()
         {
-            return $"Product: ID: {ProductId}, Name: {Name}, Price: {Price:C}, Stock: {StockQuantity}, Store ID: {StoreId}, Category: {Category}";
+            return $"Product: ID: {ProductId}, Name: {Name}, Price: {Price:C}, Stock: {StockQuantity}, Store ID: {StoreId}, Category: {Category}, IsDeleted: {IsDeleted}";
         }
 
         public ProductUpdateRequest ToProductUpdateRequest()

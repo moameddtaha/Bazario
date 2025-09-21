@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Bazario.Core.Models.Order
+namespace Bazario.Core.Models.Shared
 {
     /// <summary>
     /// Paged response wrapper for collections

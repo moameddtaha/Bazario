@@ -7,8 +7,10 @@ namespace Bazario.Core.Models.Product
     /// </summary>
     public class MonthlySalesData
     {
+        public string Month { get; set; } = string.Empty; // Format: "yyyy-MM"
+        public int Sales { get; set; }
         public int Year { get; set; }
-        public int Month { get; set; }
+        public int MonthNumber { get; set; }
         public int UnitsSold { get; set; }
         public decimal Revenue { get; set; }
     }

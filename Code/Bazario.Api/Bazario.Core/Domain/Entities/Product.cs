@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
@@ -33,6 +34,15 @@ namespace Bazario.Core.Domain.Entities
 
         [DataType(DataType.DateTime)]
         public DateTime? CreatedAt { get; set; }
+
+        // ---------- Soft Deletion Properties ----------
+        [DefaultValue(false)]
+        public bool IsDeleted { get; set; } = false;
+        [DataType(DataType.DateTime)]
+        public DateTime? DeletedAt { get; set; }
+        public Guid? DeletedBy { get; set; }
+        [StringLength(500)]
+        public string? DeletedReason { get; set; }
 
         // ---------- Navigation Properties ----------
 

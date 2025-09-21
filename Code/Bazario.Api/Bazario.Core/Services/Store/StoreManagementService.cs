@@ -293,12 +293,46 @@ namespace Bazario.Core.Services.Store
                     throw new InvalidOperationException($"Cannot hard delete store with {storeOrderCount} existing orders. Orders are permanent business records and cannot be deleted.");
                 }
 
-                // Note: Products are allowed - they can be removed during hard delete
+                // Check if store has products and delete them first (due to Restrict delete behavior)
                 var productCount = await _storeRepository.GetProductCountByStoreIdAsync(storeId, cancellationToken);
                 if (productCount > 0)
                 {
-                    _logger.LogWarning("Hard delete proceeding with {ProductCount} products - products will be permanently deleted. StoreId: {StoreId}", 
+                    _logger.LogWarning("Store has {ProductCount} products that must be deleted first. StoreId: {StoreId}", 
                         productCount, storeId);
+                    
+                    // Get all products for this store
+                    var products = await _productRepository.GetProductsByStoreIdAsync(storeId, cancellationToken);
+                    
+                    _logger.LogInformation("Hard deleting {ProductCount} products before store deletion. StoreId: {StoreId}", 
+                        products.Count, storeId);
+                    
+                    // Hard delete all products first
+                    foreach (var product in products)
+                    {
+                        try
+                        {
+                            var productDeleted = await _productRepository.HardDeleteProductAsync(product.ProductId, cancellationToken);
+                            if (productDeleted)
+                            {
+                                _logger.LogDebug("Successfully hard deleted product: {ProductId}, Name: {ProductName}", 
+                                    product.ProductId, product.Name);
+                            }
+                            else
+                            {
+                                _logger.LogWarning("Failed to hard delete product: {ProductId}, Name: {ProductName}", 
+                                    product.ProductId, product.Name);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Failed to hard delete product: {ProductId}, Name: {ProductName}", 
+                                product.ProductId, product.Name);
+                            throw new InvalidOperationException($"Failed to delete product {product.ProductId} ({product.Name}) before store deletion: {ex.Message}", ex);
+                        }
+                    }
+                    
+                    _logger.LogInformation("Successfully hard deleted all {ProductCount} products. Proceeding with store deletion. StoreId: {StoreId}", 
+                        products.Count, storeId);
                 }
 
                 // Log store details before permanent deletion for audit

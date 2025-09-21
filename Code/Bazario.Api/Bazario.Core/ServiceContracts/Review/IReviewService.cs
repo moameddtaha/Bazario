@@ -5,8 +5,8 @@ using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.DTO;
 using Bazario.Core.DTO.Review;
-using Bazario.Core.Models.Order;
 using Bazario.Core.Models.Review;
+using Bazario.Core.Models.Shared;
 
 namespace Bazario.Core.ServiceContracts.Review
 {

@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.Entities;
 using Bazario.Core.Domain.RepositoryContracts;
+using Bazario.Core.Models.Product;
 using Bazario.Infrastructure.DbContext;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -144,47 +145,6 @@ namespace Bazario.Infrastructure.Repositories
             {
                 _logger.LogError(ex, "Unexpected error while updating product: {ProductId}", product?.ProductId);
                 throw new InvalidOperationException($"Unexpected error while updating product with ID {product?.ProductId}: {ex.Message}", ex);
-            }
-        }
-
-        public async Task<bool> DeleteProductByIdAsync(Guid productId, CancellationToken cancellationToken = default)
-        {
-            _logger.LogInformation("Starting to delete product: {ProductId}", productId);
-            
-            try
-            {
-                // Validate input
-                if (productId == Guid.Empty)
-                {
-                    _logger.LogWarning("Attempted to delete product with empty ID");
-                    return false; // Invalid ID
-                }
-
-                _logger.LogDebug("Looking for product to delete: {ProductId}", productId);
-
-                // Use FindAsync for simple PK lookup (no navigation properties needed for delete)
-                var product = await _context.Products.FindAsync(new object[] { productId }, cancellationToken);
-                if (product == null)
-                {
-                    _logger.LogWarning("Product not found for deletion. ProductId: {ProductId}", productId);
-                    return false; // Product not found
-                }
-
-                _logger.LogInformation("Found product for deletion. Name: {ProductName}", product.Name);
-
-                // Delete the product
-                _context.Products.Remove(product);
-                await _context.SaveChangesAsync(cancellationToken);
-
-                _logger.LogInformation("Successfully deleted product. ProductId: {ProductId}, Name: {ProductName}", 
-                    productId, product.Name);
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Unexpected error while deleting product: {ProductId}", productId);
-                throw new InvalidOperationException($"Unexpected error while deleting product with ID {productId}: {ex.Message}", ex);
             }
         }
 
@@ -416,7 +376,8 @@ namespace Bazario.Infrastructure.Repositories
                     throw new ArgumentException("Stock quantity cannot be negative", nameof(newQuantity));
                 }
 
-                var product = await _context.Products.FindAsync(new object[] { productId }, cancellationToken);
+                var product = await _context.Products
+                    .FirstOrDefaultAsync(p => p.ProductId == productId, cancellationToken);
                 if (product == null)
                 {
                     _logger.LogWarning("Product not found for stock update: {ProductId}", productId);
@@ -441,6 +402,284 @@ namespace Bazario.Infrastructure.Repositories
             {
                 _logger.LogError(ex, "Failed to update stock quantity for product: {ProductId}", productId);
                 throw new InvalidOperationException($"Failed to update stock quantity for product {productId}: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<List<Product>> SearchProductsAsync(ProductSearchCriteria searchCriteria, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Searching products with criteria: {SearchTerm}", searchCriteria.SearchTerm);
+
+            try
+            {
+                var query = _context.Products.AsQueryable();
+
+                // Apply filters
+                if (!string.IsNullOrEmpty(searchCriteria.SearchTerm))
+                {
+                    query = query.Where(p => p.Name!.Contains(searchCriteria.SearchTerm) || 
+                                           p.Description!.Contains(searchCriteria.SearchTerm));
+                }
+
+                if (searchCriteria.StoreId.HasValue)
+                {
+                    query = query.Where(p => p.StoreId == searchCriteria.StoreId.Value);
+                }
+
+                if (searchCriteria.Category.HasValue)
+                {
+                    query = query.Where(p => p.Category == searchCriteria.Category.Value.ToString());
+                }
+
+                if (searchCriteria.MinPrice.HasValue)
+                {
+                    query = query.Where(p => p.Price >= searchCriteria.MinPrice.Value);
+                }
+
+                if (searchCriteria.MaxPrice.HasValue)
+                {
+                    query = query.Where(p => p.Price <= searchCriteria.MaxPrice.Value);
+                }
+
+                if (searchCriteria.InStockOnly == true)
+                {
+                    query = query.Where(p => p.StockQuantity > 0);
+                }
+
+                // Apply soft deletion filtering
+                if (searchCriteria.OnlyDeleted)
+                {
+                    query = query.Where(p => p.IsDeleted);
+                }
+                else if (!searchCriteria.IncludeDeleted)
+                {
+                    query = query.Where(p => !p.IsDeleted);
+                }
+                // If IncludeDeleted is true and OnlyDeleted is false, show all products
+
+                // Apply sorting
+                query = searchCriteria.SortBy?.ToLower() switch
+                {
+                    "name" => searchCriteria.SortDescending ? query.OrderByDescending(p => p.Name) : query.OrderBy(p => p.Name),
+                    "price" => searchCriteria.SortDescending ? query.OrderByDescending(p => p.Price) : query.OrderBy(p => p.Price),
+                    "createdat" => searchCriteria.SortDescending ? query.OrderByDescending(p => p.CreatedAt) : query.OrderBy(p => p.CreatedAt),
+                    _ => query.OrderBy(p => p.Name)
+                };
+
+                // Apply pagination
+                var products = await query
+                    .Skip((searchCriteria.PageNumber - 1) * searchCriteria.PageSize)
+                    .Take(searchCriteria.PageSize)
+                    .ToListAsync(cancellationToken);
+
+                _logger.LogDebug("Found {Count} products matching search criteria", products.Count);
+
+                return products;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to search products with criteria: {SearchTerm}", searchCriteria.SearchTerm);
+                throw new InvalidOperationException($"Failed to search products: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<List<Product>> GetLowStockProductsAsync(int threshold, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Retrieving products with low stock (threshold: {Threshold})", threshold);
+
+            try
+            {
+                var products = await _context.Products
+                    .Where(p => p.StockQuantity <= threshold)
+                    .OrderBy(p => p.StockQuantity)
+                    .ToListAsync(cancellationToken);
+
+                _logger.LogDebug("Found {Count} products with low stock", products.Count);
+
+                return products;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to retrieve low stock products with threshold: {Threshold}", threshold);
+                throw new InvalidOperationException($"Failed to retrieve low stock products: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<bool> SoftDeleteProductAsync(Guid productId, Guid deletedBy, string? reason = null, CancellationToken cancellationToken = default)
+        {
+            _logger.LogInformation("Soft deleting product: {ProductId}, DeletedBy: {DeletedBy}, Reason: {Reason}", 
+                productId, deletedBy, reason);
+
+            try
+            {
+                // Validate input
+                if (productId == Guid.Empty)
+                {
+                    _logger.LogWarning("Attempted to soft delete product with empty ID");
+                    return false;
+                }
+
+                if (deletedBy == Guid.Empty)
+                {
+                    _logger.LogWarning("Attempted to soft delete product with empty DeletedBy ID");
+                    return false;
+                }
+
+                var product = await _context.Products
+                    .FirstOrDefaultAsync(p => p.ProductId == productId, cancellationToken);
+                if (product == null)
+                {
+                    _logger.LogWarning("Product not found for soft deletion: {ProductId}", productId);
+                    return false;
+                }
+
+                // Note: With HasQueryFilter, we won't find already soft-deleted products
+                // So we don't need to check if (product.IsDeleted) anymore
+
+                // Perform soft delete
+                product.IsDeleted = true;
+                product.DeletedAt = DateTime.UtcNow;
+                product.DeletedBy = deletedBy;
+                product.DeletedReason = reason;
+
+                await _context.SaveChangesAsync(cancellationToken);
+
+                _logger.LogInformation("Successfully soft deleted product: {ProductId}, Name: {ProductName}", 
+                    productId, product.Name);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to soft delete product: {ProductId}, DeletedBy: {DeletedBy}", productId, deletedBy);
+                throw new InvalidOperationException($"Failed to soft delete product {productId}: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<bool> RestoreProductAsync(Guid productId, CancellationToken cancellationToken = default)
+        {
+            _logger.LogInformation("Restoring product: {ProductId}", productId);
+
+            try
+            {
+                // Validate input
+                if (productId == Guid.Empty)
+                {
+                    _logger.LogWarning("Attempted to restore product with empty ID");
+                    return false;
+                }
+
+                var product = await _context.Products
+                    .IgnoreQueryFilters() // Include soft-deleted products
+                    .FirstOrDefaultAsync(p => p.ProductId == productId, cancellationToken);
+
+                if (product == null)
+                {
+                    _logger.LogWarning("Product not found for restoration: {ProductId}", productId);
+                    return false;
+                }
+
+                if (!product.IsDeleted)
+                {
+                    _logger.LogWarning("Product is not deleted, cannot restore: {ProductId}", productId);
+                    return true; // Already restored, consider it successful
+                }
+
+                // Restore product
+                product.IsDeleted = false;
+                product.DeletedAt = null;
+                product.DeletedBy = null;
+                product.DeletedReason = null;
+
+                await _context.SaveChangesAsync(cancellationToken);
+
+                _logger.LogInformation("Successfully restored product: {ProductId}, Name: {ProductName}", 
+                    productId, product.Name);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to restore product: {ProductId}", productId);
+                throw new InvalidOperationException($"Failed to restore product {productId}: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<Product?> GetProductByIdIncludeDeletedAsync(Guid productId, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Retrieving product by ID (including deleted): {ProductId}", productId);
+
+            try
+            {
+                if (productId == Guid.Empty)
+                {
+                    _logger.LogWarning("Attempted to retrieve product with empty ID");
+                    return null;
+                }
+
+                var product = await _context.Products
+                    .IgnoreQueryFilters() // Include soft-deleted products
+                    .FirstOrDefaultAsync(p => p.ProductId == productId, cancellationToken);
+
+                if (product == null)
+                {
+                    _logger.LogDebug("Product not found (including deleted): {ProductId}", productId);
+                }
+                else
+                {
+                    _logger.LogDebug("Successfully retrieved product (including deleted): {ProductId}, Name: {ProductName}, IsDeleted: {IsDeleted}", 
+                        productId, product.Name, product.IsDeleted);
+                }
+
+                return product;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to retrieve product (including deleted): {ProductId}", productId);
+                throw new InvalidOperationException($"Failed to retrieve product {productId}: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<bool> HardDeleteProductAsync(Guid productId, CancellationToken cancellationToken = default)
+        {
+            _logger.LogCritical("HARD DELETING product: {ProductId} - This action is IRREVERSIBLE", productId);
+
+            try
+            {
+                // Validate input
+                if (productId == Guid.Empty)
+                {
+                    _logger.LogWarning("Attempted to hard delete product with empty ID");
+                    return false;
+                }
+
+                // Get product including soft-deleted ones for hard deletion
+                var product = await _context.Products
+                    .IgnoreQueryFilters() // Include soft-deleted products
+                    .FirstOrDefaultAsync(p => p.ProductId == productId, cancellationToken);
+
+                if (product == null)
+                {
+                    _logger.LogWarning("Product not found for hard deletion: {ProductId}", productId);
+                    return false;
+                }
+
+                // Log product details before permanent deletion for audit
+                _logger.LogCritical("Hard deleting product details - Name: {ProductName}, StoreId: {StoreId}, CreatedAt: {CreatedAt}, WasDeleted: {IsDeleted}", 
+                    product.Name, product.StoreId, product.CreatedAt, product.IsDeleted);
+
+                // Perform hard delete (permanent removal from database)
+                _context.Products.Remove(product);
+                await _context.SaveChangesAsync(cancellationToken);
+
+                _logger.LogCritical("HARD DELETE COMPLETED. Product permanently removed from database. ProductId: {ProductId}, Name: {ProductName}", 
+                    productId, product.Name);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to hard delete product: {ProductId}", productId);
+                throw new InvalidOperationException($"Failed to hard delete product {productId}: {ex.Message}", ex);
             }
         }
     }

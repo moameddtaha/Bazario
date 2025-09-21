@@ -465,5 +465,29 @@ namespace Bazario.Infrastructure.Repositories
                 throw new InvalidOperationException($"Failed to count orders for store {storeId}: {ex.Message}", ex);
             }
         }
+
+        public async Task<int> GetOrderCountByProductIdAsync(Guid productId, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Counting orders for product: {ProductId}", productId);
+
+            try
+            {
+                // Count orders that have order items with this specific product
+                // Order -> OrderItem -> Product
+                var count = await _context.Orders
+                    .Where(o => o.OrderItems != null && 
+                               o.OrderItems.Any(oi => oi.ProductId == productId))
+                    .CountAsync(cancellationToken);
+
+                _logger.LogDebug("Successfully counted orders for product {ProductId}: {Count}", productId, count);
+
+                return count;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to count orders for product: {ProductId}", productId);
+                throw new InvalidOperationException($"Failed to count orders for product {productId}: {ex.Message}", ex);
+            }
+        }
     }
 }

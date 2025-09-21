@@ -7,7 +7,7 @@ using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.DTO;
 using Bazario.Core.DTO.Store;
 using Bazario.Core.Extensions;
-using Bazario.Core.Models.Order;
+using Bazario.Core.Models.Shared;
 using Bazario.Core.Models.Store;
 using Bazario.Core.ServiceContracts.Store;
 using Microsoft.Extensions.Logging;

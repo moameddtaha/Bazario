@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.DTO;
 using Bazario.Core.DTO.Store;
-using Bazario.Core.Models.Order;
+using Bazario.Core.Models.Shared;
 using Bazario.Core.Models.Store;
 
 namespace Bazario.Core.ServiceContracts.Store

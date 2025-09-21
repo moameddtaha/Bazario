@@ -1,7 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Bazario.Core.Models.Order;
+using Bazario.Core.Enums;
 using Bazario.Core.Models.Shared;
 using Bazario.Core.Models.Store;
 

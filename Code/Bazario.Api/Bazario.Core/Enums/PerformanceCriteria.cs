@@ -1,4 +1,4 @@
-namespace Bazario.Core.Models.Store
+namespace Bazario.Core.Enums
 {
     /// <summary>
     /// Performance criteria for ranking stores

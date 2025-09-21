@@ -36,5 +36,7 @@ namespace Bazario.Core.Domain.RepositoryContracts
         Task<int> GetOrderCountByStatusAsync(OrderStatus status, CancellationToken cancellationToken = default);
 
         Task<int> GetOrderCountByStoreIdAsync(Guid storeId, CancellationToken cancellationToken = default);
+
+        Task<int> GetOrderCountByProductIdAsync(Guid productId, CancellationToken cancellationToken = default);
     }
 }
