@@ -39,13 +39,11 @@ namespace Bazario.Core.ServiceContracts.Store
         Task<PagedResponse<StoreResponse>> SearchStoresAsync(StoreSearchCriteria searchCriteria, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Gets stores by category with pagination
+        /// Gets stores by category with pagination using search criteria
         /// </summary>
-        /// <param name="category">Store category</param>
-        /// <param name="pageNumber">Page number</param>
-        /// <param name="pageSize">Page size</param>
+        /// <param name="searchCriteria">Search criteria with category filter</param>
         /// <param name="cancellationToken">Cancellation token</param>
         /// <returns>Stores in the specified category</returns>
-        Task<PagedResponse<StoreResponse>> GetStoresByCategoryAsync(string category, int pageNumber = 1, int pageSize = 20, CancellationToken cancellationToken = default);
+        Task<PagedResponse<StoreResponse>> GetStoresByCategoryAsync(StoreSearchCriteria searchCriteria, CancellationToken cancellationToken = default);
     }
 }

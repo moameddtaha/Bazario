@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Bazario.Core.Domain.Entities;
 using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Enums;
+using Bazario.Core.Models.Store;
 using Bazario.Infrastructure.DbContext;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -487,6 +488,82 @@ namespace Bazario.Infrastructure.Repositories
             {
                 _logger.LogError(ex, "Failed to count orders for product: {ProductId}", productId);
                 throw new InvalidOperationException($"Failed to count orders for product {productId}: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<StoreOrderStats> GetStoreOrderStatsAsync(Guid storeId, DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Getting store order stats for store: {StoreId}, from {StartDate} to {EndDate}", storeId, startDate, endDate);
+            
+            try
+            {
+                // Get orders with store products in date range using efficient SQL aggregation
+                var orderStats = await _context.Orders
+                    .Where(o => o.Date >= startDate && o.Date <= endDate)
+                    .Where(o => o.OrderItems != null && o.OrderItems.Any(oi => oi.Product != null && oi.Product.StoreId == storeId))
+                    .Select(o => new
+                    {
+                        OrderId = o.OrderId,
+                        CustomerId = o.CustomerId,
+                        Date = o.Date,
+                        StoreRevenue = o.OrderItems != null ? o.OrderItems
+                            .Where(oi => oi.Product != null && oi.Product.StoreId == storeId)
+                            .Sum(oi => oi.Price * oi.Quantity) : 0,
+                        StoreProductsSold = o.OrderItems != null ? o.OrderItems
+                            .Where(oi => oi.Product != null && oi.Product.StoreId == storeId)
+                            .Sum(oi => oi.Quantity) : 0
+                    })
+                    .ToListAsync(cancellationToken);
+
+                var totalOrders = orderStats.Count;
+                var totalRevenue = orderStats.Sum(o => o.StoreRevenue);
+                var averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+                // Calculate customer metrics
+                var customerOrderCounts = orderStats
+                    .GroupBy(o => o.CustomerId)
+                    .ToDictionary(g => g.Key, g => g.Count());
+
+                var totalCustomers = customerOrderCounts.Count;
+                var repeatCustomers = customerOrderCounts.Count(kvp => kvp.Value > 1);
+                var customerRetentionRate = totalCustomers > 0 ? (double)repeatCustomers / totalCustomers * 100 : 0;
+
+                // Calculate monthly data
+                var monthlyData = orderStats
+                    .GroupBy(o => new { o.Date.Year, o.Date.Month })
+                    .Select(g => new MonthlyOrderData
+                    {
+                        Year = g.Key.Year,
+                        Month = g.Key.Month,
+                        Orders = g.Count(),
+                        Revenue = g.Sum(o => o.StoreRevenue),
+                        NewCustomers = g.Select(o => o.CustomerId).Distinct().Count(), // Simplified
+                        ProductsSold = g.Sum(o => o.StoreProductsSold)
+                    })
+                    .OrderBy(m => m.Year)
+                    .ThenBy(m => m.Month)
+                    .ToList();
+
+                var result = new StoreOrderStats
+                {
+                    TotalOrders = totalOrders,
+                    TotalRevenue = totalRevenue,
+                    AverageOrderValue = averageOrderValue,
+                    TotalCustomers = totalCustomers,
+                    RepeatCustomers = repeatCustomers,
+                    CustomerRetentionRate = customerRetentionRate,
+                    MonthlyData = monthlyData
+                };
+
+                _logger.LogDebug("Successfully retrieved store order stats for store: {StoreId}. Orders: {TotalOrders}, Revenue: {TotalRevenue}", 
+                    storeId, totalOrders, totalRevenue);
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get store order stats for store: {StoreId}", storeId);
+                throw new InvalidOperationException($"Failed to get store order stats for store {storeId}: {ex.Message}", ex);
             }
         }
     }

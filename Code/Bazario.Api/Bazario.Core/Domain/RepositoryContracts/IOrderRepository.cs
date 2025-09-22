@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.Entities;
 using Bazario.Core.Enums;
+using Bazario.Core.Models.Store;
 
 namespace Bazario.Core.Domain.RepositoryContracts
 {
@@ -38,5 +39,10 @@ namespace Bazario.Core.Domain.RepositoryContracts
         Task<int> GetOrderCountByStoreIdAsync(Guid storeId, CancellationToken cancellationToken = default);
 
         Task<int> GetOrderCountByProductIdAsync(Guid productId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets aggregated order statistics for a specific store within a date range
+        /// </summary>
+        Task<StoreOrderStats> GetStoreOrderStatsAsync(Guid storeId, DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default);
     }
 }

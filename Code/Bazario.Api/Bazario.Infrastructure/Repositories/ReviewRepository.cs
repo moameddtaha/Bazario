@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.Entities;
 using Bazario.Core.Domain.RepositoryContracts;
+using Bazario.Core.Models.Store;
 using Bazario.Infrastructure.DbContext;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -537,6 +538,42 @@ namespace Bazario.Infrastructure.Repositories
             {
                 _logger.LogError(ex, "Failed to delete reviews for customer: {CustomerId}", customerId);
                 throw new InvalidOperationException($"Failed to delete reviews for customer {customerId}: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<StoreReviewStats> GetStoreReviewStatsAsync(Guid storeId, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Getting store review stats for store: {StoreId}", storeId);
+            
+            try
+            {
+                // Get aggregated review statistics for all products in this store
+                var reviewStats = await _context.Reviews
+                    .Where(r => r.Product != null && r.Product.StoreId == storeId)
+                    .GroupBy(r => 1) // Group all reviews together
+                    .Select(g => new StoreReviewStats
+                    {
+                        TotalReviews = g.Count(),
+                        AverageRating = g.Average(r => (decimal)r.Rating)
+                    })
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                // If no reviews found, return default values
+                var result = reviewStats ?? new StoreReviewStats
+                {
+                    TotalReviews = 0,
+                    AverageRating = 0
+                };
+
+                _logger.LogDebug("Successfully retrieved store review stats for store: {StoreId}. Reviews: {TotalReviews}, AvgRating: {AverageRating:F2}", 
+                    storeId, result.TotalReviews, result.AverageRating);
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get store review stats for store: {StoreId}", storeId);
+                throw new InvalidOperationException($"Failed to get store review stats for store {storeId}: {ex.Message}", ex);
             }
         }
     }

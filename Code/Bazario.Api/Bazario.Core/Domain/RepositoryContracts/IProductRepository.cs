@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.Entities;
 using Bazario.Core.Models.Product;
+using Bazario.Core.Models.Store;
 
 namespace Bazario.Core.Domain.RepositoryContracts
 {
@@ -17,9 +18,9 @@ namespace Bazario.Core.Domain.RepositoryContracts
 
         Task<Product?> GetProductByIdAsync(Guid productId, CancellationToken cancellationToken = default);
 
-        Task<List<Product>> GetAllProductsAsync(CancellationToken cancellationToken = default);
-
         Task<List<Product>> GetProductsByStoreIdAsync(Guid storeId, CancellationToken cancellationToken = default);
+
+        Task<List<Product>> GetAllProductsAsync(CancellationToken cancellationToken = default);
 
         Task<List<Product>> GetProductsByPriceRangeAsync(decimal minPrice, decimal maxPrice, CancellationToken cancellationToken = default);
 
@@ -31,9 +32,42 @@ namespace Bazario.Core.Domain.RepositoryContracts
 
         Task<bool> UpdateStockQuantityAsync(Guid productId, int newQuantity, CancellationToken cancellationToken = default);
 
-        Task<List<Product>> SearchProductsAsync(ProductSearchCriteria searchCriteria, CancellationToken cancellationToken = default);
-
         Task<List<Product>> GetLowStockProductsAsync(int threshold, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets top performing products for a specific store with aggregated data
+        /// </summary>
+        Task<List<ProductPerformance>> GetTopPerformingProductsAsync(Guid storeId, int count = 10, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets the count of products for a specific store with optional soft deletion filtering
+        /// </summary>
+        Task<int> GetProductCountByStoreIdAsync(Guid storeId, bool includeDeleted = false, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets aggregated sales statistics for a specific product
+        /// </summary>
+        Task<ProductSalesStats> GetProductSalesStatsAsync(Guid productId, DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets a queryable collection of products for efficient query composition
+        /// </summary>
+        IQueryable<Product> GetProductsQueryable();
+
+        /// <summary>
+        /// Gets a queryable collection of products ignoring soft deletion filters
+        /// </summary>
+        IQueryable<Product> GetProductsQueryableIgnoreFilters();
+
+        /// <summary>
+        /// Gets the count of products from a queryable collection
+        /// </summary>
+        Task<int> GetProductsCountAsync(IQueryable<Product> query, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets paged products from a queryable collection
+        /// </summary>
+        Task<List<Product>> GetProductsPagedAsync(IQueryable<Product> query, int pageNumber, int pageSize, CancellationToken cancellationToken = default);
 
         // Soft Deletion Methods
         Task<bool> SoftDeleteProductAsync(Guid productId, Guid deletedBy, string? reason = null, CancellationToken cancellationToken = default);

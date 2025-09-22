@@ -5,6 +5,7 @@ using System.Linq.Expressions;
 using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.Entities;
+using Bazario.Core.Models.Store;
 
 namespace Bazario.Core.Domain.RepositoryContracts
 {
@@ -37,5 +38,10 @@ namespace Bazario.Core.Domain.RepositoryContracts
         Task<bool> DeleteReviewsByProductIdAsync(Guid productId, CancellationToken cancellationToken = default);
 
         Task<bool> DeleteReviewsByCustomerIdAsync(Guid customerId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets aggregated review statistics for products in a specific store
+        /// </summary>
+        Task<StoreReviewStats> GetStoreReviewStatsAsync(Guid storeId, CancellationToken cancellationToken = default);
     }
 }

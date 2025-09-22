@@ -77,80 +77,84 @@ namespace Bazario.Core.Services.Store
         public async Task<PagedResponse<StoreResponse>> SearchStoresAsync(StoreSearchCriteria searchCriteria, CancellationToken cancellationToken = default)
         {
             _logger.LogDebug("Searching stores with criteria: {SearchTerm}, Category: {Category}", 
-                searchCriteria?.SearchTerm, searchCriteria?.Category);
+                searchCriteria.SearchTerm, searchCriteria.Category);
 
             try
             {
-                if (searchCriteria == null)
+                // Validate that at least one search criterion is provided
+                if (string.IsNullOrWhiteSpace(searchCriteria.SearchTerm) && 
+                    string.IsNullOrWhiteSpace(searchCriteria.Category) && 
+                    !searchCriteria.SellerId.HasValue)
                 {
-                    searchCriteria = new StoreSearchCriteria();
+                    throw new ArgumentException("At least one search criterion (SearchTerm, Category, or SellerId) must be provided", nameof(searchCriteria));
                 }
 
-                // Build filter predicate
-                var allStores = await _storeRepository.GetAllStoresAsync(cancellationToken);
-                var filteredStores = allStores.AsQueryable();
+                // Start with IQueryable - stays as SQL
+                var query = _storeRepository.GetStoresQueryable();
 
-                // Apply soft deletion filters
+                // Apply soft deletion filters (these become SQL WHERE clauses)
                 if (searchCriteria.OnlyDeleted)
                 {
-                    filteredStores = filteredStores.Where(s => s.IsDeleted);
+                    // Need to ignore the global filter to get deleted stores
+                    query = _storeRepository.GetStoresQueryableIgnoreFilters().Where(s => s.IsDeleted);
                 }
-                else if (!searchCriteria.IncludeDeleted)
+                else if (searchCriteria.IncludeDeleted)
                 {
-                    filteredStores = filteredStores.Where(s => !s.IsDeleted);
+                    // Need to ignore the global filter to include both active and deleted stores
+                    query = _storeRepository.GetStoresQueryableIgnoreFilters();
                 }
+                // If neither OnlyDeleted nor IncludeDeleted, the global HasQueryFilter 
+                // automatically applies !s.IsDeleted, so no additional filter needed
 
-                // Apply filters
+                // Apply filters (these become SQL WHERE clauses)
                 if (!string.IsNullOrWhiteSpace(searchCriteria.SearchTerm))
                 {
-                    filteredStores = filteredStores.Where(s => 
-                        s.Name != null && s.Name.Contains(searchCriteria.SearchTerm, StringComparison.OrdinalIgnoreCase) ||
-                        s.Description != null && s.Description.Contains(searchCriteria.SearchTerm, StringComparison.OrdinalIgnoreCase));
+                    query = query.Where(s => 
+                        s.Name != null && s.Name.Contains(searchCriteria.SearchTerm) ||
+                        s.Description != null && s.Description.Contains(searchCriteria.SearchTerm));
                 }
 
                 if (!string.IsNullOrWhiteSpace(searchCriteria.Category))
                 {
-                    filteredStores = filteredStores.Where(s => 
+                    query = query.Where(s => 
                         string.Equals(s.Category, searchCriteria.Category, StringComparison.OrdinalIgnoreCase));
                 }
 
                 if (searchCriteria.SellerId.HasValue)
                 {
-                    filteredStores = filteredStores.Where(s => s.SellerId == searchCriteria.SellerId.Value);
+                    query = query.Where(s => s.SellerId == searchCriteria.SellerId.Value);
                 }
 
-                // Apply sorting
-                filteredStores = searchCriteria.SortBy?.ToLower() switch
+                // Apply sorting (this becomes SQL ORDER BY)
+                query = searchCriteria.SortBy?.ToLower() switch
                 {
                     "name" => searchCriteria.SortDescending ? 
-                        filteredStores.OrderByDescending(s => s.Name) : 
-                        filteredStores.OrderBy(s => s.Name),
+                        query.OrderByDescending(s => s.Name) : 
+                        query.OrderBy(s => s.Name),
                     "createdat" => searchCriteria.SortDescending ? 
-                        filteredStores.OrderByDescending(s => s.CreatedAt) : 
-                        filteredStores.OrderBy(s => s.CreatedAt),
-                    _ => filteredStores.OrderBy(s => s.Name)
+                        query.OrderByDescending(s => s.CreatedAt) : 
+                        query.OrderBy(s => s.CreatedAt),
+                    _ => query.OrderBy(s => s.Name)
                 };
 
-                // Get total count
-                var totalCount = filteredStores.Count();
+                // Get total count with SQL COUNT
+                var totalCount = await _storeRepository.GetStoresCountAsync(query, cancellationToken);
 
-                // Apply pagination
-                var pagedStores = filteredStores
-                    .Skip((searchCriteria.PageNumber - 1) * searchCriteria.PageSize)
-                    .Take(searchCriteria.PageSize)
-                    .Select(s => s.ToStoreResponse())
-                    .ToList();
+                // Apply pagination and execute query (this becomes SQL OFFSET/FETCH)
+                var stores = await _storeRepository.GetStoresPagedAsync(query, searchCriteria.PageNumber, searchCriteria.PageSize, cancellationToken);
+
+                var storeResponses = stores.Select(s => s.ToStoreResponse()).ToList();
 
                 var result = new PagedResponse<StoreResponse>
                 {
-                    Items = pagedStores,
+                    Items = storeResponses,
                     TotalCount = totalCount,
                     PageNumber = searchCriteria.PageNumber,
                     PageSize = searchCriteria.PageSize
                 };
 
                 _logger.LogDebug("Successfully searched stores. Found {TotalCount} stores, returning page {PageNumber} with {ItemCount} items", 
-                    totalCount, searchCriteria.PageNumber, pagedStores.Count);
+                    totalCount, searchCriteria.PageNumber, storeResponses.Count);
 
                 return result;
             }
@@ -161,38 +165,72 @@ namespace Bazario.Core.Services.Store
             }
         }
 
-        public async Task<PagedResponse<StoreResponse>> GetStoresByCategoryAsync(string category, int pageNumber = 1, int pageSize = 20, CancellationToken cancellationToken = default)
+        public async Task<PagedResponse<StoreResponse>> GetStoresByCategoryAsync(StoreSearchCriteria searchCriteria, CancellationToken cancellationToken = default)
         {
             _logger.LogDebug("Getting stores by category: {Category}, Page: {PageNumber}, Size: {PageSize}", 
-                category, pageNumber, pageSize);
+                searchCriteria.Category, searchCriteria.PageNumber, searchCriteria.PageSize);
 
             try
             {
-                var stores = await _storeRepository.GetStoresByCategoryAsync(category, cancellationToken);
-                var totalCount = stores.Count;
+                // Validate that category is provided
+                if (string.IsNullOrWhiteSpace(searchCriteria.Category))
+                {
+                    throw new ArgumentException("Category is required for GetStoresByCategoryAsync", nameof(searchCriteria));
+                }
 
-                var pagedStores = stores
-                    .Skip((pageNumber - 1) * pageSize)
-                    .Take(pageSize)
-                    .Select(s => s.ToStoreResponse())
-                    .ToList();
+                // Use IQueryable for efficient SQL
+                var query = _storeRepository.GetStoresQueryable()
+                    .Where(s => s.Category == searchCriteria.Category);
+
+                // Apply soft deletion filters (consistent with SearchStoresAsync)
+                if (searchCriteria.OnlyDeleted)
+                {
+                    query = _storeRepository.GetStoresQueryableIgnoreFilters()
+                        .Where(s => s.Category == searchCriteria.Category)
+                        .Where(s => s.IsDeleted);
+                }
+                else if (searchCriteria.IncludeDeleted)
+                {
+                    query = _storeRepository.GetStoresQueryableIgnoreFilters()
+                        .Where(s => s.Category == searchCriteria.Category);
+                }
+
+                // Apply sorting (consistent with SearchStoresAsync)
+                query = searchCriteria.SortBy?.ToLower() switch
+                {
+                    "name" => searchCriteria.SortDescending ? 
+                        query.OrderByDescending(s => s.Name) : 
+                        query.OrderBy(s => s.Name),
+                    "createdat" => searchCriteria.SortDescending ? 
+                        query.OrderByDescending(s => s.CreatedAt) : 
+                        query.OrderBy(s => s.CreatedAt),
+                    _ => query.OrderBy(s => s.Name)
+                };
+
+                // Get total count with SQL COUNT
+                var totalCount = await _storeRepository.GetStoresCountAsync(query, cancellationToken);
+
+                // Apply pagination and execute query
+                var stores = await _storeRepository.GetStoresPagedAsync(query, searchCriteria.PageNumber, searchCriteria.PageSize, cancellationToken);
+
+                var storeResponses = stores.Select(s => s.ToStoreResponse()).ToList();
 
                 var result = new PagedResponse<StoreResponse>
                 {
-                    Items = pagedStores,
+                    Items = storeResponses,
                     TotalCount = totalCount,
-                    PageNumber = pageNumber,
-                    PageSize = pageSize
+                    PageNumber = searchCriteria.PageNumber,
+                    PageSize = searchCriteria.PageSize
                 };
 
                 _logger.LogDebug("Successfully retrieved stores by category: {Category}. Found {TotalCount} stores", 
-                    category, totalCount);
+                    searchCriteria.Category, totalCount);
 
                 return result;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to get stores by category: {Category}", category);
+                _logger.LogError(ex, "Failed to get stores by category: {Category}", searchCriteria.Category);
                 throw;
             }
         }

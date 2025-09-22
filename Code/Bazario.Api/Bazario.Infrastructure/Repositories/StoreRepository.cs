@@ -349,29 +349,6 @@ namespace Bazario.Infrastructure.Repositories
             }
         }
 
-        public async Task<List<Store>> GetAllStoresAsync(CancellationToken cancellationToken = default)
-        {
-            _logger.LogDebug("Starting to retrieve all stores");
-            
-            try
-            {
-                _logger.LogDebug("Querying all stores with navigation properties");
-
-                var stores = await _context.Stores
-                    .Include(s => s.Seller)
-                    .Include(s => s.Products)
-                    .ToListAsync(cancellationToken);
-
-                _logger.LogDebug("Successfully retrieved {StoreCount} stores", stores.Count);
-
-                return stores;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to retrieve all stores");
-                throw new InvalidOperationException($"Failed to retrieve stores: {ex.Message}", ex);
-            }
-        }
 
         public async Task<List<Store>> GetStoresBySellerIdAsync(Guid sellerId, CancellationToken cancellationToken = default)
         {
@@ -402,6 +379,56 @@ namespace Bazario.Infrastructure.Repositories
             {
                 _logger.LogError(ex, "Failed to retrieve stores for seller: {SellerId}", sellerId);
                 throw new InvalidOperationException($"Failed to retrieve stores for seller {sellerId}: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<List<Store>> GetAllStoresAsync(CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Retrieving all stores");
+            
+            try
+            {
+                var stores = await _context.Stores
+                    .Include(s => s.Seller)
+                    .Include(s => s.Products)
+                    .ToListAsync(cancellationToken);
+
+                _logger.LogDebug("Successfully retrieved {StoreCount} stores", stores.Count);
+                return stores;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to retrieve all stores");
+                throw new InvalidOperationException($"Failed to retrieve all stores: {ex.Message}", ex);
+            }
+        }
+
+
+        public async Task<List<Store>> GetFilteredStoresAsync(Expression<Func<Store, bool>> predicate, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Retrieving filtered stores with custom predicate");
+            
+            try
+            {
+                if (predicate == null)
+                {
+                    _logger.LogWarning("Attempted to filter stores with null predicate");
+                    throw new ArgumentNullException(nameof(predicate));
+                }
+
+                var stores = await _context.Stores
+                    .Include(s => s.Seller)
+                    .Include(s => s.Products)
+                    .Where(predicate)
+                    .ToListAsync(cancellationToken);
+
+                _logger.LogDebug("Successfully retrieved {StoreCount} filtered stores", stores.Count);
+                return stores;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to retrieve filtered stores");
+                throw new InvalidOperationException($"Failed to retrieve filtered stores: {ex.Message}", ex);
             }
         }
 
@@ -437,42 +464,6 @@ namespace Bazario.Infrastructure.Repositories
             }
         }
 
-        public async Task<List<Store>> GetFilteredStoresAsync(Expression<Func<Store, bool>> predicate, CancellationToken cancellationToken = default)
-        {
-            _logger.LogDebug("Starting to retrieve filtered stores");
-            
-            try
-            {
-                // Validate input
-                if (predicate == null)
-                {
-                    _logger.LogWarning("Attempted to retrieve stores with null predicate");
-                    throw new ArgumentNullException(nameof(predicate));
-                }
-
-                _logger.LogDebug("Querying filtered stores with navigation properties");
-
-                var stores = await _context.Stores
-                    .Include(s => s.Seller)
-                    .Include(s => s.Products)
-                    .Where(predicate)
-                    .ToListAsync(cancellationToken);
-
-                _logger.LogDebug("Successfully retrieved {StoreCount} filtered stores", stores.Count);
-
-                return stores;
-            }
-            catch (ArgumentException ex)
-            {
-                _logger.LogWarning(ex, "Validation error while retrieving filtered stores");
-                throw; // Re-throw argument exceptions as-is
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to retrieve filtered stores");
-                throw new InvalidOperationException($"Failed to retrieve filtered stores: {ex.Message}", ex);
-            }
-        }
 
         public async Task<int> GetProductCountByStoreIdAsync(Guid storeId, CancellationToken cancellationToken = default)
         {
@@ -525,6 +516,77 @@ namespace Bazario.Infrastructure.Repositories
             {
                 _logger.LogError(ex, "Failed to retrieve active stores");
                 throw new InvalidOperationException($"Failed to retrieve active stores: {ex.Message}", ex);
+            }
+        }
+
+        public IQueryable<Store> GetStoresQueryable()
+        {
+            _logger.LogDebug("Returning queryable for stores");
+            
+            try
+            {
+                // Return queryable with navigation properties
+                // The HasQueryFilter will automatically be applied by EF Core
+                return _context.Stores
+                    .Include(s => s.Seller)
+                    .Include(s => s.Products);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to create stores queryable");
+                throw new InvalidOperationException($"Failed to create stores queryable: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<int> GetStoresCountAsync(IQueryable<Store> query, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Getting count of stores from query");
+            
+            try
+            {
+                return await query.CountAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get stores count");
+                throw new InvalidOperationException($"Failed to get stores count: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<List<Store>> GetStoresPagedAsync(IQueryable<Store> query, int pageNumber, int pageSize, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Getting paged stores from query. Page: {PageNumber}, Size: {PageSize}", pageNumber, pageSize);
+            
+            try
+            {
+                return await query
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get paged stores");
+                throw new InvalidOperationException($"Failed to get paged stores: {ex.Message}", ex);
+            }
+        }
+
+        public IQueryable<Store> GetStoresQueryableIgnoreFilters()
+        {
+            _logger.LogDebug("Returning queryable for stores (ignoring global filters)");
+            
+            try
+            {
+                // Return queryable with navigation properties, ignoring global query filters
+                return _context.Stores
+                    .IgnoreQueryFilters()
+                    .Include(s => s.Seller)
+                    .Include(s => s.Products);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to create stores queryable (ignoring filters)");
+                throw new InvalidOperationException($"Failed to create stores queryable (ignoring filters): {ex.Message}", ex);
             }
         }
     }

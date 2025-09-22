@@ -33,16 +33,34 @@ namespace Bazario.Core.Domain.RepositoryContracts
 
         Task<Store?> GetStoreByIdAsync(Guid storeId, CancellationToken cancellationToken = default);
 
-        Task<List<Store>> GetAllStoresAsync(CancellationToken cancellationToken = default);
-
         Task<List<Store>> GetStoresBySellerIdAsync(Guid sellerId, CancellationToken cancellationToken = default);
 
-        Task<List<Store>> GetStoresByCategoryAsync(string category, CancellationToken cancellationToken = default);
+        Task<List<Store>> GetAllStoresAsync(CancellationToken cancellationToken = default);
 
         Task<List<Store>> GetActiveStoresAsync(CancellationToken cancellationToken = default);
 
         Task<List<Store>> GetFilteredStoresAsync(Expression<Func<Store, bool>> predicate, CancellationToken cancellationToken = default);
 
         Task<int> GetProductCountByStoreIdAsync(Guid storeId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets a queryable for stores to enable efficient filtering and pagination
+        /// </summary>
+        IQueryable<Store> GetStoresQueryable();
+
+        /// <summary>
+        /// Gets the count of stores matching the query
+        /// </summary>
+        Task<int> GetStoresCountAsync(IQueryable<Store> query, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets stores with pagination from the query
+        /// </summary>
+        Task<List<Store>> GetStoresPagedAsync(IQueryable<Store> query, int pageNumber, int pageSize, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets a queryable for stores that ignores global query filters (for soft deletion scenarios)
+        /// </summary>
+        IQueryable<Store> GetStoresQueryableIgnoreFilters();
     }
 }

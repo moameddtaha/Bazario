@@ -17,6 +17,6 @@ namespace Bazario.Core.Models.Store
         public int ReviewCount { get; set; }
         public DateTime CreatedAt { get; set; }
         public bool IsActive { get; set; }
-        public int Rank { get; set; }
+        public int? Rank { get; set; }
     }
 }

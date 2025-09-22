@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Bazario.Core.Domain.Entities;
 using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Models.Product;
+using Bazario.Core.Models.Store;
 using Bazario.Infrastructure.DbContext;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -186,24 +187,6 @@ namespace Bazario.Infrastructure.Repositories
             }
         }
 
-        public async Task<List<Product>> GetAllProductsAsync(CancellationToken cancellationToken = default)
-        {
-            try
-            {
-                var products = await _context.Products
-                    .Include(p => p.Store)
-                    .Include(p => p.Reviews)
-                    .Include(p => p.OrderItems)
-                    .ToListAsync(cancellationToken);
-
-                return products;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to retrieve all products");
-                throw new InvalidOperationException($"Failed to retrieve products: {ex.Message}", ex);
-            }
-        }
 
         public async Task<List<Product>> GetProductsByStoreIdAsync(Guid storeId, CancellationToken cancellationToken = default)
         {
@@ -236,6 +219,27 @@ namespace Bazario.Infrastructure.Repositories
             }
         }
 
+        public async Task<List<Product>> GetAllProductsAsync(CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Retrieving all products");
+            
+            try
+            {
+                var products = await _context.Products
+                    .Include(p => p.Store)
+                    .Include(p => p.Reviews)
+                    .ToListAsync(cancellationToken);
+
+                _logger.LogDebug("Successfully retrieved {ProductCount} products", products.Count);
+                return products;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to retrieve all products");
+                throw new InvalidOperationException($"Failed to retrieve all products: {ex.Message}", ex);
+            }
+        }
+
         public async Task<List<Product>> GetProductsByPriceRangeAsync(decimal minPrice, decimal maxPrice, CancellationToken cancellationToken = default)
         {
             _logger.LogDebug("Retrieving products by price range: {MinPrice:C} to {MaxPrice:C}", minPrice, maxPrice);
@@ -252,7 +256,6 @@ namespace Bazario.Infrastructure.Repositories
                 var products = await _context.Products
                     .Include(p => p.Store)
                     .Include(p => p.Reviews)
-                    .Include(p => p.OrderItems)
                     .Where(p => p.Price >= minPrice && p.Price <= maxPrice)
                     .ToListAsync(cancellationToken);
 
@@ -282,7 +285,6 @@ namespace Bazario.Infrastructure.Repositories
                 var products = await _context.Products
                     .Include(p => p.Store)
                     .Include(p => p.Reviews)
-                    .Include(p => p.OrderItems)
                     .Where(p => p.StockQuantity > 0)
                     .ToListAsync(cancellationToken);
 
@@ -306,7 +308,6 @@ namespace Bazario.Infrastructure.Repositories
                 var products = await _context.Products
                     .Include(p => p.Store)
                     .Include(p => p.Reviews)
-                    .Include(p => p.OrderItems)
                     .Where(p => p.StockQuantity == 0)
                     .ToListAsync(cancellationToken);
 
@@ -337,7 +338,6 @@ namespace Bazario.Infrastructure.Repositories
                 var products = await _context.Products
                     .Include(p => p.Store)
                     .Include(p => p.Reviews)
-                    .Include(p => p.OrderItems)
                     .Where(predicate)
                     .ToListAsync(cancellationToken);
 
@@ -402,83 +402,6 @@ namespace Bazario.Infrastructure.Repositories
             {
                 _logger.LogError(ex, "Failed to update stock quantity for product: {ProductId}", productId);
                 throw new InvalidOperationException($"Failed to update stock quantity for product {productId}: {ex.Message}", ex);
-            }
-        }
-
-        public async Task<List<Product>> SearchProductsAsync(ProductSearchCriteria searchCriteria, CancellationToken cancellationToken = default)
-        {
-            _logger.LogDebug("Searching products with criteria: {SearchTerm}", searchCriteria.SearchTerm);
-
-            try
-            {
-                var query = _context.Products.AsQueryable();
-
-                // Apply filters
-                if (!string.IsNullOrEmpty(searchCriteria.SearchTerm))
-                {
-                    query = query.Where(p => p.Name!.Contains(searchCriteria.SearchTerm) || 
-                                           p.Description!.Contains(searchCriteria.SearchTerm));
-                }
-
-                if (searchCriteria.StoreId.HasValue)
-                {
-                    query = query.Where(p => p.StoreId == searchCriteria.StoreId.Value);
-                }
-
-                if (searchCriteria.Category.HasValue)
-                {
-                    query = query.Where(p => p.Category == searchCriteria.Category.Value.ToString());
-                }
-
-                if (searchCriteria.MinPrice.HasValue)
-                {
-                    query = query.Where(p => p.Price >= searchCriteria.MinPrice.Value);
-                }
-
-                if (searchCriteria.MaxPrice.HasValue)
-                {
-                    query = query.Where(p => p.Price <= searchCriteria.MaxPrice.Value);
-                }
-
-                if (searchCriteria.InStockOnly == true)
-                {
-                    query = query.Where(p => p.StockQuantity > 0);
-                }
-
-                // Apply soft deletion filtering
-                if (searchCriteria.OnlyDeleted)
-                {
-                    query = query.Where(p => p.IsDeleted);
-                }
-                else if (!searchCriteria.IncludeDeleted)
-                {
-                    query = query.Where(p => !p.IsDeleted);
-                }
-                // If IncludeDeleted is true and OnlyDeleted is false, show all products
-
-                // Apply sorting
-                query = searchCriteria.SortBy?.ToLower() switch
-                {
-                    "name" => searchCriteria.SortDescending ? query.OrderByDescending(p => p.Name) : query.OrderBy(p => p.Name),
-                    "price" => searchCriteria.SortDescending ? query.OrderByDescending(p => p.Price) : query.OrderBy(p => p.Price),
-                    "createdat" => searchCriteria.SortDescending ? query.OrderByDescending(p => p.CreatedAt) : query.OrderBy(p => p.CreatedAt),
-                    _ => query.OrderBy(p => p.Name)
-                };
-
-                // Apply pagination
-                var products = await query
-                    .Skip((searchCriteria.PageNumber - 1) * searchCriteria.PageSize)
-                    .Take(searchCriteria.PageSize)
-                    .ToListAsync(cancellationToken);
-
-                _logger.LogDebug("Found {Count} products matching search criteria", products.Count);
-
-                return products;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to search products with criteria: {SearchTerm}", searchCriteria.SearchTerm);
-                throw new InvalidOperationException($"Failed to search products: {ex.Message}", ex);
             }
         }
 
@@ -680,6 +603,182 @@ namespace Bazario.Infrastructure.Repositories
             {
                 _logger.LogError(ex, "Failed to hard delete product: {ProductId}", productId);
                 throw new InvalidOperationException($"Failed to hard delete product {productId}: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<List<ProductPerformance>> GetTopPerformingProductsAsync(Guid storeId, int count = 10, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Getting top performing products for store: {StoreId}, count: {Count}", storeId, count);
+            
+            try
+            {
+                // Get top performing products by revenue using efficient SQL aggregation
+                var topProducts = await _context.Products
+                    .Where(p => p.StoreId == storeId && !p.IsDeleted)
+                    .Select(p => new ProductPerformance
+                    {
+                        ProductId = p.ProductId,
+                        ProductName = p.Name,
+                        UnitsSold = p.OrderItems != null ? p.OrderItems.Sum(oi => oi.Quantity) : 0,
+                        Revenue = p.OrderItems != null ? p.OrderItems.Sum(oi => oi.Price * oi.Quantity) : 0,
+                        AverageRating = p.Reviews != null && p.Reviews.Any() ? p.Reviews.Average(r => (decimal)r.Rating) : 0,
+                        ReviewCount = p.Reviews != null ? p.Reviews.Count : 0
+                    })
+                    .OrderByDescending(p => p.Revenue)
+                    .Take(count)
+                    .ToListAsync(cancellationToken);
+
+                _logger.LogDebug("Successfully retrieved {Count} top performing products for store: {StoreId}", 
+                    topProducts.Count, storeId);
+
+                return topProducts;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get top performing products for store: {StoreId}", storeId);
+                throw new InvalidOperationException($"Failed to get top performing products for store {storeId}: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<int> GetProductCountByStoreIdAsync(Guid storeId, bool includeDeleted = false, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Getting product count for store: {StoreId}, includeDeleted: {IncludeDeleted}", storeId, includeDeleted);
+            
+            try
+            {
+                var query = _context.Products.Where(p => p.StoreId == storeId);
+                
+                if (!includeDeleted)
+                {
+                    // Use the global query filter for soft deletion
+                    // No additional filtering needed as HasQueryFilter handles this
+                }
+                else
+                {
+                    // Include deleted products by ignoring the global query filter
+                    query = query.IgnoreQueryFilters();
+                }
+
+                var count = await query.CountAsync(cancellationToken);
+
+                _logger.LogDebug("Successfully retrieved product count for store: {StoreId}. Count: {Count}, IncludeDeleted: {IncludeDeleted}", 
+                    storeId, count, includeDeleted);
+
+                return count;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get product count for store: {StoreId}", storeId);
+                throw new InvalidOperationException($"Failed to get product count for store {storeId}: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<ProductSalesStats> GetProductSalesStatsAsync(Guid productId, DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Getting product sales stats for product: {ProductId}, from {StartDate} to {EndDate}", productId, startDate, endDate);
+            
+            try
+            {
+                // Get aggregated sales data using efficient SQL aggregation
+                var salesData = await _context.OrderItems
+                    .Where(oi => oi.ProductId == productId)
+                    .Where(oi => oi.Order != null && oi.Order.Date >= startDate && oi.Order.Date <= endDate)
+                    .Select(oi => new
+                    {
+                        Quantity = oi.Quantity,
+                        Price = oi.Price,
+                        Revenue = oi.Price * oi.Quantity,
+                        OrderDate = oi.Order!.Date
+                    })
+                    .ToListAsync(cancellationToken);
+
+                var totalSales = salesData.Sum(s => s.Quantity);
+                var totalRevenue = salesData.Sum(s => s.Revenue);
+
+                // Calculate monthly data
+                var monthlyData = salesData
+                    .GroupBy(s => new { s.OrderDate.Year, s.OrderDate.Month })
+                    .Select(g => new MonthlyProductSalesData
+                    {
+                        Year = g.Key.Year,
+                        Month = g.Key.Month,
+                        Sales = g.Sum(s => s.Quantity),
+                        Revenue = g.Sum(s => s.Revenue),
+                        UnitsSold = g.Sum(s => s.Quantity)
+                    })
+                    .OrderBy(m => m.Year)
+                    .ThenBy(m => m.Month)
+                    .ToList();
+
+                var result = new ProductSalesStats
+                {
+                    TotalSales = totalSales,
+                    TotalRevenue = totalRevenue,
+                    MonthlyData = monthlyData
+                };
+
+                _logger.LogDebug("Successfully retrieved product sales stats for product: {ProductId}. TotalSales: {TotalSales}, TotalRevenue: {TotalRevenue}", 
+                    productId, totalSales, totalRevenue);
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get product sales stats for product: {ProductId}", productId);
+                throw new InvalidOperationException($"Failed to get product sales stats for product {productId}: {ex.Message}", ex);
+            }
+        }
+
+        public IQueryable<Product> GetProductsQueryable()
+        {
+            return _context.Products
+                .Include(p => p.Store)
+                .Include(p => p.Reviews);
+        }
+
+        public IQueryable<Product> GetProductsQueryableIgnoreFilters()
+        {
+            return _context.Products
+                .IgnoreQueryFilters()
+                .Include(p => p.Store)
+                .Include(p => p.Reviews);
+        }
+
+        public async Task<int> GetProductsCountAsync(IQueryable<Product> query, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Getting product count from queryable");
+            
+            try
+            {
+                var count = await query.CountAsync(cancellationToken);
+                _logger.LogDebug("Successfully got product count: {Count}", count);
+                return count;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get product count from queryable");
+                throw new InvalidOperationException($"Failed to get product count: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<List<Product>> GetProductsPagedAsync(IQueryable<Product> query, int pageNumber, int pageSize, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Getting paged products. Page: {PageNumber}, Size: {PageSize}", pageNumber, pageSize);
+            
+            try
+            {
+                var products = await query
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync(cancellationToken);
+
+                _logger.LogDebug("Successfully got {Count} paged products", products.Count);
+                return products;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get paged products. Page: {PageNumber}, Size: {PageSize}", pageNumber, pageSize);
+                throw new InvalidOperationException($"Failed to get paged products: {ex.Message}", ex);
             }
         }
     }

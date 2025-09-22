@@ -51,49 +51,32 @@ namespace Bazario.Core.Services.Product
                     throw new InvalidOperationException($"Product with ID {productId} not found");
                 }
 
-                // Get orders containing this product
-                var orders = await _orderRepository.GetFilteredOrdersAsync(
-                    o => o.OrderItems != null && o.OrderItems.Any(oi => oi.ProductId == productId), 
-                    cancellationToken);
-
-                // Get reviews for this product
-                var reviews = await _reviewRepository.GetReviewsByProductIdAsync(productId, cancellationToken);
-
-                // Calculate analytics
-                var totalSales = orders.Sum(o => o.OrderItems?.Where(oi => oi.ProductId == productId).Sum(oi => oi.Quantity) ?? 0);
-                var totalRevenue = orders.Sum(o => o.OrderItems?.Where(oi => oi.ProductId == productId).Sum(oi => oi.Quantity * oi.Price) ?? 0);
-                var averageRating = reviews.Any() ? (decimal)reviews.Average(r => r.Rating) : 0;
-                var reviewCount = reviews.Count;
-
-                // Calculate monthly sales data (last 12 months)
-                var monthlySales = new List<MonthlySalesData>();
-                var currentDate = DateTime.UtcNow;
+                // Get product analytics efficiently using database aggregation
+                // Use last 12 months for product analytics (same as store analytics)
+                var oneYearAgo = DateTime.UtcNow.AddYears(-1);
+                var salesStats = await _productRepository.GetProductSalesStatsAsync(productId, oneYearAgo, DateTime.UtcNow, cancellationToken);
                 
-                for (int i = 11; i >= 0; i--)
+                // Get review statistics efficiently
+                var averageRating = await _reviewRepository.GetAverageRatingByProductIdAsync(productId, cancellationToken);
+                var reviewCount = await _reviewRepository.GetReviewCountByProductIdAsync(productId, cancellationToken);
+
+                // Convert monthly product sales data to monthly sales data
+                var monthlySales = salesStats.MonthlyData.Select(m => new MonthlySalesData
                 {
-                    var monthStart = new DateTime(currentDate.Year, currentDate.Month, 1).AddMonths(-i);
-                    var monthEnd = monthStart.AddMonths(1).AddDays(-1);
-                    
-                    var monthOrders = orders.Where(o => o.Date >= monthStart && o.Date <= monthEnd);
-                    var monthSales = monthOrders.Sum(o => o.OrderItems?.Where(oi => oi.ProductId == productId).Sum(oi => oi.Quantity) ?? 0);
-                    
-                    monthlySales.Add(new MonthlySalesData
-                    {
-                        Month = monthStart.ToString("yyyy-MM"),
-                        Sales = monthSales,
-                        Year = monthStart.Year,
-                        MonthNumber = monthStart.Month,
-                        UnitsSold = monthSales,
-                        Revenue = monthOrders.Sum(o => o.OrderItems?.Where(oi => oi.ProductId == productId).Sum(oi => oi.Quantity * oi.Price) ?? 0)
-                    });
-                }
+                    Month = $"{m.Year}-{m.Month:D2}",
+                    Sales = m.Sales,
+                    Year = m.Year,
+                    MonthNumber = m.Month,
+                    UnitsSold = m.UnitsSold,
+                    Revenue = m.Revenue
+                }).ToList();
 
                 var analytics = new ProductAnalytics
                 {
                     ProductId = productId,
                     ProductName = product.Name ?? "Unknown",
-                    TotalSales = totalSales,
-                    TotalRevenue = totalRevenue,
+                    TotalSales = salesStats.TotalSales,
+                    TotalRevenue = salesStats.TotalRevenue,
                     AverageRating = Math.Round(averageRating, 2),
                     ReviewCount = reviewCount,
                     CurrentStock = product.StockQuantity,
@@ -102,7 +85,7 @@ namespace Bazario.Core.Services.Product
                 };
 
                 _logger.LogDebug("Successfully generated analytics for product: {ProductId}, TotalSales: {TotalSales}, TotalRevenue: {TotalRevenue}, AverageRating: {AverageRating}", 
-                    productId, totalSales, totalRevenue, averageRating);
+                    productId, salesStats.TotalSales, salesStats.TotalRevenue, averageRating);
 
                 return analytics;
             }

@@ -32,13 +32,12 @@ namespace Bazario.Core.ServiceContracts.Store
         Task<StorePerformance> GetStorePerformanceAsync(Guid storeId, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Gets top performing stores with pagination
+        /// Gets top performing stores with pagination and filtering
         /// </summary>
-        /// <param name="criteria">Performance criteria</param>
-        /// <param name="pageNumber">Page number</param>
-        /// <param name="pageSize">Page size</param>
+        /// <param name="performanceCriteria">Performance criteria for ranking</param>
+        /// <param name="searchCriteria">Search and filter criteria (category, seller, etc.)</param>
         /// <param name="cancellationToken">Cancellation token</param>
         /// <returns>Top performing stores</returns>
-        Task<PagedResponse<StorePerformance>> GetTopPerformingStoresAsync(PerformanceCriteria criteria = PerformanceCriteria.Revenue, int pageNumber = 1, int pageSize = 10, CancellationToken cancellationToken = default);
+        Task<PagedResponse<StorePerformance>> GetTopPerformingStoresAsync(PerformanceCriteria performanceCriteria = PerformanceCriteria.Revenue, StoreSearchCriteria? searchCriteria = null, CancellationToken cancellationToken = default);
     }
 }

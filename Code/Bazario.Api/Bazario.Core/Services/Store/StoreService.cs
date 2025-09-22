@@ -99,10 +99,10 @@ namespace Bazario.Core.Services.Store
             return await _queryService.SearchStoresAsync(searchCriteria, cancellationToken);
         }
 
-        public async Task<PagedResponse<StoreResponse>> GetStoresByCategoryAsync(string category, int pageNumber = 1, int pageSize = 20, CancellationToken cancellationToken = default)
+        public async Task<PagedResponse<StoreResponse>> GetStoresByCategoryAsync(StoreSearchCriteria searchCriteria, CancellationToken cancellationToken = default)
         {
             _logger.LogDebug("Delegating category stores retrieval to query service");
-            return await _queryService.GetStoresByCategoryAsync(category, pageNumber, pageSize, cancellationToken);
+            return await _queryService.GetStoresByCategoryAsync(searchCriteria, cancellationToken);
         }
 
         #endregion
