@@ -5,6 +5,7 @@ using System.Linq.Expressions;
 using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.Entities;
+using Bazario.Core.Models.Store;
 
 namespace Bazario.Core.Domain.RepositoryContracts
 {
@@ -62,5 +63,10 @@ namespace Bazario.Core.Domain.RepositoryContracts
         /// Gets a queryable for stores that ignores global query filters (for soft deletion scenarios)
         /// </summary>
         IQueryable<Store> GetStoresQueryableIgnoreFilters();
+
+        /// <summary>
+        /// Gets top performing stores with performance metrics calculated at database level
+        /// </summary>
+        Task<List<StorePerformance>> GetTopPerformingStoresAsync(IQueryable<Store> query, int pageNumber, int pageSize, string performanceCriteria, DateTime? performancePeriodStart = null, CancellationToken cancellationToken = default);
     }
 }

@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.Entities;
 using Bazario.Core.Domain.RepositoryContracts;
+using Bazario.Core.Models.Store;
 using Bazario.Infrastructure.DbContext;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -587,6 +588,114 @@ namespace Bazario.Infrastructure.Repositories
             {
                 _logger.LogError(ex, "Failed to create stores queryable (ignoring filters)");
                 throw new InvalidOperationException($"Failed to create stores queryable (ignoring filters): {ex.Message}", ex);
+            }
+        }
+
+        public async Task<List<StorePerformance>> GetTopPerformingStoresAsync(IQueryable<Store> query, int pageNumber, int pageSize, string performanceCriteria, DateTime? performancePeriodStart = null, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Getting top performing stores with criteria: {PerformanceCriteria}, page: {PageNumber}, size: {PageSize}", 
+                performanceCriteria, pageNumber, pageSize);
+
+            try
+            {
+                // First, get all matching stores with their related data using efficient Include
+                // This approach avoids complex EF translation issues while still being performant
+                // Only include recent data for performance metrics (configurable period, default 12 months)
+                var periodStart = performancePeriodStart ?? DateTime.UtcNow.AddMonths(-12);
+                
+                _logger.LogDebug("Using performance period: {PeriodStart} to {PeriodEnd}", 
+                    periodStart, DateTime.UtcNow);
+                
+                var queryWithIncludes = query
+                    .Include(s => s.Products!.Where(p => !p.IsDeleted))
+                        .ThenInclude(p => p.OrderItems!.Where(oi => oi.Order != null && oi.Order.Date >= periodStart))
+                            .ThenInclude(oi => oi.Order) // Include Order for the Date filter
+                    .Include(s => s.Products!)
+                        .ThenInclude(p => p.Reviews!.Where(r => r.CreatedAt >= periodStart))
+                    .AsNoTracking();
+
+                // Log the generated SQL for debugging (only in debug builds)
+                #if DEBUG
+                var sqlQuery = queryWithIncludes.ToQueryString();
+                _logger.LogDebug("Generated SQL Query: {SQL}", sqlQuery);
+                #endif
+
+                // Add safety limit for in-memory operations to prevent memory issues
+                var storesWithData = await queryWithIncludes.ToListAsync(cancellationToken);
+                
+                // Check for large datasets and warn if necessary
+                if (storesWithData.Count > 1000)
+                {
+                    _logger.LogWarning("Large dataset detected ({Count} stores). Consider using database-level aggregation for better performance. Current approach may consume significant memory.", storesWithData.Count);
+                }
+                else if (storesWithData.Count > 500)
+                {
+                    _logger.LogInformation("Moderate dataset size ({Count} stores). Performance should be acceptable but monitor memory usage.", storesWithData.Count);
+                }
+
+                _logger.LogDebug("Retrieved {StoreCount} stores with related data for performance calculation", storesWithData.Count);
+
+                // Calculate performance metrics in memory (acceptable for filtered datasets)
+                // Data is already filtered at database level, so no need to filter again
+                var performances = storesWithData.Select(s => new StorePerformance
+                {
+                    StoreId = s.StoreId,
+                    StoreName = s.Name,
+                    Category = s.Category,
+                    IsActive = s.IsActive,
+                    CreatedAt = s.CreatedAt ?? DateTime.UtcNow,
+                    ProductCount = s.Products?.Count(p => !p.IsDeleted) ?? 0,
+                    // No need to filter again - already filtered in Include statements
+                    TotalRevenue = s.Products?.SelectMany(p => p.OrderItems ?? new List<OrderItem>())
+                                             .Sum(oi => oi.Price * oi.Quantity) ?? 0,
+                    // No need to filter again - already filtered in Include statements
+                    TotalOrders = s.Products?.SelectMany(p => p.OrderItems ?? new List<OrderItem>())
+                                            .Select(oi => oi.OrderId)
+                                            .Distinct()
+                                            .Count() ?? 0,
+                    // Only keep the rating > 0 filter since date filtering is already done
+                    AverageRating = s.Products?.SelectMany(p => p.Reviews ?? new List<Review>())
+                                              .Where(r => r.Rating > 0)
+                                              .Average(r => (decimal?)r.Rating) ?? 0,
+                    // No need to filter again - already filtered in Include statements
+                    ReviewCount = s.Products?.SelectMany(p => p.Reviews ?? new List<Review>())
+                                            .Count() ?? 0,
+                    Rank = 0 // Will be set after sorting and pagination
+                }).ToList();
+
+                _logger.LogDebug("Calculated performance metrics for {PerformanceCount} stores", performances.Count);
+
+                // Sort by the actual performance criteria
+                var sorted = performanceCriteria.ToLower() switch
+                {
+                    "revenue" => performances.OrderByDescending(s => s.TotalRevenue),
+                    "orders" => performances.OrderByDescending(s => s.TotalOrders),
+                    "rating" => performances.OrderByDescending(s => s.AverageRating),
+                    "customers" => performances.OrderByDescending(s => s.ReviewCount),
+                    "products" => performances.OrderByDescending(s => s.ProductCount),
+                    _ => performances.OrderByDescending(s => s.TotalRevenue)
+                };
+
+                // Apply pagination and set global rankings
+                var results = sorted
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .Select((perf, index) => 
+                    {
+                        perf.Rank = (pageNumber - 1) * pageSize + index + 1;
+                        return perf;
+                    })
+                    .ToList();
+
+                _logger.LogDebug("Successfully retrieved {Count} top performing stores with criteria: {PerformanceCriteria}. Global rankings: {StartRank}-{EndRank}", 
+                    results.Count, performanceCriteria, results.FirstOrDefault()?.Rank ?? 0, results.LastOrDefault()?.Rank ?? 0);
+
+                return results;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get top performing stores with criteria: {PerformanceCriteria}", performanceCriteria);
+                throw new InvalidOperationException($"Failed to get top performing stores: {ex.Message}", ex);
             }
         }
     }

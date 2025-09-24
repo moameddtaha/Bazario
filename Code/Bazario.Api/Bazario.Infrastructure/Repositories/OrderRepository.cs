@@ -499,9 +499,10 @@ namespace Bazario.Infrastructure.Repositories
             {
                 // Get orders with store products in date range using efficient SQL aggregation
                 var orderStats = await _context.Orders
+                    .AsNoTracking()
                     .Where(o => o.Date >= startDate && o.Date <= endDate)
                     .Where(o => o.OrderItems != null && o.OrderItems.Any(oi => oi.Product != null && oi.Product.StoreId == storeId))
-                    .Select(o => new
+                    .Select(o => new OrderStatsProjection
                     {
                         OrderId = o.OrderId,
                         CustomerId = o.CustomerId,
@@ -528,7 +529,22 @@ namespace Bazario.Infrastructure.Repositories
                 var repeatCustomers = customerOrderCounts.Count(kvp => kvp.Value > 1);
                 var customerRetentionRate = totalCustomers > 0 ? (double)repeatCustomers / totalCustomers * 100 : 0;
 
-                // Calculate monthly data
+                // Identify customers with orders before the range to avoid miscounting returning customers as new
+                var priorCustomerIds = await _context.Orders
+                    .AsNoTracking()
+                    .Where(o => o.Date < startDate)
+                    .Where(o => o.OrderItems != null && o.OrderItems.Any(oi => oi.Product != null && oi.Product.StoreId == storeId))
+                    .Select(o => o.CustomerId)
+                    .Distinct()
+                    .ToListAsync(cancellationToken);
+
+                var priorCustomers = new HashSet<Guid>(priorCustomerIds);
+
+                // Calculate monthly data with proper new customer calculation
+                var customerFirstOrderDates = orderStats
+                    .GroupBy(o => o.CustomerId)
+                    .ToDictionary(g => g.Key, g => g.Min(o => o.Date));
+
                 var monthlyData = orderStats
                     .GroupBy(o => new { o.Date.Year, o.Date.Month })
                     .Select(g => new MonthlyOrderData
@@ -537,7 +553,10 @@ namespace Bazario.Infrastructure.Repositories
                         Month = g.Key.Month,
                         Orders = g.Count(),
                         Revenue = g.Sum(o => o.StoreRevenue),
-                        NewCustomers = g.Select(o => o.CustomerId).Distinct().Count(), // Simplified
+                        NewCustomers = g.Select(o => o.CustomerId).Distinct()
+                                        .Count(customerId => !priorCustomers.Contains(customerId) &&
+                                               customerFirstOrderDates[customerId].Year == g.Key.Year && 
+                                               customerFirstOrderDates[customerId].Month == g.Key.Month),
                         ProductsSold = g.Sum(o => o.StoreProductsSold)
                     })
                     .OrderBy(m => m.Year)
@@ -564,6 +583,110 @@ namespace Bazario.Infrastructure.Repositories
             {
                 _logger.LogError(ex, "Failed to get store order stats for store: {StoreId}", storeId);
                 throw new InvalidOperationException($"Failed to get store order stats for store {storeId}: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<Dictionary<Guid, StoreOrderStats>> GetBulkStoreOrderStatsAsync(List<Guid> storeIds, DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Getting bulk store order stats for {StoreCount} stores from {StartDate} to {EndDate}", 
+                storeIds.Count, startDate, endDate);
+
+            try
+            {
+                if (!storeIds.Any())
+                {
+                    return new Dictionary<Guid, StoreOrderStats>();
+                }
+
+                // Get all orders for the specified stores and date range in a single query
+                // Orders are related to stores through OrderItems -> Product -> Store
+                var orders = await _context.Orders
+                    .Where(o => o.OrderItems != null && 
+                               o.OrderItems.Any(oi => oi.Product != null && storeIds.Contains(oi.Product.StoreId)) &&
+                               o.Date >= startDate && 
+                               o.Date <= endDate)
+                    .Include(o => o.OrderItems!)
+                        .ThenInclude(oi => oi.Product)
+                    .AsNoTracking()
+                    .ToListAsync(cancellationToken);
+
+                // Group by store and calculate stats
+                var result = new Dictionary<Guid, StoreOrderStats>();
+
+                foreach (var storeId in storeIds)
+                {
+                    // Filter orders that have items from this specific store
+                    var storeOrders = orders.Where(o => o.OrderItems != null && 
+                                                      o.OrderItems.Any(oi => oi.Product != null && oi.Product.StoreId == storeId)).ToList();
+                    
+                    if (!storeOrders.Any())
+                    {
+                        result[storeId] = new StoreOrderStats
+                        {
+                            TotalOrders = 0,
+                            TotalRevenue = 0,
+                            AverageOrderValue = 0,
+                            TotalCustomers = 0,
+                            RepeatCustomers = 0,
+                            CustomerRetentionRate = 0,
+                            MonthlyData = new List<MonthlyOrderData>()
+                        };
+                        continue;
+                    }
+
+                    // Calculate revenue for this store (only from items belonging to this store)
+                    var totalRevenue = storeOrders.Sum(o => 
+                        o.OrderItems?.Where(oi => oi.Product != null && oi.Product.StoreId == storeId)
+                         .Sum(oi => oi.Price * oi.Quantity) ?? 0);
+                    
+                    var totalOrders = storeOrders.Count;
+                    var uniqueCustomers = storeOrders.Select(o => o.CustomerId).Distinct().ToList();
+                    var totalCustomers = uniqueCustomers.Count;
+
+                    // Calculate repeat customers
+                    var customerOrderCounts = storeOrders
+                        .GroupBy(o => o.CustomerId)
+                        .ToDictionary(g => g.Key, g => g.Count());
+                    
+                    var repeatCustomers = customerOrderCounts.Count(kvp => kvp.Value > 1);
+                    var customerRetentionRate = totalCustomers > 0 ? (double)repeatCustomers / totalCustomers * 100 : 0;
+
+                    // Calculate monthly data
+                    var monthlyData = storeOrders
+                        .GroupBy(o => new { o.Date.Year, o.Date.Month })
+                        .Select(g => new MonthlyOrderData
+                        {
+                            Year = g.Key.Year,
+                            Month = g.Key.Month,
+                            Orders = g.Count(),
+                            Revenue = g.Sum(o => o.OrderItems?.Where(oi => oi.Product != null && oi.Product.StoreId == storeId)
+                                                      .Sum(oi => oi.Price * oi.Quantity) ?? 0),
+                            NewCustomers = 0, // Would need additional logic to determine new vs returning customers
+                            ProductsSold = g.Sum(o => o.OrderItems?.Where(oi => oi.Product != null && oi.Product.StoreId == storeId)
+                                                           .Sum(oi => oi.Quantity) ?? 0)
+                        })
+                        .OrderBy(m => m.Year).ThenBy(m => m.Month)
+                        .ToList();
+
+                    result[storeId] = new StoreOrderStats
+                    {
+                        TotalOrders = totalOrders,
+                        TotalRevenue = totalRevenue,
+                        AverageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0,
+                        TotalCustomers = totalCustomers,
+                        RepeatCustomers = repeatCustomers,
+                        CustomerRetentionRate = customerRetentionRate,
+                        MonthlyData = monthlyData
+                    };
+                }
+
+                _logger.LogDebug("Successfully calculated bulk store order stats for {StoreCount} stores", storeIds.Count);
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get bulk store order stats for {StoreCount} stores", storeIds.Count);
+                throw new InvalidOperationException($"Failed to get bulk store order stats: {ex.Message}", ex);
             }
         }
     }

@@ -44,5 +44,10 @@ namespace Bazario.Core.Domain.RepositoryContracts
         /// Gets aggregated order statistics for a specific store within a date range
         /// </summary>
         Task<StoreOrderStats> GetStoreOrderStatsAsync(Guid storeId, DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets store order statistics for multiple stores in a single query
+        /// </summary>
+        Task<Dictionary<Guid, StoreOrderStats>> GetBulkStoreOrderStatsAsync(List<Guid> storeIds, DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default);
     }
 }

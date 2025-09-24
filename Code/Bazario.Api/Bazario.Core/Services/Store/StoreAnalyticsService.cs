@@ -167,9 +167,6 @@ namespace Bazario.Core.Services.Store
 
             try
             {
-                // ✅ MAJOR PERFORMANCE IMPROVEMENT: Only calculate performance for the requested page
-                // ✅ BETTER APPROACH: Use existing StoreSearchCriteria for consistent filtering
-                
                 // Start with base queryable
                 var query = _storeRepository.GetStoresQueryable();
 
@@ -210,59 +207,30 @@ namespace Bazario.Core.Services.Store
                     query = query.Where(s => s.IsActive == searchCriteria.IsActive.Value);
                 }
 
-                // ✅ IMPROVED SORTING: Sort by meaningful criteria at database level where possible
-                var sortedQuery = performanceCriteria switch
+                // Get total count for pagination
+                var totalCount = await _storeRepository.GetStoresCountAsync(query, cancellationToken);
+
+                // Convert performance criteria to string for repository method
+                var performanceCriteriaString = performanceCriteria switch
                 {
-                    PerformanceCriteria.ProductCount => query.OrderByDescending(s => s.Products != null ? s.Products.Count() : 0),
-                    // For complex criteria, use StoreSearchCriteria sorting or default to creation date
-                    _ => searchCriteria.SortBy?.ToLower() switch
-                    {
-                        "name" => searchCriteria.SortDescending ? 
-                            query.OrderByDescending(s => s.Name) : 
-                            query.OrderBy(s => s.Name),
-                        "createdat" => searchCriteria.SortDescending ? 
-                            query.OrderByDescending(s => s.CreatedAt) : 
-                            query.OrderBy(s => s.CreatedAt),
-                        _ => query.OrderBy(s => s.Category).ThenByDescending(s => s.CreatedAt)
-                    }
+                    PerformanceCriteria.Revenue => "revenue",
+                    PerformanceCriteria.Orders => "orders",
+                    PerformanceCriteria.Rating => "rating",
+                    PerformanceCriteria.CustomerCount => "customers",
+                    PerformanceCriteria.ProductCount => "products",
+                    _ => "revenue"
                 };
 
-                // Get total count and basic store info for the requested page
-                var totalCount = await _storeRepository.GetStoresCountAsync(query, cancellationToken);
-                var pagedStores = await _storeRepository.GetStoresPagedAsync(sortedQuery, searchCriteria.PageNumber, searchCriteria.PageSize, cancellationToken);
-
-                _logger.LogDebug("Retrieved {PagedStoreCount} stores for performance calculation out of {TotalCount} total stores", 
-                    pagedStores.Count, totalCount);
-
-                // ✅ PERFORMANCE FIX: Only calculate detailed performance for the paged stores (e.g., 10 stores instead of 1000)
-                var storePerformances = new List<StorePerformance>();
-                
-                for (int i = 0; i < pagedStores.Count; i++)
-                {
-                    var store = pagedStores[i];
-                    var performance = await GetStorePerformanceAsync(store.StoreId, cancellationToken);
-                    performance.Rank = (searchCriteria.PageNumber - 1) * searchCriteria.PageSize + i + 1;
-                    storePerformances.Add(performance);
-                }
-
-                // If sorting by complex criteria, we need to re-sort the performance results
-                if (performanceCriteria != PerformanceCriteria.ProductCount)
-                {
-                    storePerformances = performanceCriteria switch
-                    {
-                        PerformanceCriteria.Revenue => storePerformances.OrderByDescending(s => s.TotalRevenue).ToList(),
-                        PerformanceCriteria.Orders => storePerformances.OrderByDescending(s => s.TotalOrders).ToList(),
-                        PerformanceCriteria.Rating => storePerformances.OrderByDescending(s => s.AverageRating).ToList(),
-                        PerformanceCriteria.CustomerCount => storePerformances.OrderByDescending(s => s.ReviewCount).ToList(),
-                        _ => storePerformances.OrderByDescending(s => s.TotalRevenue).ToList()
-                    };
-
-                    // Reassign rankings after sorting
-                    for (int i = 0; i < storePerformances.Count; i++)
-                    {
-                        storePerformances[i].Rank = (searchCriteria.PageNumber - 1) * searchCriteria.PageSize + i + 1;
-                    }
-                }
+                // Get top performing stores with performance metrics calculated and sorted at database level
+                // Use last 12 months for performance metrics (configurable)
+                var performancePeriodStart = DateTime.UtcNow.AddMonths(-12);
+                var storePerformances = await _storeRepository.GetTopPerformingStoresAsync(
+                    query, 
+                    searchCriteria.PageNumber, 
+                    searchCriteria.PageSize, 
+                    performanceCriteriaString, 
+                    performancePeriodStart,
+                    cancellationToken);
 
                 var result = new PagedResponse<StorePerformance>
                 {
@@ -272,8 +240,8 @@ namespace Bazario.Core.Services.Store
                     PageSize = searchCriteria.PageSize
                 };
 
-                _logger.LogDebug("Successfully calculated performance for {CalculatedCount} stores out of {TotalCount} total stores. Category: {Category}, SellerId: {SellerId}", 
-                    storePerformances.Count, totalCount, searchCriteria.Category ?? "All", searchCriteria.SellerId);
+                _logger.LogDebug("Successfully retrieved {CalculatedCount} top performing stores out of {TotalCount} total stores. Category: {Category}, SellerId: {SellerId}, Criteria: {PerformanceCriteria}", 
+                    storePerformances.Count, totalCount, searchCriteria.Category ?? "All", searchCriteria.SellerId, performanceCriteria);
                 
                 return result;
             }

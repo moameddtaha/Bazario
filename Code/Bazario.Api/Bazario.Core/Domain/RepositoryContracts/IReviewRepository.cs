@@ -43,5 +43,10 @@ namespace Bazario.Core.Domain.RepositoryContracts
         /// Gets aggregated review statistics for products in a specific store
         /// </summary>
         Task<StoreReviewStats> GetStoreReviewStatsAsync(Guid storeId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets store review statistics for multiple stores in a single query
+        /// </summary>
+        Task<Dictionary<Guid, StoreReviewStats>> GetBulkStoreReviewStatsAsync(List<Guid> storeIds, CancellationToken cancellationToken = default);
     }
 }

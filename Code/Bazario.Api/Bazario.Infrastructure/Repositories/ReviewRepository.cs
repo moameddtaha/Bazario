@@ -549,6 +549,7 @@ namespace Bazario.Infrastructure.Repositories
             {
                 // Get aggregated review statistics for all products in this store
                 var reviewStats = await _context.Reviews
+                    .AsNoTracking()
                     .Where(r => r.Product != null && r.Product.StoreId == storeId)
                     .GroupBy(r => 1) // Group all reviews together
                     .Select(g => new StoreReviewStats
@@ -574,6 +575,60 @@ namespace Bazario.Infrastructure.Repositories
             {
                 _logger.LogError(ex, "Failed to get store review stats for store: {StoreId}", storeId);
                 throw new InvalidOperationException($"Failed to get store review stats for store {storeId}: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<Dictionary<Guid, StoreReviewStats>> GetBulkStoreReviewStatsAsync(List<Guid> storeIds, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Getting bulk store review stats for {StoreCount} stores", storeIds.Count);
+
+            try
+            {
+                if (!storeIds.Any())
+                {
+                    return new Dictionary<Guid, StoreReviewStats>();
+                }
+
+                // Get all reviews for products in the specified stores in a single query
+                var reviews = await _context.Reviews
+                    .Where(r => r.Product != null && storeIds.Contains(r.Product.StoreId))
+                    .AsNoTracking()
+                    .ToListAsync(cancellationToken);
+
+                // Group by store and calculate stats
+                var result = new Dictionary<Guid, StoreReviewStats>();
+
+                foreach (var storeId in storeIds)
+                {
+                    var storeReviews = reviews.Where(r => r.Product?.StoreId == storeId).ToList();
+                    
+                    if (!storeReviews.Any())
+                    {
+                        result[storeId] = new StoreReviewStats
+                        {
+                            TotalReviews = 0,
+                            AverageRating = 0
+                        };
+                        continue;
+                    }
+
+                    var totalReviews = storeReviews.Count;
+                    var averageRating = storeReviews.Average(r => (decimal)r.Rating);
+
+                    result[storeId] = new StoreReviewStats
+                    {
+                        TotalReviews = totalReviews,
+                        AverageRating = averageRating
+                    };
+                }
+
+                _logger.LogDebug("Successfully calculated bulk store review stats for {StoreCount} stores", storeIds.Count);
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get bulk store review stats for {StoreCount} stores", storeIds.Count);
+                throw new InvalidOperationException($"Failed to get bulk store review stats: {ex.Message}", ex);
             }
         }
     }
