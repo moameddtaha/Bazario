@@ -40,6 +40,11 @@ namespace Bazario.Core.Domain.RepositoryContracts
         Task<List<ProductPerformance>> GetTopPerformingProductsAsync(Guid storeId, int count = 10, CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// Gets top performing products for a specific store with aggregated data and configurable time period
+        /// </summary>
+        Task<List<ProductPerformance>> GetTopPerformingProductsAsync(Guid storeId, int count, DateTime? performancePeriodStart, CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Gets the count of products for a specific store with optional soft deletion filtering
         /// </summary>
         Task<int> GetProductCountByStoreIdAsync(Guid storeId, bool includeDeleted = false, CancellationToken cancellationToken = default);

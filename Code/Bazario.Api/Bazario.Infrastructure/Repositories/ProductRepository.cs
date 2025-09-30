@@ -608,25 +608,53 @@ namespace Bazario.Infrastructure.Repositories
 
         public async Task<List<ProductPerformance>> GetTopPerformingProductsAsync(Guid storeId, int count = 10, CancellationToken cancellationToken = default)
         {
-            _logger.LogDebug("Getting top performing products for store: {StoreId}, count: {Count}", storeId, count);
+            return await GetTopPerformingProductsAsync(storeId, count, null, cancellationToken);
+        }
+
+        public async Task<List<ProductPerformance>> GetTopPerformingProductsAsync(Guid storeId, int count, DateTime? performancePeriodStart, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Getting top performing products for store: {StoreId}, count: {Count}, performancePeriodStart: {PerformancePeriodStart}", 
+                storeId, count, performancePeriodStart);
             
             try
             {
-                // Get top performing products by revenue using efficient SQL aggregation
-                var topProducts = await _context.Products
+                // Default to last 12 months if no period specified
+                var periodStart = performancePeriodStart ?? DateTime.UtcNow.AddMonths(-12);
+                
+                _logger.LogDebug("Using performance period: {PeriodStart} to {PeriodEnd}", periodStart, DateTime.UtcNow);
+
+                // Get top performing products by revenue using efficient SQL aggregation with time-based filtering
+                var query = _context.Products
                     .Where(p => p.StoreId == storeId && !p.IsDeleted)
                     .Select(p => new ProductPerformance
                     {
                         ProductId = p.ProductId,
                         ProductName = p.Name,
-                        UnitsSold = p.OrderItems != null ? p.OrderItems.Sum(oi => oi.Quantity) : 0,
-                        Revenue = p.OrderItems != null ? p.OrderItems.Sum(oi => oi.Price * oi.Quantity) : 0,
-                        AverageRating = p.Reviews != null && p.Reviews.Any() ? p.Reviews.Average(r => (decimal)r.Rating) : 0,
-                        ReviewCount = p.Reviews != null ? p.Reviews.Count : 0
+                        // Only include OrderItems from the specified time period
+                        UnitsSold = p.OrderItems != null 
+                            ? p.OrderItems.Where(oi => oi.Order != null && oi.Order.Date >= periodStart).Sum(oi => oi.Quantity) 
+                            : 0,
+                        Revenue = p.OrderItems != null 
+                            ? p.OrderItems.Where(oi => oi.Order != null && oi.Order.Date >= periodStart).Sum(oi => oi.Price * oi.Quantity) 
+                            : 0,
+                        // Only include Reviews from the specified time period
+                        AverageRating = p.Reviews != null && p.Reviews.Any(r => r.CreatedAt >= periodStart) 
+                            ? p.Reviews.Where(r => r.CreatedAt >= periodStart).Average(r => (decimal)r.Rating) 
+                            : 0,
+                        ReviewCount = p.Reviews != null 
+                            ? p.Reviews.Count(r => r.CreatedAt >= periodStart) 
+                            : 0
                     })
                     .OrderByDescending(p => p.Revenue)
                     .Take(count)
-                    .ToListAsync(cancellationToken);
+                    .AsNoTracking(); // Read-only query for better performance
+
+                #if DEBUG
+                var sqlQuery = query.ToQueryString();
+                _logger.LogDebug("Generated SQL Query for top performing products: {SQL}", sqlQuery);
+                #endif
+
+                var topProducts = await query.ToListAsync(cancellationToken);
 
                 _logger.LogDebug("Successfully retrieved {Count} top performing products for store: {StoreId}", 
                     topProducts.Count, storeId);
@@ -690,6 +718,7 @@ namespace Bazario.Infrastructure.Repositories
                         Revenue = oi.Price * oi.Quantity,
                         OrderDate = oi.Order!.Date
                     })
+                    .AsNoTracking() // Read-only query for better performance
                     .ToListAsync(cancellationToken);
 
                 var totalSales = salesData.Sum(s => s.Quantity);
