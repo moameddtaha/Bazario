@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Models.Order;
 using Bazario.Core.ServiceContracts.Order;
+using Bazario.Core.Helpers.Order;
 using Microsoft.Extensions.Logging;
 
 namespace Bazario.Core.Services.Order
@@ -16,13 +17,16 @@ namespace Bazario.Core.Services.Order
     public class OrderAnalyticsService : IOrderAnalyticsService
     {
         private readonly IOrderRepository _orderRepository;
+        private readonly IOrderMetricsHelper _metricsHelper;
         private readonly ILogger<OrderAnalyticsService> _logger;
 
         public OrderAnalyticsService(
             IOrderRepository orderRepository,
+            IOrderMetricsHelper metricsHelper,
             ILogger<OrderAnalyticsService> logger)
         {
             _orderRepository = orderRepository ?? throw new ArgumentNullException(nameof(orderRepository));
+            _metricsHelper = metricsHelper ?? throw new ArgumentNullException(nameof(metricsHelper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -129,8 +133,8 @@ namespace Bazario.Core.Services.Order
                     ShippedOrders = orders.Count(o => o.Status == "Shipped"),
                     DeliveredOrders = orders.Count(o => o.Status == "Delivered"),
                     CancelledOrders = orders.Count(o => o.Status == "Cancelled"),
-                    AverageProcessingTime = 24, // Placeholder - would need more data to calculate
-                    AverageDeliveryTime = 72, // Placeholder - would need more data to calculate
+                    AverageProcessingTime = _metricsHelper.CalculateAverageProcessingTime(orders),
+                    AverageDeliveryTime = _metricsHelper.CalculateAverageDeliveryTime(orders),
                     OrderFulfillmentRate = totalOrders > 0 
                         ? (decimal)orders.Count(o => o.Status == "Delivered") / totalOrders * 100 
                         : 0,
@@ -150,5 +154,6 @@ namespace Bazario.Core.Services.Order
                 throw;
             }
         }
+
     }
 }

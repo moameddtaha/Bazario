@@ -83,7 +83,7 @@ namespace Bazario.Email.ServiceTests
         #region RenderTemplateAsync Tests
 
         [Fact]
-        public async Task RenderTemplateAsync_WithValidTemplate_ReturnsRenderedContent()
+        public void RenderTemplateAsync_WithValidTemplate_ReturnsRenderedContent()
         {
             // Note: This test focuses on the template rendering logic
             // File system operations would be mocked in a real unit test scenario

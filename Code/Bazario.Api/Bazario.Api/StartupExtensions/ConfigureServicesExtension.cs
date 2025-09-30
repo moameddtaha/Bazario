@@ -13,12 +13,14 @@ using Bazario.Core.Helpers.Store;
 using Bazario.Core.ServiceContracts.Store;
 using Bazario.Core.ServiceContracts.Product;
 using Bazario.Core.ServiceContracts.Order;
+using Bazario.Core.ServiceContracts.Inventory;
 using Bazario.Core.Domain.IdentityEntities;
 using Bazario.Core.Domain.RepositoryContracts;
 
 using Bazario.Core.Services.Store;
 using Bazario.Core.Services.Product;
 using Bazario.Core.Services.Order;
+using Bazario.Core.Services.Inventory;
 using Bazario.Core.Models.Email;
 using Bazario.Core.ServiceContracts.Auth;
 using Bazario.Core.Services.Auth;
@@ -26,6 +28,7 @@ using Bazario.Core.ServiceContracts.Email;
 using Bazario.Core.Services.Email;
 using Bazario.Core.Helpers.Auth;
 using Bazario.Core.Helpers.Email;
+using Bazario.Core.Helpers.Order;
 
 namespace Bazario.Api.StartupExtensions
 {
@@ -91,6 +94,14 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<IOrderPaymentService, OrderPaymentService>();
             services.AddScoped<IOrderService, OrderService>(); // Composite interface
             
+            // Register Inventory Services (SOLID principle separation)
+            services.AddScoped<IInventoryManagementService, InventoryManagementService>();
+            services.AddScoped<IInventoryQueryService, InventoryQueryService>();
+            services.AddScoped<IInventoryValidationService, InventoryValidationService>();
+            services.AddScoped<IInventoryAnalyticsService, InventoryAnalyticsService>();
+            services.AddScoped<IInventoryAlertService, InventoryAlertService>();
+            services.AddScoped<IInventoryService, InventoryService>(); // Composite interface
+            
             // Configure EmailSettings
             services.Configure<EmailSettings>(configuration.GetSection("EmailSettings"));
             
@@ -115,6 +126,8 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<IUserCreationService, UserCreationService>();
             services.AddScoped<IRoleManagementHelper, RoleManagementHelper>();
             services.AddScoped<IEmailHelper, EmailHelper>();
+            services.AddScoped<IShippingZoneService, ShippingZoneService>();
+            services.AddScoped<IOrderMetricsHelper, OrderMetricsHelper>();
             
             // Register Service Aggregators (Dependency Bundling)
             services.AddScoped<IUserAuthenticationDependencies, UserAuthenticationDependencies>();

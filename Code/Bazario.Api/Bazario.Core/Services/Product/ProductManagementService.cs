@@ -5,6 +5,7 @@ using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.DTO.Product;
 using Bazario.Core.Extensions;
 using Bazario.Core.ServiceContracts.Product;
+using Bazario.Core.Helpers.Product;
 using Microsoft.Extensions.Logging;
 
 namespace Bazario.Core.Services.Product
@@ -18,17 +19,20 @@ namespace Bazario.Core.Services.Product
         private readonly IProductRepository _productRepository;
         private readonly IStoreRepository _storeRepository;
         private readonly IOrderRepository _orderRepository;
+        private readonly IProductValidationHelper _validationHelper;
         private readonly ILogger<ProductManagementService> _logger;
 
         public ProductManagementService(
             IProductRepository productRepository,
             IStoreRepository storeRepository,
             IOrderRepository orderRepository,
+            IProductValidationHelper validationHelper,
             ILogger<ProductManagementService> logger)
         {
             _productRepository = productRepository ?? throw new ArgumentNullException(nameof(productRepository));
             _storeRepository = storeRepository ?? throw new ArgumentNullException(nameof(storeRepository));
             _orderRepository = orderRepository ?? throw new ArgumentNullException(nameof(orderRepository));
+            _validationHelper = validationHelper ?? throw new ArgumentNullException(nameof(validationHelper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -201,9 +205,21 @@ namespace Bazario.Core.Services.Product
                     throw new ArgumentException("Reason is required for hard deletion", nameof(reason));
                 }
 
-                // TODO: Add admin check when role management is available
-                // For now, we'll allow hard deletion but log it as a warning
-                _logger.LogWarning("Admin user {UserId} attempting hard delete of product {ProductId}", deletedBy, productId);
+                // Check if user has admin privileges
+                if (!await _validationHelper.HasAdminPrivilegesAsync(deletedBy, cancellationToken))
+                {
+                    _logger.LogWarning("User {UserId} attempted hard delete of product {ProductId} without admin privileges", deletedBy, productId);
+                    throw new UnauthorizedAccessException("Only administrators can perform hard deletion of products");
+                }
+
+                // Check if product can be safely deleted
+                if (!await _validationHelper.CanProductBeSafelyDeletedAsync(productId, cancellationToken))
+                {
+                    _logger.LogWarning("Product {ProductId} cannot be safely deleted - has active orders or dependencies", productId);
+                    throw new InvalidOperationException("Product cannot be safely deleted due to active orders or dependencies");
+                }
+
+                _logger.LogInformation("Admin user {UserId} performing hard delete of product {ProductId}", deletedBy, productId);
 
                 _logger.LogCritical("PERFORMING HARD DELETE - This action is IRREVERSIBLE. ProductId: {ProductId}, DeletedBy: {DeletedBy}, Reason: {Reason}", 
                     productId, deletedBy, reason);
@@ -308,5 +324,6 @@ namespace Bazario.Core.Services.Product
                 throw;
             }
         }
+
     }
 }

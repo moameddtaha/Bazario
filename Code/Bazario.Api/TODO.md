@@ -110,7 +110,53 @@ This document outlines the remaining tasks to complete Phase 1 (Foundation) of t
   - Payment processing and refund simulation
   - Paymob payment gateway integration planned
 
-### 2.4 Review Management Service
+### 2.4 Inventory Management Service ✅ COMPLETED + REFACTORED
+- [x] **Create InventoryService** ✅ COMPLETE
+  - File: `Bazario.Core/Services/Inventory/InventoryService.cs`
+  - Implements `IInventoryService` composite interface
+  - Stock level management and tracking
+  - Inventory alerts and notifications
+  - Stock movement history and reporting
+  - Low stock warnings and reorder points
+  - Inventory analytics and forecasting
+- [x] **Refactor to SOLID Principles** ✅ COMPLETE
+  - Created `IInventoryManagementService` for CRUD operations
+  - Created `IInventoryQueryService` for read operations
+  - Created `IInventoryValidationService` for business rules and validation
+  - Created `IInventoryAnalyticsService` for analytics and reporting
+  - Created `IInventoryAlertService` for alerts and notifications
+  - Updated `IInventoryService` to be composite interface
+- [x] **Models and Analytics** ✅ COMPLETE
+  - Created `InventoryTurnoverData` for turnover tracking
+  - Created `StockValuationReport` + `ProductValuation` for valuation
+  - Created `InventoryPerformanceMetrics` for performance tracking
+  - Created `StockForecast` for demand prediction
+  - Created `DeadStockItem` for slow-moving inventory analysis
+  - Created `InventoryAlertPreferences` for alert configuration
+  - Created `ReservationFailure` + `ReservedStockItem` for reservations
+
+### 2.5 Shipping Zone Service ✅ COMPLETED + PRODUCTION-READY
+- [x] **Create ShippingZoneService** ✅ COMPLETE
+  - File: `Bazario.Core/Helpers/Order/ShippingZoneService.cs`
+  - Implements `IShippingZoneService` interface
+  - Egypt-focused but future-expandable architecture
+  - Real address-based zone determination (not simulation)
+  - Hierarchical zone determination: Postal Code → City → State → Country → Default
+- [x] **Production-Ready Features** ✅ COMPLETE
+  - Country support system with easy expansion capability
+  - Express and same-day delivery eligibility checking
+  - Egyptian cities and governorates mapping
+  - Delivery time multipliers optimized for Egypt
+  - Comprehensive error handling and logging
+  - Performance-optimized with O(1) lookups
+- [x] **Future Expansion Ready** ✅ COMPLETE
+  - Modular design for easy country addition
+  - Configuration-driven zone mappings
+  - Country-specific city lists and delivery options
+  - Complete expansion guide documentation
+  - No postal code dependency (Egypt doesn't use them)
+
+### 2.6 Review Management Service
 - [ ] **Create ReviewService**
   - File: `Bazario.Core/Services/ReviewService.cs`
   - Implement `IReviewService` interface
@@ -118,7 +164,7 @@ This document outlines the remaining tasks to complete Phase 1 (Foundation) of t
   - Review moderation capabilities
   - Rating aggregation and statistics
 
-### 2.5 Admin Management Service
+### 2.7 Admin Management Service
 - [ ] **Create AdminService**
   - File: `Bazario.Core/Services/AdminService.cs`
   - User management operations
@@ -162,7 +208,16 @@ This document outlines the remaining tasks to complete Phase 1 (Foundation) of t
   - Endpoints: GET /api/orders/{id} (get order details)
   - Endpoints: PUT /api/orders/{id} (update order status)
 
-### 3.5 Review Management Controller
+### 3.5 Inventory Management Controller
+- [ ] **Create InventoryController**
+  - File: `Bazario.Api/Controllers/InventoryController.cs`
+  - Endpoints: GET /api/inventory (list inventory items)
+  - Endpoints: GET /api/inventory/{productId} (get product stock levels)
+  - Endpoints: PUT /api/inventory/{productId} (update stock levels)
+  - Endpoints: GET /api/inventory/alerts (get low stock alerts)
+  - Endpoints: GET /api/inventory/reports (get inventory reports)
+
+### 3.6 Review Management Controller
 - [ ] **Create ReviewsController**
   - File: `Bazario.Api/Controllers/ReviewsController.cs`
   - Endpoints: GET /api/reviews (list reviews)
@@ -171,7 +226,7 @@ This document outlines the remaining tasks to complete Phase 1 (Foundation) of t
   - Endpoints: PUT /api/reviews/{id} (update review)
   - Endpoints: DELETE /api/reviews/{id} (delete review)
 
-### 3.6 Admin Dashboard Controller
+### 3.7 Admin Dashboard Controller
 - [ ] **Create AdminController**
   - File: `Bazario.Api/Controllers/AdminController.cs`
   - User management endpoints
@@ -214,6 +269,7 @@ This document outlines the remaining tasks to complete Phase 1 (Foundation) of t
   - StoreService tests
   - ProductService tests  
   - OrderService tests
+  - InventoryService tests
   - ReviewService tests
   - AdminService tests
   - PaymobService tests
@@ -230,6 +286,7 @@ This document outlines the remaining tasks to complete Phase 1 (Foundation) of t
   - User registration and login
   - Store creation and management
   - Product management
+  - Inventory management and stock tracking
   - Order placement and tracking
   - Payment processing with Paymob
   - Review submission and display
@@ -241,13 +298,13 @@ This document outlines the remaining tasks to complete Phase 1 (Foundation) of t
 | Priority | Tasks | Estimated Time | Dependencies | Status |
 |----------|-------|----------------|--------------|--------|
 | Priority 1 | Repository implementations | 1-2 days | None | ✅ COMPLETE |
-| Priority 2 | Service implementations | 3-4 days | Priority 1 | 🔄 PARTIAL (Store, Product & Order ✅, Review & Admin pending) |
+| Priority 2 | Service implementations | 3-4 days | Priority 1 | 🔄 PARTIAL (Store, Product, Order & Inventory ✅, Review & Admin pending) |
 | Priority 3 | API controllers | 2-3 days | Priority 2 | ⏳ PENDING |
 | Priority 4 | Configuration & docs | 1-2 days | Priority 3 | ⏳ PENDING (includes Paymob integration) |
 | Priority 5 | Testing & integration | 2-3 days | All above | ⏳ PENDING |
 
 **Total Estimated Time: 10-14 days** (includes Paymob integration)  
-**Current Progress: ~60% Complete**
+**Current Progress: ~75% Complete**
 
 ---
 
@@ -258,6 +315,7 @@ Phase 1 will be considered complete when:
 - [ ] All API endpoints from the PRD are implemented and functional
 - [ ] Users can register, login, and manage their profiles
 - [ ] Sellers can create stores and manage products
+- [ ] Inventory management and stock tracking works properly
 - [ ] Customers can browse products and place orders
 - [ ] Order status tracking works end-to-end
 - [ ] Payment processing with Paymob gateway is functional
@@ -280,14 +338,18 @@ Phase 1 will be considered complete when:
 
 *Last Updated: December 2024*  
 *Phase: 1 (Foundation)*  
-*Status: 🔄 In Progress - Service Layer Implementation (60% Complete)*
+*Status: 🔄 In Progress - Service Layer Implementation (75% Complete)*
 
 ## Recent Updates (December 2024)
 - ✅ **Store Services**: Completed and optimized with performance improvements
 - ✅ **Product Services**: Completed and optimized to match Store service patterns
 - ✅ **Order Services**: Completed with SOLID principles (5 specialized services + composite)
-- ✅ **Service Registration**: All Order services registered in DI container
+- ✅ **Inventory Services**: Completed with SOLID principles (5 specialized services + composite)
+- ✅ **Shipping Zone Service**: Completed with production-ready Egypt-focused implementation
+- ✅ **Service Registration**: All Order, Inventory, and Shipping services registered in DI container
 - ✅ **Performance Optimizations**: Applied database-level aggregation, time-based filtering, and AsNoTracking
 - ✅ **Repository Layer**: All repositories implemented with efficient query patterns
-- ✅ **Business Logic**: Status transitions, validation rules, payment processing implemented
+- ✅ **Business Logic**: Status transitions, validation rules, payment processing, inventory tracking implemented
+- ✅ **Inventory Features**: Stock reservations, bulk updates, analytics, forecasting, alerts, and valuations
+- ✅ **Shipping Features**: Real address-based zone determination, express/same-day delivery, future expansion ready
 - 🔄 **Next Priority**: Review Management Service, Admin Services, and Paymob Integration
