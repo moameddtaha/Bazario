@@ -108,6 +108,7 @@ This document outlines the remaining tasks to complete Phase 1 (Foundation) of t
   - Stock availability validation
   - Order total calculations with tax
   - Payment processing and refund simulation
+  - Paymob payment gateway integration planned
 
 ### 2.4 Review Management Service
 - [ ] **Create ReviewService**
@@ -182,16 +183,27 @@ This document outlines the remaining tasks to complete Phase 1 (Foundation) of t
 ## Priority 4: Service Registration & Configuration
 
 ### 4.1 Dependency Injection Setup
-- [ ] **Update ConfigureServicesExtension.cs**
+- [x] **Update ConfigureServicesExtension.cs** ✅ COMPLETE
   - Register all new service implementations
   - Register missing repository implementations
   - Ensure proper scoped lifetimes
+  - Added Order services registration (5 specialized + 1 composite)
 
 ### 4.2 API Documentation
 - [ ] **Update Swagger Configuration**
   - Add API documentation for all endpoints
   - Include authentication requirements
   - Add example requests/responses
+
+### 4.3 Payment Gateway Integration
+- [ ] **Integrate Paymob Payment Gateway**
+  - File: `Bazario.Core/Services/Payment/PaymobService.cs`
+  - Implement `IPaymobService` interface
+  - Payment processing (credit card, mobile wallet, bank transfer)
+  - Refund processing
+  - Webhook handling for payment confirmations
+  - Error handling and retry logic
+  - Update `OrderPaymentService` to use Paymob instead of simulation
 
 ---
 
@@ -204,12 +216,14 @@ This document outlines the remaining tasks to complete Phase 1 (Foundation) of t
   - OrderService tests
   - ReviewService tests
   - AdminService tests
+  - PaymobService tests
 
 ### 5.2 Integration Tests
 - [ ] **Create API integration tests**
   - Authentication flow tests
   - CRUD operation tests for each controller
   - End-to-end workflow tests
+  - Paymob payment integration tests
 
 ### 5.3 Manual Testing
 - [ ] **Test complete user workflows**
@@ -217,6 +231,7 @@ This document outlines the remaining tasks to complete Phase 1 (Foundation) of t
   - Store creation and management
   - Product management
   - Order placement and tracking
+  - Payment processing with Paymob
   - Review submission and display
 
 ---
@@ -226,13 +241,13 @@ This document outlines the remaining tasks to complete Phase 1 (Foundation) of t
 | Priority | Tasks | Estimated Time | Dependencies | Status |
 |----------|-------|----------------|--------------|--------|
 | Priority 1 | Repository implementations | 1-2 days | None | ✅ COMPLETE |
-| Priority 2 | Service implementations | 3-4 days | Priority 1 | 🔄 PARTIAL (Store, Product & Order ✅) |
+| Priority 2 | Service implementations | 3-4 days | Priority 1 | 🔄 PARTIAL (Store, Product & Order ✅, Review & Admin pending) |
 | Priority 3 | API controllers | 2-3 days | Priority 2 | ⏳ PENDING |
-| Priority 4 | Configuration & docs | 1 day | Priority 3 | ⏳ PENDING |
+| Priority 4 | Configuration & docs | 1-2 days | Priority 3 | ⏳ PENDING (includes Paymob integration) |
 | Priority 5 | Testing & integration | 2-3 days | All above | ⏳ PENDING |
 
-**Total Estimated Time: 9-13 days**  
-**Current Progress: ~55% Complete**
+**Total Estimated Time: 10-14 days** (includes Paymob integration)  
+**Current Progress: ~60% Complete**
 
 ---
 
@@ -245,6 +260,7 @@ Phase 1 will be considered complete when:
 - [ ] Sellers can create stores and manage products
 - [ ] Customers can browse products and place orders
 - [ ] Order status tracking works end-to-end
+- [ ] Payment processing with Paymob gateway is functional
 - [ ] Review system allows customers to rate and review products
 - [ ] Admin dashboard provides basic user and platform management
 - [ ] All core functionality is covered by tests
@@ -264,13 +280,14 @@ Phase 1 will be considered complete when:
 
 *Last Updated: December 2024*  
 *Phase: 1 (Foundation)*  
-*Status: 🔄 In Progress - Service Layer Implementation (55% Complete)*
+*Status: 🔄 In Progress - Service Layer Implementation (60% Complete)*
 
 ## Recent Updates (December 2024)
 - ✅ **Store Services**: Completed and optimized with performance improvements
 - ✅ **Product Services**: Completed and optimized to match Store service patterns
 - ✅ **Order Services**: Completed with SOLID principles (5 specialized services + composite)
+- ✅ **Service Registration**: All Order services registered in DI container
 - ✅ **Performance Optimizations**: Applied database-level aggregation, time-based filtering, and AsNoTracking
 - ✅ **Repository Layer**: All repositories implemented with efficient query patterns
 - ✅ **Business Logic**: Status transitions, validation rules, payment processing implemented
-- 🔄 **Next Priority**: Review Management Service and Admin Services
+- 🔄 **Next Priority**: Review Management Service, Admin Services, and Paymob Integration

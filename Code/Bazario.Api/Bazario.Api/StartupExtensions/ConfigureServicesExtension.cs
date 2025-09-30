@@ -12,11 +12,13 @@ using System.Text;
 using Bazario.Core.Helpers.Store;
 using Bazario.Core.ServiceContracts.Store;
 using Bazario.Core.ServiceContracts.Product;
+using Bazario.Core.ServiceContracts.Order;
 using Bazario.Core.Domain.IdentityEntities;
 using Bazario.Core.Domain.RepositoryContracts;
 
 using Bazario.Core.Services.Store;
 using Bazario.Core.Services.Product;
+using Bazario.Core.Services.Order;
 using Bazario.Core.Models.Email;
 using Bazario.Core.ServiceContracts.Auth;
 using Bazario.Core.Services.Auth;
@@ -80,6 +82,14 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<IProductAnalyticsService, ProductAnalyticsService>();
             services.AddScoped<IProductValidationService, ProductValidationService>();
             services.AddScoped<IProductService, ProductService>(); // Composite interface
+            
+            // Register Order Services (SOLID principle separation)
+            services.AddScoped<IOrderManagementService, OrderManagementService>();
+            services.AddScoped<IOrderQueryService, OrderQueryService>();
+            services.AddScoped<IOrderValidationService, OrderValidationService>();
+            services.AddScoped<IOrderAnalyticsService, OrderAnalyticsService>();
+            services.AddScoped<IOrderPaymentService, OrderPaymentService>();
+            services.AddScoped<IOrderService, OrderService>(); // Composite interface
             
             // Configure EmailSettings
             services.Configure<EmailSettings>(configuration.GetSection("EmailSettings"));
