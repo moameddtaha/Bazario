@@ -121,10 +121,10 @@ namespace Bazario.Core.Services.Store
             return await _analyticsService.GetStorePerformanceAsync(storeId, cancellationToken);
         }
 
-        public async Task<PagedResponse<StorePerformance>> GetTopPerformingStoresAsync(PerformanceCriteria criteria = PerformanceCriteria.Revenue, int pageNumber = 1, int pageSize = 10, CancellationToken cancellationToken = default)
+        public async Task<PagedResponse<StorePerformance>> GetTopPerformingStoresAsync(PerformanceCriteria performanceCriteria = PerformanceCriteria.Revenue, StoreSearchCriteria? searchCriteria = null, CancellationToken cancellationToken = default)
         {
             _logger.LogDebug("Delegating top performing stores to analytics service");
-            return await _analyticsService.GetTopPerformingStoresAsync(criteria, pageNumber, pageSize, cancellationToken);
+            return await _analyticsService.GetTopPerformingStoresAsync(performanceCriteria, searchCriteria, cancellationToken);
         }
 
         #endregion
