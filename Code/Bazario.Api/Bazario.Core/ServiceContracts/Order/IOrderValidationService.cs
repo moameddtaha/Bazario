@@ -38,13 +38,15 @@ namespace Bazario.Core.ServiceContracts.Order
         bool IsValidStatusTransition(string currentStatus, string newStatus);
 
         /// <summary>
-        /// Calculates order total including taxes and discounts
+        /// Calculates order total including shipping costs and discounts
         /// </summary>
         /// <param name="orderItems">List of order items</param>
-        /// <param name="customerId">Customer ID for tax calculation</param>
+        /// <param name="customerId">Customer ID for calculation</param>
+        /// <param name="shippingAddress">Shipping address information</param>
+        /// <param name="discountCode">Optional discount code to apply</param>
         /// <param name="cancellationToken">Cancellation token</param>
         /// <returns>Order total calculation result</returns>
-        Task<OrderTotalCalculation> CalculateOrderTotalAsync(List<OrderItemAddRequest> orderItems, Guid customerId, CancellationToken cancellationToken = default);
+        Task<OrderTotalCalculation> CalculateOrderTotalAsync(List<OrderItemAddRequest> orderItems, Guid customerId, ShippingAddress shippingAddress, List<string>? discountCodes = null, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Validates order items have sufficient stock

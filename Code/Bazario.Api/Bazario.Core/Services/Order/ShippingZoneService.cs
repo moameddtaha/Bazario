@@ -6,8 +6,9 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Bazario.Core.Enums;
+using Bazario.Core.ServiceContracts.Order;
 
-namespace Bazario.Core.Helpers.Order
+namespace Bazario.Core.Services.Order
 {
     /// <summary>
     /// Production-ready shipping zone service that calculates delivery zones based on real address data

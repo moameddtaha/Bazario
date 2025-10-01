@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.Entities;
 using Bazario.Core.Enums;
+using Bazario.Core.Models.Order;
 using Bazario.Core.Models.Store;
 
 namespace Bazario.Core.Domain.RepositoryContracts
@@ -49,5 +50,15 @@ namespace Bazario.Core.Domain.RepositoryContracts
         /// Gets store order statistics for multiple stores in a single query
         /// </summary>
         Task<Dictionary<Guid, StoreOrderStats>> GetBulkStoreOrderStatsAsync(List<Guid> storeIds, DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets all orders that used a specific discount code
+        /// </summary>
+        Task<List<Order>> GetOrdersByDiscountCodeAsync(string discountCode, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets orders with pre-calculated discount code counts for performance optimization
+        /// </summary>
+        Task<List<OrderWithCodeCount>> GetOrdersWithCodeCountsByDiscountCodeAsync(string discountCode, CancellationToken cancellationToken = default);
     }
 }

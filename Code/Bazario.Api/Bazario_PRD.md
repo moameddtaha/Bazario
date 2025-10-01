@@ -113,21 +113,30 @@ Bazario aims to democratize e-commerce by providing an accessible, secure, and f
 ### 2. Store Management
 - **Store Creation**: Sellers can create and customize their stores
 - **Store Profiles**: Name, description, category, and logo management
-- **Store Analytics**: Performance metrics and insights
+- **Store Analytics**: Performance metrics and insights with order analytics
 - **Store Settings**: Configuration and customization options
+- **Shipping Management**: Store-specific shipping rates and zones configuration
+- **Store Shipping Zones**: Location-based shipping cost management per store
 
 ### 3. Product Catalog
-- **Product Management**: Create, read, update, delete products
-- **Inventory Tracking**: Real-time stock quantity management
-- **Product Categories**: Organized product classification system
-- **Product Images**: Support for product photography
+- **Product Management**: Create, read, update, delete products with soft deletion support
+- **Inventory Tracking**: Real-time stock quantity management with alerts and analytics
+- **Product Categories**: Organized product classification system with hierarchical structure
+- **Product Images**: Support for product photography and media management
 - **Product Search**: Advanced search and filtering capabilities
+- **Inventory Analytics**: Dead stock analysis, forecasting, and performance metrics
+- **Stock Reservations**: Temporary stock holding for pending orders
+- **Inventory Alerts**: Automated notifications for low stock and reorder points
 
 ### 4. Order Management
-- **Order Processing**: Complete order lifecycle management
+- **Order Processing**: Complete order lifecycle management with automated total calculation
 - **Order Status Tracking**: Real-time status updates (Pending, Processing, Shipped, Delivered, Cancelled, Returned)
 - **Order History**: Comprehensive order tracking for customers and sellers
-- **Order Analytics**: Sales reporting and insights
+- **Order Analytics**: Advanced sales reporting and insights with discount performance tracking
+- **Order Calculation**: Automated order total calculation with shipping costs and discount application
+- **Multi-Discount Support**: Support for applying multiple discount codes per order
+- **Shipping Zone Management**: Location-based shipping cost calculation
+- **Discount Management**: Comprehensive discount system with usage tracking and analytics
 
 ### 5. Review & Rating System
 - **Product Reviews**: Customer feedback and ratings
@@ -143,9 +152,12 @@ Bazario aims to democratize e-commerce by providing an accessible, secure, and f
 
 ### 7. Admin Dashboard
 - **User Management**: Admin control over users and roles
-- **Platform Analytics**: System-wide performance metrics
+- **Platform Analytics**: System-wide performance metrics with discount analytics
 - **Content Moderation**: Review and approve content
 - **System Configuration**: Platform settings and maintenance
+- **Discount Management**: Create and manage discount codes and campaigns
+- **Shipping Configuration**: Global shipping zone and rate management
+- **Order Management**: Advanced order processing and analytics tools
 
 ---
 
@@ -172,11 +184,14 @@ Bazario.Email.ServiceTests/ # Email service tests
 
 ### Database Schema
 - **Users**: ApplicationUser, ApplicationRole
-- **Stores**: Store entity with seller relationships
-- **Products**: Product catalog with store relationships
-- **Orders**: Order and OrderItem entities
+- **Stores**: Store entity with seller relationships and shipping configuration
+- **Products**: Product catalog with store relationships and inventory tracking
+- **Orders**: Order and OrderItem entities with discount and shipping details
 - **Reviews**: Product review and rating system
 - **Refresh Tokens**: JWT token management
+- **Discounts**: Discount codes with usage tracking and analytics
+- **StoreShippingRates**: Store-specific shipping rates by zone
+- **Inventory**: Stock tracking with alerts and reservations
 
 ---
 
@@ -213,10 +228,14 @@ DELETE /api/products/{id}   # Delete product
 
 ### Order Management Endpoints
 ```
-GET    /api/orders          # List orders
-POST   /api/orders          # Create new order
-GET    /api/orders/{id}     # Get order details
-PUT    /api/orders/{id}     # Update order status
+GET    /api/orders                    # List orders with filtering
+POST   /api/orders                    # Create new order with calculation
+GET    /api/orders/{id}               # Get order details
+PUT    /api/orders/{id}               # Update order status and details
+GET    /api/orders/analytics          # Order analytics and metrics
+GET    /api/orders/discounts/stats    # Discount usage statistics
+GET    /api/orders/discounts/performance # Discount performance analytics
+GET    /api/orders/revenue/impact     # Revenue impact analysis
 ```
 
 ### Review Management Endpoints
@@ -228,6 +247,35 @@ PUT    /api/reviews/{id}    # Update review
 DELETE /api/reviews/{id}    # Delete review
 ```
 
+### Discount Management Endpoints
+```
+GET    /api/discounts       # List discount codes
+POST   /api/discounts       # Create new discount
+GET    /api/discounts/{id}  # Get discount details
+PUT    /api/discounts/{id}  # Update discount
+DELETE /api/discounts/{id}  # Delete discount
+GET    /api/discounts/validate # Validate discount code
+```
+
+### Shipping Management Endpoints
+```
+GET    /api/shipping/zones  # List shipping zones
+POST   /api/shipping/rates  # Create shipping rate
+GET    /api/shipping/rates  # List shipping rates
+PUT    /api/shipping/rates/{id} # Update shipping rate
+DELETE /api/shipping/rates/{id} # Delete shipping rate
+```
+
+### Inventory Management Endpoints
+```
+GET    /api/inventory       # List inventory items
+POST   /api/inventory       # Create inventory item
+GET    /api/inventory/{id}  # Get inventory details
+PUT    /api/inventory/{id}  # Update inventory
+GET    /api/inventory/alerts # Get inventory alerts
+GET    /api/inventory/analytics # Get inventory analytics
+```
+
 ---
 
 ## User Stories
@@ -237,17 +285,28 @@ DELETE /api/reviews/{id}    # Delete review
 2. **As a customer**, I want to read product reviews so that I can make informed purchasing decisions.
 3. **As a customer**, I want to track my order status so that I know when to expect delivery.
 4. **As a customer**, I want to leave reviews for products I've purchased so that I can help other customers.
+5. **As a customer**, I want to apply multiple discount codes to my order so that I can maximize my savings.
+6. **As a customer**, I want to see accurate shipping costs based on my location so that I know the total cost upfront.
+7. **As a customer**, I want to see detailed order breakdowns including subtotal, discounts, and shipping so that I understand my charges.
 
 ### Seller Stories
 1. **As a seller**, I want to create a store profile so that I can establish my brand presence.
 2. **As a seller**, I want to manage my product inventory so that I can keep accurate stock levels.
 3. **As a seller**, I want to view order analytics so that I can understand my business performance.
 4. **As a seller**, I want to respond to customer reviews so that I can build customer relationships.
+5. **As a seller**, I want to set up shipping rates for different zones so that I can offer competitive shipping.
+6. **As a seller**, I want to create discount campaigns so that I can attract more customers.
+7. **As a seller**, I want to track inventory levels and get alerts so that I can restock on time.
+8. **As a seller**, I want to analyze discount performance so that I can optimize my marketing campaigns.
 
 ### Admin Stories
 1. **As an admin**, I want to moderate user content so that I can maintain platform quality.
 2. **As an admin**, I want to view platform analytics so that I can make data-driven decisions.
 3. **As an admin**, I want to manage user accounts so that I can ensure platform security.
+4. **As an admin**, I want to manage discount campaigns across the platform so that I can drive sales.
+5. **As an admin**, I want to configure global shipping zones so that I can standardize shipping.
+6. **As an admin**, I want to monitor inventory levels across all stores so that I can identify issues.
+7. **As an admin**, I want to analyze discount performance and revenue impact so that I can optimize the platform.
 
 ---
 
@@ -374,30 +433,43 @@ DELETE /api/reviews/{id}    # Delete review
 ### Phase 1 (Q1 2024) - Foundation
 - ✅ Core authentication system
 - ✅ Basic store and product management
-- ✅ Order processing system
+- ✅ Order processing system with automated calculation
 - ✅ Review and rating system
-- 🔄 Admin dashboard development
+- ✅ Admin dashboard development
+- ✅ Advanced order management with discount and shipping
+- ✅ Inventory management with analytics and alerts
+- ✅ Discount management system
+- ✅ Shipping zone management
+- ✅ Order analytics and reporting
 
 ### Phase 2 (Q2 2024) - Enhancement
 - 📋 Advanced search and filtering
 - 📋 Payment gateway integration
 - 📋 Mobile application (iOS/Android)
-- 📋 Advanced analytics dashboard
+- 📋 Advanced analytics dashboard with discount insights
 - 📋 Email marketing system
+- 📋 Advanced discount campaign management
+- 📋 Real-time inventory synchronization
+- 📋 Advanced shipping options (express, same-day)
 
 ### Phase 3 (Q3 2024) - Scale
 - 📋 Multi-language support
-- 📋 Advanced inventory management
+- 📋 Advanced inventory management with AI forecasting
 - 📋 Shipping and logistics integration
-- 📋 Advanced reporting and analytics
+- 📋 Advanced reporting and analytics with predictive insights
 - 📋 API for third-party integrations
+- 📋 Dynamic pricing based on demand and inventory
+- 📋 Advanced discount optimization algorithms
 
 ### Phase 4 (Q4 2024) - Growth
 - 📋 AI-powered product recommendations
-- 📋 Advanced seller tools
+- 📋 Advanced seller tools with automated marketing
 - 📋 Marketplace expansion features
 - 📋 International payment support
 - 📋 Advanced security features
+- 📋 Machine learning for discount optimization
+- 📋 Predictive analytics for inventory management
+- 📋 Advanced fraud detection for orders and discounts
 
 ---
 
@@ -405,7 +477,16 @@ DELETE /api/reviews/{id}    # Delete review
 
 Bazario represents a comprehensive e-commerce platform designed to meet the needs of modern online commerce. With its robust technical architecture, comprehensive feature set, and focus on user experience, the platform is positioned for success in the competitive e-commerce market.
 
-The platform's modular design, security-first approach, and scalable architecture provide a solid foundation for growth and expansion. Regular monitoring of KPIs and user feedback will ensure continuous improvement and alignment with business objectives.
+The platform's modular design, security-first approach, and scalable architecture provide a solid foundation for growth and expansion. The recent enhancements including advanced order calculation, multi-discount support, shipping zone management, and comprehensive analytics provide significant competitive advantages in the marketplace.
+
+Key differentiators include:
+- **Intelligent Order Processing**: Automated calculation with multi-discount support and location-based shipping
+- **Advanced Analytics**: Comprehensive discount performance tracking and revenue impact analysis
+- **Inventory Intelligence**: Real-time tracking with alerts, forecasting, and dead stock analysis
+- **Flexible Discount System**: Support for multiple discount types with usage tracking and optimization
+- **Scalable Architecture**: Clean architecture with performance-optimized queries and efficient data processing
+
+Regular monitoring of KPIs and user feedback will ensure continuous improvement and alignment with business objectives.
 
 ---
 

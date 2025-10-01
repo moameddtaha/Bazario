@@ -24,6 +24,8 @@ namespace Bazario.Infrastructure.DbContext
         public DbSet<Product> Products { get; set; }
         public DbSet<OrderItem> OrderItems { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
+        public DbSet<StoreShippingRate> StoreShippingRates { get; set; }
+        public DbSet<Discount> Discounts { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {

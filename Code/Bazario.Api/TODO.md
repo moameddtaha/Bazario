@@ -16,6 +16,10 @@ This document outlines the remaining tasks to complete Phase 1 (Foundation) of t
 ### 🔄 **IN PROGRESS / PARTIAL**
 - [x] Store and product management (services completed and optimized) ✅
 - [x] Order processing system (services completed and refactored) ✅
+- [x] Order calculation system (automated calculation with discounts and shipping) ✅
+- [x] Discount management system (comprehensive discount tracking and analytics) ✅
+- [x] Shipping zone management (location-based shipping cost calculation) ✅
+- [x] Inventory management (advanced analytics, alerts, and forecasting) ✅
 - [ ] Review and rating system (domain exists, services missing)
 - [ ] Admin dashboard development (repositories exist, services missing)
 
@@ -80,7 +84,7 @@ This document outlines the remaining tasks to complete Phase 1 (Foundation) of t
   - Added DEBUG-only SQL logging with #if DEBUG
   - Product services now match Store service patterns for consistency
 
-### 2.3 Order Processing Service ✅ COMPLETED + REFACTORED
+### 2.3 Order Processing Service ✅ COMPLETED + REFACTORED + ENHANCED
 - [x] **Create OrderService** ✅ COMPLETE
   - File: `Bazario.Core/Services/Order/OrderService.cs`
   - Implements `IOrderService` composite interface
@@ -109,6 +113,24 @@ This document outlines the remaining tasks to complete Phase 1 (Foundation) of t
   - Order total calculations with tax
   - Payment processing and refund simulation
   - Paymob payment gateway integration planned
+- [x] **Order Calculation System** ✅ COMPLETE
+  - Automated order total calculation with shipping and discounts
+  - Multi-discount support with proportional attribution
+  - Location-based shipping cost calculation
+  - Tax removal (no tax calculation for now)
+  - Order entity enhanced with discount and shipping details
+  - Business validation for order updates
+- [x] **Discount Management Integration** ✅ COMPLETE
+  - Discount validation and application logic
+  - Multiple discount codes per order support
+  - Discount analytics and performance tracking
+  - Revenue impact analysis
+  - Usage statistics and reporting
+- [x] **Shipping Zone Integration** ✅ COMPLETE
+  - Location-based shipping cost calculation
+  - Store-specific shipping rates
+  - Free shipping threshold support
+  - Multi-store order shipping handling
 
 ### 2.4 Inventory Management Service ✅ COMPLETED + REFACTORED
 - [x] **Create InventoryService** ✅ COMPLETE
@@ -156,7 +178,25 @@ This document outlines the remaining tasks to complete Phase 1 (Foundation) of t
   - Complete expansion guide documentation
   - No postal code dependency (Egypt doesn't use them)
 
-### 2.6 Review Management Service
+### 2.6 Discount Management Service ✅ COMPLETED
+- [x] **Create DiscountService** ✅ COMPLETE
+  - File: `Bazario.Core/Services/Discount/DiscountService.cs`
+  - Implements `IDiscountService` composite interface
+  - Discount CRUD operations with validation
+  - Discount validation and application logic
+  - Usage tracking and analytics
+- [x] **Discount Analytics** ✅ COMPLETE
+  - Discount performance tracking
+  - Revenue impact analysis
+  - Usage statistics and reporting
+  - Multi-discount support with proportional attribution
+- [x] **Discount Models** ✅ COMPLETE
+  - `DiscountUsageStats` for individual discount analytics
+  - `DiscountPerformance` for performance metrics
+  - `DiscountRevenueImpact` for revenue analysis
+  - `OrderWithCodeCount` for performance optimization
+
+### 2.7 Review Management Service
 - [ ] **Create ReviewService**
   - File: `Bazario.Core/Services/ReviewService.cs`
   - Implement `IReviewService` interface
@@ -164,7 +204,7 @@ This document outlines the remaining tasks to complete Phase 1 (Foundation) of t
   - Review moderation capabilities
   - Rating aggregation and statistics
 
-### 2.7 Admin Management Service
+### 2.8 Admin Management Service
 - [ ] **Create AdminService**
   - File: `Bazario.Core/Services/AdminService.cs`
   - User management operations
@@ -203,10 +243,14 @@ This document outlines the remaining tasks to complete Phase 1 (Foundation) of t
 ### 3.4 Order Management Controller
 - [ ] **Create OrdersController**
   - File: `Bazario.Api/Controllers/OrdersController.cs`
-  - Endpoints: GET /api/orders (list orders)
-  - Endpoints: POST /api/orders (create order)
+  - Endpoints: GET /api/orders (list orders with filtering)
+  - Endpoints: POST /api/orders (create order with calculation)
   - Endpoints: GET /api/orders/{id} (get order details)
-  - Endpoints: PUT /api/orders/{id} (update order status)
+  - Endpoints: PUT /api/orders/{id} (update order status and details)
+  - Endpoints: GET /api/orders/analytics (order analytics and metrics)
+  - Endpoints: GET /api/orders/discounts/stats (discount usage statistics)
+  - Endpoints: GET /api/orders/discounts/performance (discount performance analytics)
+  - Endpoints: GET /api/orders/revenue/impact (revenue impact analysis)
 
 ### 3.5 Inventory Management Controller
 - [ ] **Create InventoryController**
@@ -217,7 +261,26 @@ This document outlines the remaining tasks to complete Phase 1 (Foundation) of t
   - Endpoints: GET /api/inventory/alerts (get low stock alerts)
   - Endpoints: GET /api/inventory/reports (get inventory reports)
 
-### 3.6 Review Management Controller
+### 3.6 Discount Management Controller
+- [ ] **Create DiscountsController**
+  - File: `Bazario.Api/Controllers/DiscountsController.cs`
+  - Endpoints: GET /api/discounts (list discount codes)
+  - Endpoints: POST /api/discounts (create new discount)
+  - Endpoints: GET /api/discounts/{id} (get discount details)
+  - Endpoints: PUT /api/discounts/{id} (update discount)
+  - Endpoints: DELETE /api/discounts/{id} (delete discount)
+  - Endpoints: GET /api/discounts/validate (validate discount code)
+
+### 3.7 Shipping Management Controller
+- [ ] **Create ShippingController**
+  - File: `Bazario.Api/Controllers/ShippingController.cs`
+  - Endpoints: GET /api/shipping/zones (list shipping zones)
+  - Endpoints: POST /api/shipping/rates (create shipping rate)
+  - Endpoints: GET /api/shipping/rates (list shipping rates)
+  - Endpoints: PUT /api/shipping/rates/{id} (update shipping rate)
+  - Endpoints: DELETE /api/shipping/rates/{id} (delete shipping rate)
+
+### 3.8 Review Management Controller
 - [ ] **Create ReviewsController**
   - File: `Bazario.Api/Controllers/ReviewsController.cs`
   - Endpoints: GET /api/reviews (list reviews)
@@ -226,12 +289,14 @@ This document outlines the remaining tasks to complete Phase 1 (Foundation) of t
   - Endpoints: PUT /api/reviews/{id} (update review)
   - Endpoints: DELETE /api/reviews/{id} (delete review)
 
-### 3.7 Admin Dashboard Controller
+### 3.9 Admin Dashboard Controller
 - [ ] **Create AdminController**
   - File: `Bazario.Api/Controllers/AdminController.cs`
   - User management endpoints
   - Platform analytics endpoints
   - Content moderation endpoints
+  - Discount management endpoints
+  - Shipping configuration endpoints
 
 ---
 
@@ -243,6 +308,10 @@ This document outlines the remaining tasks to complete Phase 1 (Foundation) of t
   - Register missing repository implementations
   - Ensure proper scoped lifetimes
   - Added Order services registration (5 specialized + 1 composite)
+  - Added Discount services registration
+  - Added StoreShipping services registration
+  - Added Inventory services registration (5 specialized + 1 composite)
+  - Added ShippingZone service registration
 
 ### 4.2 API Documentation
 - [ ] **Update Swagger Configuration**
@@ -298,13 +367,13 @@ This document outlines the remaining tasks to complete Phase 1 (Foundation) of t
 | Priority | Tasks | Estimated Time | Dependencies | Status |
 |----------|-------|----------------|--------------|--------|
 | Priority 1 | Repository implementations | 1-2 days | None | ✅ COMPLETE |
-| Priority 2 | Service implementations | 3-4 days | Priority 1 | 🔄 PARTIAL (Store, Product, Order & Inventory ✅, Review & Admin pending) |
+| Priority 2 | Service implementations | 3-4 days | Priority 1 | 🔄 PARTIAL (Store, Product, Order, Inventory, Discount & Shipping ✅, Review & Admin pending) |
 | Priority 3 | API controllers | 2-3 days | Priority 2 | ⏳ PENDING |
 | Priority 4 | Configuration & docs | 1-2 days | Priority 3 | ⏳ PENDING (includes Paymob integration) |
 | Priority 5 | Testing & integration | 2-3 days | All above | ⏳ PENDING |
 
 **Total Estimated Time: 10-14 days** (includes Paymob integration)  
-**Current Progress: ~75% Complete**
+**Current Progress: ~85% Complete**
 
 ---
 
@@ -318,6 +387,9 @@ Phase 1 will be considered complete when:
 - [ ] Inventory management and stock tracking works properly
 - [ ] Customers can browse products and place orders
 - [ ] Order status tracking works end-to-end
+- [ ] Order calculation with discounts and shipping works automatically
+- [ ] Discount management system is fully functional
+- [ ] Shipping zone management works for location-based costs
 - [ ] Payment processing with Paymob gateway is functional
 - [ ] Review system allows customers to rate and review products
 - [ ] Admin dashboard provides basic user and platform management
@@ -338,7 +410,7 @@ Phase 1 will be considered complete when:
 
 *Last Updated: December 2024*  
 *Phase: 1 (Foundation)*  
-*Status: 🔄 In Progress - Service Layer Implementation (75% Complete)*
+*Status: 🔄 In Progress - Service Layer Implementation (85% Complete)*
 
 ## Recent Updates (December 2024)
 - ✅ **Store Services**: Completed and optimized with performance improvements
@@ -346,10 +418,14 @@ Phase 1 will be considered complete when:
 - ✅ **Order Services**: Completed with SOLID principles (5 specialized services + composite)
 - ✅ **Inventory Services**: Completed with SOLID principles (5 specialized services + composite)
 - ✅ **Shipping Zone Service**: Completed with production-ready Egypt-focused implementation
-- ✅ **Service Registration**: All Order, Inventory, and Shipping services registered in DI container
+- ✅ **Discount Management**: Completed with comprehensive analytics and multi-discount support
+- ✅ **Order Calculation System**: Automated calculation with shipping and discount integration
+- ✅ **Service Registration**: All Order, Inventory, Shipping, and Discount services registered in DI container
 - ✅ **Performance Optimizations**: Applied database-level aggregation, time-based filtering, and AsNoTracking
 - ✅ **Repository Layer**: All repositories implemented with efficient query patterns
 - ✅ **Business Logic**: Status transitions, validation rules, payment processing, inventory tracking implemented
 - ✅ **Inventory Features**: Stock reservations, bulk updates, analytics, forecasting, alerts, and valuations
 - ✅ **Shipping Features**: Real address-based zone determination, express/same-day delivery, future expansion ready
+- ✅ **Discount Features**: Multi-discount support, proportional attribution, performance analytics, revenue impact
+- ✅ **Order Enhancement**: Entity updated with discount and shipping details, business validation, DTOs updated
 - 🔄 **Next Priority**: Review Management Service, Admin Services, and Paymob Integration

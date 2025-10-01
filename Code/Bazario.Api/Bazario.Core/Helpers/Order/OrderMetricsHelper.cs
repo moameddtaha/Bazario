@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Bazario.Core.Enums;
+using Bazario.Core.ServiceContracts.Order;
 using OrderEntity = Bazario.Core.Domain.Entities.Order;
 
 namespace Bazario.Core.Helpers.Order

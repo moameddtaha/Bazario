@@ -68,5 +68,10 @@ namespace Bazario.Core.Domain.RepositoryContracts
         /// Gets top performing stores with performance metrics calculated at database level
         /// </summary>
         Task<List<StorePerformance>> GetTopPerformingStoresAsync(IQueryable<Store> query, int pageNumber, int pageSize, string performanceCriteria, DateTime? performancePeriodStart = null, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets multiple stores by their IDs in a single query to avoid N+1 problem.
+        /// </summary>
+        Task<List<Store>> GetStoresByIdsAsync(List<Guid> storeIds, CancellationToken cancellationToken = default);
     }
 }

@@ -698,5 +698,33 @@ namespace Bazario.Infrastructure.Repositories
                 throw new InvalidOperationException($"Failed to get top performing stores: {ex.Message}", ex);
             }
         }
+
+        public async Task<List<Store>> GetStoresByIdsAsync(List<Guid> storeIds, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Getting stores by IDs: {StoreIds}", string.Join(", ", storeIds));
+
+            try
+            {
+                if (storeIds == null || !storeIds.Any())
+                {
+                    _logger.LogWarning("Store IDs list is null or empty");
+                    return new List<Store>();
+                }
+
+                var stores = await _context.Stores
+                    .Include(s => s.Seller)
+                    .Where(s => storeIds.Contains(s.StoreId))
+                    .AsNoTracking()
+                    .ToListAsync(cancellationToken);
+
+                _logger.LogDebug("Found {Count} stores for {StoreIdCount} IDs", stores.Count, storeIds.Count);
+                return stores;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get stores by IDs");
+                throw new InvalidOperationException($"Failed to get stores by IDs: {ex.Message}", ex);
+            }
+        }
     }
 }

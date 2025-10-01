@@ -20,7 +20,12 @@ namespace Bazario.Core.Extensions
                 CustomerId = order.CustomerId,
                 Date = order.Date,
                 TotalAmount = order.TotalAmount,
-                Status = Enum.TryParse<OrderStatus>(order.Status, out var status) ? status : OrderStatus.Pending
+                Status = Enum.TryParse<OrderStatus>(order.Status, out var status) ? status : OrderStatus.Pending,
+                AppliedDiscountCodes = order.AppliedDiscountCodes,
+                DiscountAmount = order.DiscountAmount,
+                AppliedDiscountTypes = order.AppliedDiscountTypes,
+                ShippingCost = order.ShippingCost,
+                Subtotal = order.Subtotal
             };
         }
     }

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.RepositoryContracts;
@@ -46,6 +47,45 @@ namespace Bazario.Core.Services.Order
                 order.OrderId = Guid.NewGuid();
                 order.Date = DateTime.UtcNow;
 
+                // Check if order should be calculated (customer orders) or use provided values (admin orders)
+                if (orderAddRequest.ShouldCalculateOrder())
+                {
+                    _logger.LogDebug("Calculating order total for customer order: {OrderId}", order.OrderId);
+                    
+                    // Calculate order total including shipping and discounts
+                    var calculation = await _validationService.CalculateOrderTotalAsync(
+                        orderAddRequest.OrderItems,
+                        orderAddRequest.CustomerId,
+                        orderAddRequest.ShippingAddress,
+                        orderAddRequest.DiscountCodes,
+                        cancellationToken);
+
+                    // Populate order entity with calculated values
+                    order.Subtotal = calculation.Subtotal;
+                    order.DiscountAmount = calculation.DiscountAmount;
+                    order.ShippingCost = calculation.ShippingCost;
+                    order.TotalAmount = calculation.Total;
+                    
+                    // Set applied discount types from the calculation
+                    if (calculation.AppliedDiscounts.Any())
+                    {
+                        // Extract discount types from AppliedDiscounts (format: "CODE (Type)")
+                        var discountTypes = calculation.AppliedDiscounts
+                            .Select(d => d.Contains('(') ? d.Split('(')[1].TrimEnd(')') : "Unknown")
+                            .ToList();
+                        order.AppliedDiscountTypes = string.Join(",", discountTypes);
+                    }
+
+                    _logger.LogDebug("Order calculated - Subtotal: {Subtotal}, Discount: {Discount}, Shipping: {Shipping}, Total: {Total}",
+                        order.Subtotal, order.DiscountAmount, order.ShippingCost, order.TotalAmount);
+                }
+                else
+                {
+                    _logger.LogDebug("Using provided values for admin order: {OrderId}", order.OrderId);
+                    // For admin orders, use the provided values from the request
+                    // The order entity already has the values from ToOrder() method
+                }
+
                 // Add order to database
                 var createdOrder = await _orderRepository.AddOrderAsync(order, cancellationToken);
 
@@ -86,9 +126,24 @@ namespace Bazario.Core.Services.Order
                     throw new InvalidOperationException($"Order with ID {orderUpdateRequest.OrderId} not found");
                 }
 
+                // Business validation for new properties
+                ValidateOrderUpdateBusinessRules(orderUpdateRequest, existingOrder);
+
                 // Update order properties
                 existingOrder.TotalAmount = orderUpdateRequest.TotalAmount ?? existingOrder.TotalAmount;
-                existingOrder.Status = orderUpdateRequest.Status.ToString();
+                existingOrder.Status = orderUpdateRequest.Status?.ToString() ?? existingOrder.Status;
+                
+                // Update discount and shipping properties if provided
+                if (orderUpdateRequest.AppliedDiscountCodes != null)
+                    existingOrder.AppliedDiscountCodes = orderUpdateRequest.AppliedDiscountCodes;
+                if (orderUpdateRequest.DiscountAmount.HasValue)
+                    existingOrder.DiscountAmount = orderUpdateRequest.DiscountAmount.Value;
+                if (orderUpdateRequest.AppliedDiscountTypes != null)
+                    existingOrder.AppliedDiscountTypes = orderUpdateRequest.AppliedDiscountTypes;
+                if (orderUpdateRequest.ShippingCost.HasValue)
+                    existingOrder.ShippingCost = orderUpdateRequest.ShippingCost.Value;
+                if (orderUpdateRequest.Subtotal.HasValue)
+                    existingOrder.Subtotal = orderUpdateRequest.Subtotal.Value;
 
                 // Save changes
                 var updatedOrder = await _orderRepository.UpdateOrderAsync(existingOrder, cancellationToken);
@@ -192,6 +247,62 @@ namespace Bazario.Core.Services.Order
                 _logger.LogError(ex, "Failed to delete order: {OrderId}", orderId);
                 throw;
             }
+        }
+
+        /// <summary>
+        /// Validates business rules for order updates
+        /// </summary>
+        private void ValidateOrderUpdateBusinessRules(OrderUpdateRequest orderUpdateRequest, Domain.Entities.Order existingOrder)
+        {
+            _logger.LogDebug("Validating business rules for order update: {OrderId}", orderUpdateRequest.OrderId);
+
+            // Get the values that will be used for validation (either from request or existing order)
+            var subtotal = orderUpdateRequest.Subtotal ?? existingOrder.Subtotal;
+            var discountAmount = orderUpdateRequest.DiscountAmount ?? existingOrder.DiscountAmount;
+            var shippingCost = orderUpdateRequest.ShippingCost ?? existingOrder.ShippingCost;
+            var totalAmount = orderUpdateRequest.TotalAmount ?? existingOrder.TotalAmount;
+
+            // Business Rule 1: Discount amount should not exceed subtotal
+            if (discountAmount > subtotal)
+            {
+                _logger.LogWarning("Business rule violation: Discount amount {DiscountAmount} exceeds subtotal {Subtotal} for order {OrderId}",
+                    discountAmount, subtotal, orderUpdateRequest.OrderId);
+                throw new InvalidOperationException($"Discount amount ({discountAmount:C}) cannot exceed subtotal ({subtotal:C})");
+            }
+
+            // Business Rule 2: Total amount should be consistent with subtotal, discount, and shipping
+            var expectedTotal = subtotal + shippingCost - discountAmount;
+            if (Math.Abs(totalAmount - expectedTotal) > 0.01m) // Allow for small rounding differences
+            {
+                _logger.LogWarning("Business rule violation: Total amount {TotalAmount} does not match calculated total {ExpectedTotal} (Subtotal: {Subtotal}, Shipping: {ShippingCost}, Discount: {DiscountAmount}) for order {OrderId}",
+                    totalAmount, expectedTotal, subtotal, shippingCost, discountAmount, orderUpdateRequest.OrderId);
+                throw new InvalidOperationException($"Total amount ({totalAmount:C}) does not match calculated total ({expectedTotal:C}). Expected: Subtotal + Shipping - Discount = {subtotal:C} + {shippingCost:C} - {discountAmount:C}");
+            }
+
+            // Business Rule 3: AppliedDiscountCodes and AppliedDiscountTypes should be consistent
+            if (!string.IsNullOrEmpty(orderUpdateRequest.AppliedDiscountCodes) && !string.IsNullOrEmpty(orderUpdateRequest.AppliedDiscountTypes))
+            {
+                var codeCount = orderUpdateRequest.AppliedDiscountCodes.Split(',', StringSplitOptions.RemoveEmptyEntries).Length;
+                var typeCount = orderUpdateRequest.AppliedDiscountTypes.Split(',', StringSplitOptions.RemoveEmptyEntries).Length;
+                
+                if (codeCount != typeCount)
+                {
+                    _logger.LogWarning("Business rule violation: AppliedDiscountCodes count ({CodeCount}) does not match AppliedDiscountTypes count ({TypeCount}) for order {OrderId}",
+                        codeCount, typeCount, orderUpdateRequest.OrderId);
+                    throw new InvalidOperationException($"Applied discount codes count ({codeCount}) must match applied discount types count ({typeCount})");
+                }
+            }
+
+            // Business Rule 4: If discount amount is provided, discount codes should also be provided
+            if (orderUpdateRequest.DiscountAmount.HasValue && orderUpdateRequest.DiscountAmount.Value > 0 && 
+                string.IsNullOrEmpty(orderUpdateRequest.AppliedDiscountCodes))
+            {
+                _logger.LogWarning("Business rule violation: Discount amount {DiscountAmount} provided but no discount codes for order {OrderId}",
+                    orderUpdateRequest.DiscountAmount.Value, orderUpdateRequest.OrderId);
+                throw new InvalidOperationException("Discount amount cannot be greater than 0 without applied discount codes");
+            }
+
+            _logger.LogDebug("Business rules validation passed for order update: {OrderId}", orderUpdateRequest.OrderId);
         }
     }
 }

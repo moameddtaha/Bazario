@@ -7,10 +7,12 @@ using System.Threading.Tasks;
 using Bazario.Core.Domain.Entities;
 using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Enums;
+using Bazario.Core.Models.Order;
 using Bazario.Core.Models.Store;
 using Bazario.Infrastructure.DbContext;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using MonthlyOrderData = Bazario.Core.Models.Store.MonthlyOrderData;
 
 namespace Bazario.Infrastructure.Repositories
 {
@@ -547,7 +549,7 @@ namespace Bazario.Infrastructure.Repositories
 
                 var monthlyData = orderStats
                     .GroupBy(o => new { o.Date.Year, o.Date.Month })
-                    .Select(g => new MonthlyOrderData
+                    .Select(g => new Bazario.Core.Models.Store.MonthlyOrderData
                     {
                         Year = g.Key.Year,
                         Month = g.Key.Month,
@@ -654,7 +656,7 @@ namespace Bazario.Infrastructure.Repositories
                     // Calculate monthly data
                     var monthlyData = storeOrders
                         .GroupBy(o => new { o.Date.Year, o.Date.Month })
-                        .Select(g => new MonthlyOrderData
+                        .Select(g => new Bazario.Core.Models.Store.MonthlyOrderData
                         {
                             Year = g.Key.Year,
                             Month = g.Key.Month,
@@ -687,6 +689,84 @@ namespace Bazario.Infrastructure.Repositories
             {
                 _logger.LogError(ex, "Failed to get bulk store order stats for {StoreCount} stores", storeIds.Count);
                 throw new InvalidOperationException($"Failed to get bulk store order stats: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<List<Order>> GetOrdersByDiscountCodeAsync(string discountCode, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Getting orders by discount code: {DiscountCode}", discountCode);
+
+            try
+            {
+                if (string.IsNullOrWhiteSpace(discountCode))
+                {
+                    _logger.LogWarning("Discount code is null or empty");
+                    return new List<Order>();
+                }
+
+                var orders = await _context.Orders
+                    .Where(o => o.AppliedDiscountCodes != null && o.AppliedDiscountCodes.Contains(discountCode))
+                    .Include(o => o.OrderItems!)
+                        .ThenInclude(oi => oi.Product)
+                    .AsNoTracking()
+                    .ToListAsync(cancellationToken);
+
+                _logger.LogDebug("Found {OrderCount} orders with discount code: {DiscountCode}", orders.Count, discountCode);
+                return orders;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get orders by discount code: {DiscountCode}", discountCode);
+                throw new InvalidOperationException($"Failed to get orders by discount code: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<List<OrderWithCodeCount>> GetOrdersWithCodeCountsByDiscountCodeAsync(string discountCode, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Getting orders with code counts by discount code: {DiscountCode}", discountCode);
+
+            try
+            {
+                if (string.IsNullOrWhiteSpace(discountCode))
+                {
+                    _logger.LogWarning("Discount code is null or empty");
+                    return new List<OrderWithCodeCount>();
+                }
+
+                var orders = await _context.Orders
+                    .Where(o => o.AppliedDiscountCodes != null && o.AppliedDiscountCodes.Contains(discountCode))
+                    .Include(o => o.OrderItems!)
+                        .ThenInclude(oi => oi.Product)
+                    .AsNoTracking()
+                    .ToListAsync(cancellationToken);
+
+                // Pre-calculate code counts and proportional amounts at repository level
+                var ordersWithCodeCounts = orders.Select(o => {
+                    var codes = (o.AppliedDiscountCodes ?? string.Empty)
+                        .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                        .Select(c => c.Trim())
+                        .Where(c => !string.IsNullOrEmpty(c))
+                        .ToList();
+                    
+                    var codeCount = codes.Count;
+                    return new OrderWithCodeCount
+                    {
+                        Order = o,
+                        CodeCount = codeCount,
+                        ProportionalDiscountAmount = codeCount > 0 ? o.DiscountAmount / codeCount : 0,
+                        ProportionalTotalAmount = codeCount > 0 ? o.TotalAmount / codeCount : 0
+                    };
+                }).ToList();
+
+                _logger.LogDebug("Found {OrderCount} orders with pre-calculated code counts for discount code: {DiscountCode}", 
+                    ordersWithCodeCounts.Count, discountCode);
+
+                return ordersWithCodeCounts;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get orders with code counts by discount code: {DiscountCode}", discountCode);
+                throw new InvalidOperationException($"Failed to get orders with code counts by discount code: {ex.Message}", ex);
             }
         }
     }

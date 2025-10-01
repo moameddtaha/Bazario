@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.Enums;
 
-namespace Bazario.Core.Helpers.Order
+namespace Bazario.Core.ServiceContracts.Order
 {
     /// <summary>
     /// Service for calculating shipping zones and delivery multipliers
@@ -35,5 +35,4 @@ namespace Bazario.Core.Helpers.Order
         /// </summary>
         Task<bool> IsEligibleForSameDayDeliveryAsync(string address, string city, string state, string country, string postalCode, CancellationToken cancellationToken = default);
     }
-
 }

@@ -29,6 +29,8 @@ using Bazario.Core.Services.Email;
 using Bazario.Core.Helpers.Auth;
 using Bazario.Core.Helpers.Email;
 using Bazario.Core.Helpers.Order;
+using Bazario.Core.Helpers.Product;
+using Bazario.Core.Helpers.Inventory;
 
 namespace Bazario.Api.StartupExtensions
 {
@@ -64,6 +66,8 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<IReviewRepository, ReviewRepository>();
             services.AddScoped<IStoreRepository, StoreRepository>();
             services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+            services.AddScoped<IStoreShippingRepository, StoreShippingRepository>();
+            services.AddScoped<IDiscountRepository, DiscountRepository>();
 
             // Register Core Services
             services.AddScoped<IJwtService, JwtService>();
@@ -128,6 +132,8 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<IEmailHelper, EmailHelper>();
             services.AddScoped<IShippingZoneService, ShippingZoneService>();
             services.AddScoped<IOrderMetricsHelper, OrderMetricsHelper>();
+            services.AddScoped<IProductValidationHelper, ProductValidationHelper>();
+            services.AddScoped<IInventoryHelper, InventoryHelper>();
             
             // Register Service Aggregators (Dependency Bundling)
             services.AddScoped<IUserAuthenticationDependencies, UserAuthenticationDependencies>();
