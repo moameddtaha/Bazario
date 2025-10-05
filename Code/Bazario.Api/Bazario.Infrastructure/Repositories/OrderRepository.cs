@@ -93,25 +93,53 @@ namespace Bazario.Infrastructure.Repositories
                     throw new InvalidOperationException($"Order with ID {order.OrderId} not found");
                 }
 
-                _logger.LogDebug("Updating order properties. OrderId: {OrderId}, Date: {Date}, TotalAmount: {TotalAmount}, Status: {Status}", 
-                    order.OrderId, order.Date, order.TotalAmount, order.Status);
+                _logger.LogDebug("Updating order properties. OrderId: {OrderId}, Date: {Date}, TotalAmount: {TotalAmount}, Status: {Status}, Subtotal: {Subtotal}, DiscountAmount: {DiscountAmount}, ShippingCost: {ShippingCost}", 
+                    order.OrderId, order.Date, order.TotalAmount, order.Status, order.Subtotal, order.DiscountAmount, order.ShippingCost);
 
+                // Update basic order properties
                 existingOrder.Date = order.Date;
+                
+                if (!string.IsNullOrEmpty(order.Status))
+                {
+                    existingOrder.Status = order.Status;
+                }
 
-                if (order.TotalAmount > 0) // Only update if total amount is valid
+                // Update financial properties (only if they have valid values)
+                if (order.Subtotal >= 0)
+                {
+                    existingOrder.Subtotal = order.Subtotal;
+                }
+                
+                if (order.DiscountAmount >= 0)
+                {
+                    existingOrder.DiscountAmount = order.DiscountAmount;
+                }
+                
+                if (order.ShippingCost >= 0)
+                {
+                    existingOrder.ShippingCost = order.ShippingCost;
+                }
+                
+                if (order.TotalAmount >= 0)
                 {
                     existingOrder.TotalAmount = order.TotalAmount;
                 }
 
-                if (!string.IsNullOrEmpty(order.Status)) // Only update if status is provided
+                // Update discount-related properties (only if not null/empty)
+                if (!string.IsNullOrEmpty(order.AppliedDiscountCodes))
                 {
-                    existingOrder.Status = order.Status;
+                    existingOrder.AppliedDiscountCodes = order.AppliedDiscountCodes;
+                }
+                
+                if (!string.IsNullOrEmpty(order.AppliedDiscountTypes))
+                {
+                    existingOrder.AppliedDiscountTypes = order.AppliedDiscountTypes;
                 }
                 
                 await _context.SaveChangesAsync(cancellationToken);
 
-                _logger.LogInformation("Successfully updated order. OrderId: {OrderId}, TotalAmount: {TotalAmount}, Status: {Status}", 
-                    order.OrderId, order.TotalAmount, order.Status);
+                _logger.LogInformation("Successfully updated order. OrderId: {OrderId}, Status: {Status}, Subtotal: {Subtotal}, DiscountAmount: {DiscountAmount}, ShippingCost: {ShippingCost}, TotalAmount: {TotalAmount}", 
+                    order.OrderId, order.Status, order.Subtotal, order.DiscountAmount, order.ShippingCost, order.TotalAmount);
 
                 return existingOrder;
             }

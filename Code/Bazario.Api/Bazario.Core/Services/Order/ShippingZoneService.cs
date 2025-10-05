@@ -7,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Bazario.Core.Enums;
 using Bazario.Core.ServiceContracts.Order;
+using Bazario.Core.ServiceContracts.Store;
 
 namespace Bazario.Core.Services.Order
 {
@@ -17,98 +18,19 @@ namespace Bazario.Core.Services.Order
     {
         private readonly IConfiguration _configuration;
         private readonly ILogger<ShippingZoneService> _logger;
-        private readonly Dictionary<string, ShippingZone> _postalCodeZones;
-        private readonly Dictionary<string, ShippingZone> _cityZones;
-        private readonly Dictionary<string, ShippingZone> _stateZones;
-        private readonly Dictionary<string, ShippingZone> _countryZones;
+        private readonly IStoreShippingConfigurationService _storeShippingConfigurationService;
 
-        public ShippingZoneService(IConfiguration configuration, ILogger<ShippingZoneService> logger)
+        public ShippingZoneService(
+            IConfiguration configuration, 
+            ILogger<ShippingZoneService> logger,
+            IStoreShippingConfigurationService storeShippingConfigurationService)
         {
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _storeShippingConfigurationService = storeShippingConfigurationService ?? throw new ArgumentNullException(nameof(storeShippingConfigurationService));
             
-            // Initialize zone mappings from configuration
-            _postalCodeZones = LoadPostalCodeZones();
-            _cityZones = LoadCityZones();
-            _stateZones = LoadStateZones();
-            _countryZones = LoadCountryZones();
         }
 
-        public async Task<ShippingZone> DetermineShippingZoneAsync(string address, string city, string state, string country, string postalCode, CancellationToken cancellationToken = default)
-        {
-            try
-            {
-                _logger.LogDebug("Determining shipping zone for address: {City}, {State}, {Country}", 
-                    city, state, country);
-
-                // Validate input parameters
-                if (string.IsNullOrWhiteSpace(country))
-                {
-                    _logger.LogWarning("Country is required for shipping zone determination");
-                    return GetDefaultZoneForCountry("EG"); // Default to Egypt
-                }
-
-                // Check if country is supported
-                if (!IsCountrySupported(country))
-                {
-                    _logger.LogWarning("Country {Country} is not currently supported for shipping. Egypt is the primary market.", country);
-                    return GetDefaultZoneForCountry("EG"); // Default to Egypt
-                }
-
-                // 1. Check for same-day delivery eligibility
-                if (await IsEligibleForSameDayDeliveryAsync(address, city, state, country, postalCode, cancellationToken))
-                {
-                    _logger.LogDebug("Address eligible for same-day delivery in {Country}", country);
-                    return ShippingZone.SameDay;
-                }
-
-                // 2. Check for express delivery eligibility
-                if (await IsEligibleForExpressDeliveryAsync(address, city, state, country, postalCode, cancellationToken))
-                {
-                    _logger.LogDebug("Address eligible for express delivery in {Country}", country);
-                    return ShippingZone.Express;
-                }
-
-                // 3. Check postal code specific zones (if supported by country)
-                if (IsPostalCodeSupported(country) && !string.IsNullOrWhiteSpace(postalCode) && _postalCodeZones.TryGetValue(postalCode.ToUpperInvariant(), out var postalZone))
-                {
-                    _logger.LogDebug("Postal code {PostalCode} mapped to zone {Zone} in {Country}", postalCode, postalZone, country);
-                    return postalZone;
-                }
-
-                // 4. Check city specific zones
-                if (!string.IsNullOrWhiteSpace(city) && _cityZones.TryGetValue(city.ToUpperInvariant(), out var cityZone))
-                {
-                    _logger.LogDebug("City {City} mapped to zone {Zone} in {Country}", city, cityZone, country);
-                    return cityZone;
-                }
-
-                // 5. Check state/province zones
-                if (!string.IsNullOrWhiteSpace(state) && _stateZones.TryGetValue(state.ToUpperInvariant(), out var stateZone))
-                {
-                    _logger.LogDebug("State/Province {State} mapped to zone {Zone} in {Country}", state, stateZone, country);
-                    return stateZone;
-                }
-
-                // 6. Check country zones
-                if (_countryZones.TryGetValue(country.ToUpperInvariant(), out var countryZone))
-                {
-                    _logger.LogDebug("Country {Country} mapped to zone {Zone}", country, countryZone);
-                    return countryZone;
-                }
-
-                // 7. Default fallback based on country
-                var defaultZone = GetDefaultZoneForCountry(country);
-                _logger.LogDebug("Using default zone {Zone} for country {Country}", defaultZone, country);
-                return defaultZone;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error determining shipping zone for address: {City}, {State}, {Country}", 
-                    city, state, country);
-                return GetDefaultZoneForCountry("EG"); // Safe fallback to Egypt
-            }
-        }
 
         public decimal GetZoneMultiplier(ShippingZone zone)
         {
@@ -116,12 +38,9 @@ namespace Bazario.Core.Services.Order
             return zone switch
             {
                 ShippingZone.SameDay => 0.3m,      // 3-4 hours for same-day delivery (major cities)
-                ShippingZone.Express => 0.6m,       // 6-8 hours for express delivery (major cities)
                 ShippingZone.Local => 1.0m,         // 12-24 hours for local delivery
-                ShippingZone.Regional => 1.5m,      // 18-36 hours for regional delivery
                 ShippingZone.National => 2.0m,      // 24-48 hours for national delivery
-                ShippingZone.International => 4.0m, // 96+ hours for international delivery (future expansion)
-                ShippingZone.Remote => 3.0m,        // 36-72 hours for remote areas
+                ShippingZone.NotSupported => 0.0m,  // Not supported - no multiplier
                 _ => 1.0m                           // Default fallback
             };
         }
@@ -132,313 +51,285 @@ namespace Bazario.Core.Services.Order
             return zone switch
             {
                 ShippingZone.SameDay => 4,          // Same day delivery (major cities)
-                ShippingZone.Express => 8,          // Express delivery (major cities)
                 ShippingZone.Local => 24,           // 1 day delivery (same city)
-                ShippingZone.Regional => 36,        // 1.5 day delivery (same region)
                 ShippingZone.National => 48,        // 2 day delivery (different region)
-                ShippingZone.International => 168,  // 7 day delivery (international - future expansion)
-                ShippingZone.Remote => 72,          // 3 day delivery (remote areas)
+                ShippingZone.NotSupported => 0,     // Not supported - no delivery time
                 _ => 24                             // Default 1 day delivery
             };
         }
 
-        public async Task<bool> IsEligibleForExpressDeliveryAsync(string address, string city, string state, string country, string postalCode, CancellationToken cancellationToken = default)
+        private ShippingZone GetSimpleFallbackZone(string city, string country)
         {
-            try
+            // Simple fallback zone determination when store-specific logic fails
+            if (string.IsNullOrWhiteSpace(country) || country.ToUpperInvariant() != "EG")
             {
-                // Check if country supports express delivery
-                if (string.IsNullOrWhiteSpace(country) || !IsCountrySupported(country))
+                return ShippingZone.NotSupported;
+            }
+
+                if (string.IsNullOrWhiteSpace(city))
+            {
+                return ShippingZone.Local;
+            }
+
+            var cityUpper = city.ToUpperInvariant();
+            
+            // Same-day delivery cities (Cairo only)
+            if (cityUpper == "CAIRO")
+            {
+                return ShippingZone.SameDay;
+            }
+            
+            // Major cities (national delivery)
+            if (cityUpper == "ALEXANDRIA" || cityUpper == "GIZA" || cityUpper == "PORT SAID" || cityUpper == "SUEZ" || 
+                cityUpper == "LUXOR" || cityUpper == "ASWAN" || cityUpper == "HURGHADA")
+            {
+                return ShippingZone.National;
+            }
+            
+            // All other Egyptian cities are national delivery
+            return ShippingZone.National;
+        }
+
+        private bool IsSimpleSameDayEligible(string city, string country)
+        {
+            if (string.IsNullOrWhiteSpace(country) || country.ToUpperInvariant() != "EG")
                     return false;
 
                 if (string.IsNullOrWhiteSpace(city))
                     return false;
 
-                // Check if city is in express delivery zone for the specific country
-                var expressCities = GetExpressDeliveryCitiesForCountry(country);
-                var isEligible = expressCities.Contains(city.ToUpperInvariant());
-
-                _logger.LogDebug("Express delivery eligibility for {City}, {Country}: {IsEligible}", city, country, isEligible);
-                
-                await Task.CompletedTask; // Placeholder for async operation
-                return isEligible;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error checking express delivery eligibility for {Country}", country);
-                return false;
-            }
+            var cityUpper = city.ToUpperInvariant();
+            return cityUpper == "CAIRO";
         }
 
-        public async Task<bool> IsEligibleForSameDayDeliveryAsync(string address, string city, string state, string country, string postalCode, CancellationToken cancellationToken = default)
+
+        private decimal GetSimpleDeliveryFee(ShippingZone zone)
+        {
+            // Simple delivery fee calculation based on zone (fallback values - all 0 since stores must configure)
+            return zone switch
+            {
+                ShippingZone.SameDay => 0.00m,       // Same-day delivery fee (store must configure)
+                ShippingZone.Local => 0.00m,         // Local delivery fee (store must configure)
+                ShippingZone.National => 0.00m,      // National delivery fee (store must configure)
+                ShippingZone.NotSupported => 0.00m,  // Not supported - no fee
+                _ => 0.00m                           // Default delivery fee (store must configure)
+            };
+        }
+
+        private async Task<decimal> GetStoreDeliveryFeeByZoneAsync(ShippingZone zone, Guid storeId, CancellationToken cancellationToken = default)
         {
             try
             {
-                // Check if country supports same-day delivery
-                if (string.IsNullOrWhiteSpace(country) || !IsCountrySupported(country))
-                    return false;
-
-                if (string.IsNullOrWhiteSpace(city))
-                    return false;
-
-                // Check if city is in same-day delivery zone for the specific country
-                var sameDayCities = GetSameDayDeliveryCitiesForCountry(country);
-                var isEligible = sameDayCities.Contains(city.ToUpperInvariant());
-
-                _logger.LogDebug("Same-day delivery eligibility for {City}, {Country}: {IsEligible}", city, country, isEligible);
+                // Get store's shipping configuration
+                var config = await _storeShippingConfigurationService.GetConfigurationAsync(storeId, cancellationToken);
                 
-                await Task.CompletedTask; // Placeholder for async operation
-                return isEligible;
+                return zone switch
+                {
+                    ShippingZone.SameDay => config.SameDayDeliveryFee,      // Use store's configured fee
+                    ShippingZone.Local => config.StandardDeliveryFee,       // Use store's configured fee
+                    ShippingZone.National => config.NationalDeliveryFee,   // Use store's configured fee
+                    ShippingZone.NotSupported => 0.00m,  // Not supported - no fee
+                    _ => 0.00m                          // Default fallback (store must configure)
+                };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error checking same-day delivery eligibility for {Country}", country);
+                _logger.LogWarning(ex, "Failed to get store-specific delivery fee for store {StoreId}, using fallback", storeId);
+                // Fallback to hardcoded values if store config not found
+                return GetSimpleDeliveryFee(zone);
+            }
+        }
+
+
+        public async Task<ShippingZone> DetermineStoreShippingZoneAsync(Guid storeId, string city, string country, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Determining store-specific shipping zone for store: {StoreId}, city: {City}, country: {Country}", 
+                storeId, city, country);
+
+            try
+            {
+                // First check store-specific same-day delivery
+                if (await _storeShippingConfigurationService.IsSameDayDeliveryAvailableAsync(storeId, city, cancellationToken))
+                {
+                    _logger.LogDebug("Store {StoreId} offers same-day delivery to {City}", storeId, city);
+                    return ShippingZone.SameDay;
+                }
+
+
+                // Fall back to simple zone determination
+                var fallbackZone = GetSimpleFallbackZone(city, country);
+                _logger.LogDebug("Using fallback zone {Zone} for store {StoreId} and city {City}", fallbackZone, storeId, city);
+                
+                return fallbackZone;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error determining store shipping zone for store: {StoreId}, city: {City}, country: {Country}", 
+                    storeId, city, country);
+                
+                // Fall back to simple zone determination
+                return GetSimpleFallbackZone(city, country);
+            }
+        }
+
+        public async Task<bool> IsEligibleForStoreSameDayDeliveryAsync(Guid storeId, string city, string country, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Checking store same-day delivery eligibility for store: {StoreId}, city: {City}", storeId, city);
+
+            try
+            {
+                // Check store-specific same-day delivery availability
+                var isStoreEligible = await _storeShippingConfigurationService.IsSameDayDeliveryAvailableAsync(storeId, city, cancellationToken);
+                
+                if (isStoreEligible)
+                {
+                    _logger.LogDebug("Store {StoreId} offers same-day delivery to {City}", storeId, city);
+                    return true;
+                }
+
+                // Fall back to simple same-day delivery check
+                var isFallbackEligible = IsSimpleSameDayEligible(city, country);
+                _logger.LogDebug("Fallback same-day delivery eligibility for {City}: {IsEligible}", city, isFallbackEligible);
+                
+                return isFallbackEligible;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error checking store same-day delivery eligibility for store: {StoreId}, city: {City}", storeId, city);
                 return false;
             }
         }
 
-        private Dictionary<string, ShippingZone> LoadPostalCodeZones()
+
+        public async Task<decimal> GetStoreDeliveryFeeAsync(Guid storeId, string city, string country, CancellationToken cancellationToken = default)
         {
-            var zones = new Dictionary<string, ShippingZone>();
-            
-            var postalCodeConfig = _configuration.GetSection("Shipping:PostalCodeZones");
-            foreach (var section in postalCodeConfig.GetChildren())
-            {
-                if (Enum.TryParse<ShippingZone>(section.Value, out var zone))
-                {
-                    zones[section.Key.ToUpperInvariant()] = zone;
-                }
-            }
+            _logger.LogDebug("Getting store delivery fee for store: {StoreId}, city: {City}", storeId, city);
 
-            // Currently no postal code zones configured (Egypt doesn't use them)
-            // Future countries can be added here
-            if (!zones.Any())
+            try
             {
-                _logger.LogDebug("No postal code zones configured - using city/state based zones");
-            }
-
-            return zones;
-        }
-
-        private Dictionary<string, ShippingZone> LoadCityZones()
-        {
-            var zones = new Dictionary<string, ShippingZone>();
-            
-            var cityConfig = _configuration.GetSection("Shipping:CityZones");
-            foreach (var section in cityConfig.GetChildren())
-            {
-                if (Enum.TryParse<ShippingZone>(section.Value, out var zone))
-                {
-                    zones[section.Key.ToUpperInvariant()] = zone;
-                }
-            }
-
-            // Default Egyptian city zones if none configured
-            if (!zones.Any())
-            {
-                // Same-day delivery cities (Cairo and Alexandria)
-                zones["CAIRO"] = ShippingZone.SameDay;
-                zones["ALEXANDRIA"] = ShippingZone.SameDay;
+                // First determine the shipping zone
+                var zone = await DetermineStoreShippingZoneAsync(storeId, city, country, cancellationToken);
                 
-                // Express delivery cities (Major Egyptian cities)
-                zones["GIZA"] = ShippingZone.Express;
-                zones["SHUBRA EL KHEIMA"] = ShippingZone.Express;
-                zones["PORT SAID"] = ShippingZone.Express;
-                zones["SUEZ"] = ShippingZone.Express;
-                zones["LUXOR"] = ShippingZone.Express;
-                zones["ASWAN"] = ShippingZone.Express;
-                zones["ISMAILIA"] = ShippingZone.Express;
-                zones["FAYYUM"] = ShippingZone.Express;
-                zones["ZAGAZIG"] = ShippingZone.Express;
-                zones["ASUIT"] = ShippingZone.Express;
-                zones["TANTA"] = ShippingZone.Express;
-                zones["MANSOURA"] = ShippingZone.Express;
-                zones["DAMANHUR"] = ShippingZone.Express;
-                zones["MINYA"] = ShippingZone.Express;
-                zones["BENI SUEF"] = ShippingZone.Express;
-                zones["QENA"] = ShippingZone.Express;
-                zones["SOHAAG"] = ShippingZone.Express;
-                zones["HURGHADA"] = ShippingZone.Express;
-                zones["SHARM EL SHEIKH"] = ShippingZone.Express;
-            }
-
-            return zones;
-        }
-
-        private Dictionary<string, ShippingZone> LoadStateZones()
-        {
-            var zones = new Dictionary<string, ShippingZone>();
-            
-            var stateConfig = _configuration.GetSection("Shipping:StateZones");
-            foreach (var section in stateConfig.GetChildren())
-            {
-                if (Enum.TryParse<ShippingZone>(section.Value, out var zone))
-                {
-                    zones[section.Key.ToUpperInvariant()] = zone;
-                }
-            }
-
-            // Default Egyptian governorate zones if none configured
-            if (!zones.Any())
-            {
-                // Major governorates with express delivery
-                zones["CAIRO"] = ShippingZone.Express;
-                zones["ALEXANDRIA"] = ShippingZone.Express;
-                zones["GIZA"] = ShippingZone.Express;
-                zones["QALYUBIA"] = ShippingZone.Express;
-                zones["PORT SAID"] = ShippingZone.Express;
-                zones["SUEZ"] = ShippingZone.Express;
-                zones["ISMAILIA"] = ShippingZone.Express;
-                zones["LUXOR"] = ShippingZone.Express;
-                zones["ASWAN"] = ShippingZone.Express;
-                zones["HURGHADA"] = ShippingZone.Express;
-                zones["SHARM EL SHEIKH"] = ShippingZone.Express;
+                // Get store-specific delivery fee based on zone
+                var storeFee = await GetStoreDeliveryFeeByZoneAsync(zone, storeId, cancellationToken);
                 
-                // Regional governorates
-                zones["DAKAHLIA"] = ShippingZone.Regional;
-                zones["SHARQIA"] = ShippingZone.Regional;
-                zones["KAFR EL SHEIKH"] = ShippingZone.Regional;
-                zones["GHARBIA"] = ShippingZone.Regional;
-                zones["MONUFIA"] = ShippingZone.Regional;
-                zones["BEHEIRA"] = ShippingZone.Regional;
-                zones["FAYYUM"] = ShippingZone.Regional;
-                zones["BENI SUEF"] = ShippingZone.Regional;
-                zones["MINYA"] = ShippingZone.Regional;
-                zones["ASUIT"] = ShippingZone.Regional;
-                zones["SOHAAG"] = ShippingZone.Regional;
-                zones["QENA"] = ShippingZone.Regional;
-                zones["RED SEA"] = ShippingZone.Regional;
-                zones["NORTH SINAI"] = ShippingZone.Regional;
-                zones["SOUTH SINAI"] = ShippingZone.Regional;
-                zones["NEW VALLEY"] = ShippingZone.Remote;
-                zones["MATROUH"] = ShippingZone.Remote;
+                _logger.LogDebug("Store {StoreId} delivery fee for {City} (zone: {Zone}): {Fee}", storeId, city, zone, storeFee);
+                return storeFee;
             }
-
-            return zones;
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting store delivery fee for store: {StoreId}, city: {City}", storeId, city);
+                return 0;
+            }
         }
 
-        private Dictionary<string, ShippingZone> LoadCountryZones()
+        public async Task<List<ShippingZone>> GetAvailableDeliveryOptionsAsync(Guid storeId, string city, string country, CancellationToken cancellationToken = default)
         {
-            var zones = new Dictionary<string, ShippingZone>();
-            
-            var countryConfig = _configuration.GetSection("Shipping:CountryZones");
-            foreach (var section in countryConfig.GetChildren())
+            _logger.LogDebug("Getting available delivery options for store: {StoreId}, city: {City}", storeId, city);
+
+            try
             {
-                if (Enum.TryParse<ShippingZone>(section.Value, out var zone))
+                var availableOptions = new List<ShippingZone>();
+
+                // Check store-specific same-day delivery
+                if (await _storeShippingConfigurationService.IsSameDayDeliveryAvailableAsync(storeId, city, cancellationToken))
                 {
-                    zones[section.Key.ToUpperInvariant()] = zone;
+                    availableOptions.Add(ShippingZone.SameDay);
                 }
-            }
 
-            // Default country zones if none configured
-            if (!zones.Any())
-            {
-                // Egypt (primary market)
-                zones["EG"] = ShippingZone.Local;
-                zones["EGYPT"] = ShippingZone.Local;
-                zones["EGY"] = ShippingZone.Local;
+
+                // Always add standard delivery options based on simple fallback
+                var fallbackZone = GetSimpleFallbackZone(city, country);
                 
-                // Future expansion countries can be added here
-                // zones["US"] = ShippingZone.National;
-                // zones["CA"] = ShippingZone.National;
-                // zones["GB"] = ShippingZone.International;
+                // Add fallback zone if not already in store-specific options
+                if (!availableOptions.Contains(fallbackZone))
+                {
+                    availableOptions.Add(fallbackZone);
+                }
+
+                // Add standard delivery as fallback
+                if (!availableOptions.Contains(ShippingZone.Local))
+                {
+                    availableOptions.Add(ShippingZone.Local);
+                }
+
+                _logger.LogDebug("Available delivery options for store {StoreId}, city {City}: {Options}", 
+                    storeId, city, string.Join(", ", availableOptions));
+
+                return availableOptions;
             }
-
-            return zones;
-        }
-
-        private ShippingZone GetDefaultZoneForCountry(string country)
-        {
-            // Default zones based on country
-            return country?.ToUpperInvariant() switch
+            catch (Exception ex)
             {
-                "EG" or "EGYPT" or "EGY" => ShippingZone.Local,        // Egypt - local delivery
-                "US" or "CA" => ShippingZone.National,                 // North America - national
-                "GB" or "UK" or "DE" or "FR" or "IT" or "ES" => ShippingZone.International, // Europe - international
-                _ => ShippingZone.Local                                // Default to local
-            };
+                _logger.LogError(ex, "Error getting available delivery options for store: {StoreId}, city: {City}", storeId, city);
+                
+                // Fall back to simple zone only
+                var fallbackZone = GetSimpleFallbackZone(city, country);
+                return new List<ShippingZone> { fallbackZone };
+            }
         }
 
-        private bool IsCountrySupported(string country)
+        #region Fallback Methods (No Store ID Required)
+
+        /// <summary>
+        /// Determines shipping zone using simple fallback logic when store ID is not available
+        /// </summary>
+        public ShippingZone DetermineShippingZoneFallback(string city, string country)
         {
-            if (string.IsNullOrWhiteSpace(country))
-                return false;
+            _logger.LogDebug("Using fallback shipping zone determination for city: {City}, country: {Country}", 
+                city, country);
 
-            var countryUpper = country.ToUpperInvariant();
-            
-            // Currently supported countries
-            var supportedCountries = new HashSet<string>
-            {
-                "EG", "EGYPT", "EGY"  // Egypt (primary market)
-                // Future countries can be added here
-                // "US", "CA", "GB", "UK", "DE", "FR", "IT", "ES"
-            };
-
-            return supportedCountries.Contains(countryUpper);
+            return GetSimpleFallbackZone(city, country);
         }
 
-        private bool IsPostalCodeSupported(string country)
+        /// <summary>
+        /// Checks if a city is eligible for same-day delivery using simple fallback logic
+        /// </summary>
+        public bool IsEligibleForSameDayDeliveryFallback(string city, string country)
         {
-            if (string.IsNullOrWhiteSpace(country))
-                return false;
+            _logger.LogDebug("Using fallback same-day delivery check for city: {City}, country: {Country}", 
+                city, country);
 
-            var countryUpper = country.ToUpperInvariant();
-            
-            // Countries that use postal codes for shipping zones
-            var postalCodeCountries = new HashSet<string>
-            {
-                // "US", "CA", "GB", "UK", "DE", "FR", "IT", "ES"  // Future expansion
-            };
-
-            return postalCodeCountries.Contains(countryUpper);
+            return IsSimpleSameDayEligible(city, country);
         }
 
-        private HashSet<string> GetExpressDeliveryCitiesForCountry(string country)
+
+        /// <summary>
+        /// Gets delivery fee using simple fallback logic when store ID is not available
+        /// </summary>
+        public decimal GetDeliveryFeeFallback(string city, string country)
         {
-            var countryUpper = country?.ToUpperInvariant();
-            
-            return countryUpper switch
-            {
-                "EG" or "EGYPT" or "EGY" => GetEgyptianExpressDeliveryCities(),
-                // Future countries can be added here
-                // "US" => GetUSExpressDeliveryCities(),
-                // "CA" => GetCanadaExpressDeliveryCities(),
-                // "GB" or "UK" => GetUKExpressDeliveryCities(),
-                _ => new HashSet<string>() // No express cities for unsupported countries
-            };
+            _logger.LogDebug("Using fallback delivery fee calculation for city: {City}, country: {Country}", 
+                city, country);
+
+            var zone = GetSimpleFallbackZone(city, country);
+            return GetSimpleDeliveryFee(zone);
         }
 
-        private HashSet<string> GetSameDayDeliveryCitiesForCountry(string country)
+        /// <summary>
+        /// Gets delivery fee using store-specific configuration when store ID is available
+        /// </summary>
+        public async Task<decimal> GetStoreDeliveryFeeFallbackAsync(Guid storeId, string city, string country, CancellationToken cancellationToken = default)
         {
-            var countryUpper = country?.ToUpperInvariant();
-            
-            return countryUpper switch
-            {
-                "EG" or "EGYPT" or "EGY" => GetEgyptianSameDayDeliveryCities(),
-                // Future countries can be added here
-                // "US" => GetUSSameDayDeliveryCities(),
-                // "CA" => GetCanadaSameDayDeliveryCities(),
-                // "GB" or "UK" => GetUKSameDayDeliveryCities(),
-                _ => new HashSet<string>() // No same-day cities for unsupported countries
-            };
+            _logger.LogDebug("Using store-specific fallback delivery fee calculation for store: {StoreId}, city: {City}, country: {Country}", 
+                storeId, city, country);
+
+            var zone = GetSimpleFallbackZone(city, country);
+            return await GetStoreDeliveryFeeByZoneAsync(zone, storeId, cancellationToken);
         }
 
-        private HashSet<string> GetEgyptianExpressDeliveryCities()
+        /// <summary>
+        /// Gets available delivery options using simple fallback logic when store ID is not available
+        /// </summary>
+        public List<ShippingZone> GetAvailableDeliveryOptionsFallback(string city, string country)
         {
-            return new HashSet<string>
-            {
-                "CAIRO", "ALEXANDRIA", "GIZA", "SHUBRA EL KHEIMA", "PORT SAID", "SUEZ",
-                "LUXOR", "ASWAN", "ISMAILIA", "FAYYUM", "ZAGAZIG", "ASUIT", "TANTA",
-                "MANSOURA", "DAMANHUR", "MINYA", "BENI SUEF", "QENA", "SOHAAG",
-                "HURGHADA", "SHARM EL SHEIKH"
-            };
+            _logger.LogDebug("Using fallback delivery options for city: {City}, country: {Country}", 
+                city, country);
+
+            var zone = GetSimpleFallbackZone(city, country);
+            return new List<ShippingZone> { zone };
         }
 
-        private HashSet<string> GetEgyptianSameDayDeliveryCities()
-        {
-            return new HashSet<string>
-            {
-                "CAIRO", "ALEXANDRIA"
-            };
-        }
+        #endregion
+
     }
 }

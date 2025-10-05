@@ -20,7 +20,6 @@ namespace Bazario.Core.Services.Order
     {
         private readonly IOrderRepository _orderRepository;
         private readonly IProductRepository _productRepository;
-        private readonly IStoreShippingRepository _storeShippingRepository;
         private readonly IShippingZoneService _shippingZoneService;
         private readonly IDiscountRepository _discountRepository;
         private readonly ILogger<OrderValidationService> _logger;
@@ -28,14 +27,12 @@ namespace Bazario.Core.Services.Order
         public OrderValidationService(
             IOrderRepository orderRepository,
             IProductRepository productRepository,
-            IStoreShippingRepository storeShippingRepository,
             IShippingZoneService shippingZoneService,
             IDiscountRepository discountRepository,
             ILogger<OrderValidationService> logger)
         {
             _orderRepository = orderRepository ?? throw new ArgumentNullException(nameof(orderRepository));
             _productRepository = productRepository ?? throw new ArgumentNullException(nameof(productRepository));
-            _storeShippingRepository = storeShippingRepository ?? throw new ArgumentNullException(nameof(storeShippingRepository));
             _shippingZoneService = shippingZoneService ?? throw new ArgumentNullException(nameof(shippingZoneService));
             _discountRepository = discountRepository ?? throw new ArgumentNullException(nameof(discountRepository));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -158,18 +155,6 @@ namespace Bazario.Core.Services.Order
                     subtotal += product.Price * item.Quantity;
                 }
 
-                // Determine shipping zone based on address
-                var shippingZone = await _shippingZoneService.DetermineShippingZoneAsync(
-                    shippingAddress.Address, 
-                    shippingAddress.City, 
-                    shippingAddress.State ?? string.Empty, 
-                    "EG", // Egypt - local delivery only
-                    shippingAddress.PostalCode ?? string.Empty, 
-                    cancellationToken);
-
-                _logger.LogDebug("Determined shipping zone: {ShippingZone} for address: {City}, {State}", 
-                    shippingZone, shippingAddress.City, shippingAddress.State);
-
                 // Get products and group by store for efficient processing
                 var productStoreMap = new Dictionary<Guid, List<OrderItemAddRequest>>();
                 var storeIds = new HashSet<Guid>();
@@ -193,38 +178,61 @@ namespace Bazario.Core.Services.Order
 
                 _logger.LogDebug("Found {StoreCount} unique stores in order", storeIds.Count);
 
-                // Calculate shipping cost for each store
+                // Calculate shipping cost for each store using store-specific shipping configuration
                 decimal totalShippingCost = 0;
                 foreach (var storeId in storeIds)
                 {
-                    var storeShippingRate = await _storeShippingRepository.GetShippingRateByZoneAsync(storeId, shippingZone, cancellationToken);
+                    ShippingZone storeShippingZone;
+                    decimal storeDeliveryFee;
                     
-                    if (storeShippingRate != null && storeShippingRate.IsActive)
+                    try
                     {
-                        // Calculate subtotal for this store
-                        var storeSubtotal = productStoreMap[storeId]
-                            .Sum(x => x.Price * x.Quantity);
+                        // Determine store-specific shipping zone
+                        storeShippingZone = await _shippingZoneService.DetermineStoreShippingZoneAsync(
+                            storeId,
+                            shippingAddress.City, 
+                            "EG", 
+                            cancellationToken);
 
-                        decimal storeShippingCost = 0;
-                        if (storeSubtotal < storeShippingRate.FreeShippingThreshold)
+                        _logger.LogDebug("Store {StoreId} shipping zone: {ShippingZone} for address: {City}, {State}", 
+                            storeId, storeShippingZone, shippingAddress.City, shippingAddress.State);
+
+                        // Check if shipping is not supported for this address
+                        if (storeShippingZone == ShippingZone.NotSupported)
                         {
-                            storeShippingCost = storeShippingRate.ShippingCost;
+                            throw new InvalidOperationException($"Shipping is not supported to the address: {shippingAddress.City}, {shippingAddress.State}. Only Egyptian addresses are currently supported.");
                         }
 
-                        totalShippingCost += storeShippingCost;
+                        // Get store-specific delivery fee
+                        storeDeliveryFee = await _shippingZoneService.GetStoreDeliveryFeeAsync(
+                            storeId, 
+                            shippingAddress.City, 
+                            "EG", 
+                            cancellationToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to determine store-specific shipping for store {StoreId}, using fallback", storeId);
+                        
+                        // Fallback to simple zone determination
+                        storeShippingZone = GetSimpleFallbackZone(shippingAddress.City, "EG");
+                        storeDeliveryFee = GetSimpleDeliveryFee(storeShippingZone);
+                        
+                        _logger.LogDebug("Using fallback shipping zone: {ShippingZone}, fee: {Fee} for store {StoreId}", 
+                            storeShippingZone, storeDeliveryFee, storeId);
+                    }
 
-                        _logger.LogDebug("Store {StoreId} shipping cost: {ShippingCost} (subtotal: {Subtotal}, threshold: {Threshold})", 
-                            storeId, storeShippingCost, storeSubtotal, storeShippingRate.FreeShippingThreshold);
-                    }
-                    else if (storeShippingRate != null && !storeShippingRate.IsActive)
-                    {
-                        _logger.LogWarning("Shipping rate disabled for store {StoreId} and zone {ShippingZone}", storeId, shippingZone);
-                        // Could apply default shipping cost or show error to customer
-                    }
-                    else
-                    {
-                        _logger.LogWarning("No shipping rate found for store {StoreId} and zone {ShippingZone}", storeId, shippingZone);
-                    }
+                    // Calculate subtotal for this store
+                    var storeSubtotal = productStoreMap[storeId]
+                        .Sum(x => x.Price * x.Quantity);
+
+                    // Use the store delivery fee from the new configuration system
+                    decimal storeShippingCost = storeDeliveryFee;
+
+                    totalShippingCost += storeShippingCost;
+
+                    _logger.LogDebug("Store {StoreId} shipping cost: {ShippingCost} (subtotal: {Subtotal}, store fee: {StoreFee})", 
+                        storeId, storeShippingCost, storeSubtotal, storeDeliveryFee);
                 }
 
                 _logger.LogDebug("Total shipping cost: {TotalShippingCost}", totalShippingCost);
@@ -320,7 +328,8 @@ namespace Bazario.Core.Services.Order
             {
                 if (orderItems == null || !orderItems.Any())
                 {
-                    return true;
+                    _logger.LogWarning("Order validation failed: No order items provided");
+                    return false;
                 }
 
                 foreach (var item in orderItems)
@@ -348,6 +357,55 @@ namespace Bazario.Core.Services.Order
                 _logger.LogError(ex, "Failed to validate stock availability");
                 throw;
             }
+        }
+
+        /// <summary>
+        /// Simple fallback zone determination for when store-specific methods fail
+        /// </summary>
+        private ShippingZone GetSimpleFallbackZone(string city, string country)
+        {
+            if (string.IsNullOrWhiteSpace(country) || country.ToUpperInvariant() != "EG")
+            {
+                return ShippingZone.NotSupported;
+            }
+
+            if (string.IsNullOrWhiteSpace(city))
+            {
+                return ShippingZone.Local;
+            }
+
+            var cityUpper = city.ToUpperInvariant();
+            
+            // Major cities (local delivery)
+            if (cityUpper == "CAIRO")
+            {
+                return ShippingZone.Local;
+            }
+            
+            // Major cities (national delivery)
+            if (cityUpper == "ALEXANDRIA" || cityUpper == "GIZA" || cityUpper == "PORT SAID" || cityUpper == "SUEZ" || 
+                cityUpper == "LUXOR" || cityUpper == "ASWAN" || cityUpper == "HURGHADA")
+            {
+                return ShippingZone.National;
+            }
+            
+            // Default to local for other Egyptian cities
+            return ShippingZone.Local;
+        }
+
+        /// <summary>
+        /// Simple fallback delivery fee calculation based on shipping zone
+        /// </summary>
+        private decimal GetSimpleDeliveryFee(ShippingZone zone)
+        {
+            return zone switch
+            {
+                ShippingZone.SameDay => 0m,     // Same-day delivery fee (store must configure)
+                ShippingZone.Local => 0m,       // Local delivery fee (store must configure)
+                ShippingZone.National => 0m,    // National delivery fee (store must configure)
+                ShippingZone.NotSupported => 0m, // Not supported - no fee
+                _ => 0m                         // Default fallback (store must configure)
+            };
         }
     }
 }

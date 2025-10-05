@@ -241,14 +241,9 @@ namespace Bazario.Core.Helpers.Order
                 // In a real implementation, this would come from order.ShippingAddress
                 var address = ExtractShippingAddress(order);
                 
-                // Determine shipping zone using real address data
-                var shippingZone = _shippingZoneService.DetermineShippingZoneAsync(
-                    address.Address, 
-                    address.City, 
-                    address.State, 
-                    address.Country, 
-                    address.PostalCode ?? string.Empty, // Egypt doesn't use postal codes
-                    CancellationToken.None).GetAwaiter().GetResult();
+                // Determine shipping zone using simple fallback logic
+                // Note: For metrics calculation, we use a simple fallback since orders can have multiple stores
+                var shippingZone = GetSimpleFallbackZone(address.City, address.Country);
                 
                 // Get the zone multiplier from the service
                 var baseMultiplier = _shippingZoneService.GetZoneMultiplier(shippingZone);
@@ -370,6 +365,38 @@ namespace Bazario.Core.Helpers.Order
             public string State { get; set; } = string.Empty;
             public string Country { get; set; } = string.Empty;
             public string? PostalCode { get; set; } = null; // Egypt doesn't use postal codes
+        }
+
+        private ShippingZone GetSimpleFallbackZone(string city, string country)
+        {
+            // Simple fallback zone determination for metrics calculation
+            if (string.IsNullOrWhiteSpace(country) || country.ToUpperInvariant() != "EG")
+            {
+                return ShippingZone.NotSupported;
+            }
+
+            if (string.IsNullOrWhiteSpace(city))
+            {
+                return ShippingZone.Local;
+            }
+
+            var cityUpper = city.ToUpperInvariant();
+            
+            // Same-day delivery cities (Cairo only)
+            if (cityUpper == "CAIRO")
+            {
+                return ShippingZone.SameDay;
+            }
+            
+            // Major cities (national delivery)
+            if (cityUpper == "ALEXANDRIA" || cityUpper == "GIZA" || cityUpper == "PORT SAID" || cityUpper == "SUEZ" || 
+                cityUpper == "LUXOR" || cityUpper == "ASWAN" || cityUpper == "HURGHADA")
+            {
+                return ShippingZone.National;
+            }
+            
+            // Default to local for other Egyptian cities
+            return ShippingZone.Local;
         }
     }
 }

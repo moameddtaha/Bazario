@@ -11,6 +11,7 @@ using Bazario.Core.Models.Order;
 using Bazario.Core.Models.Shared;
 using Bazario.Core.ServiceContracts.Order;
 using Microsoft.Extensions.Logging;
+using OrderEntity = Bazario.Core.Domain.Entities.Order;
 
 namespace Bazario.Core.Services.Order
 {
@@ -124,7 +125,7 @@ namespace Bazario.Core.Services.Order
                 // Get all orders and apply filters (for now, until we add IQueryable to repository)
                 var allOrders = await _orderRepository.GetAllOrdersAsync(cancellationToken);
                 
-                IEnumerable<Domain.Entities.Order> filtered = allOrders;
+                IEnumerable<OrderEntity> filtered = allOrders;
 
                 // Apply filters
                 if (searchCriteria.CustomerId.HasValue)

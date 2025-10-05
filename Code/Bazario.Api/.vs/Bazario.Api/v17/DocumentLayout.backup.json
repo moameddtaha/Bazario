@@ -3,8 +3,8 @@
   "WorkspaceRootPath": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Infrastructure\\Migrations\\20251001201126_AddOrderCalculationDiscountShippingFeatures.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Bazario.Infrastructure\\Migrations\\20251001201126_AddOrderCalculationDiscountShippingFeatures.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{58250EAC-33BA-4A9B-B08B-D7AE6B96132D}|Bazario.Infrastructure\\Bazario.Infrastructure.csproj|d:\\mohamed taha\\private projects\\bazario\\code\\bazario.api\\bazario.infrastructure\\migrations\\20251005122542_simplifyshippingzonesandmakedeliveryfeesrequired.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{58250EAC-33BA-4A9B-B08B-D7AE6B96132D}|Bazario.Infrastructure\\Bazario.Infrastructure.csproj|solutionrelative:bazario.infrastructure\\migrations\\20251005122542_simplifyshippingzonesandmakedeliveryfeesrequired.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     }
   ],
   "DocumentGroupContainers": [
@@ -19,14 +19,14 @@
             {
               "$type": "Document",
               "DocumentIndex": 0,
-              "Title": "20251001201126_AddOrderCalculationDiscountShippingFeatures.cs",
-              "DocumentMoniker": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Infrastructure\\Migrations\\20251001201126_AddOrderCalculationDiscountShippingFeatures.cs",
-              "RelativeDocumentMoniker": "Bazario.Infrastructure\\Migrations\\20251001201126_AddOrderCalculationDiscountShippingFeatures.cs",
-              "ToolTip": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Infrastructure\\Migrations\\20251001201126_AddOrderCalculationDiscountShippingFeatures.cs",
-              "RelativeToolTip": "Bazario.Infrastructure\\Migrations\\20251001201126_AddOrderCalculationDiscountShippingFeatures.cs",
+              "Title": "20251005122542_SimplifyShippingZonesAndMakeDeliveryFeesRequired.cs",
+              "DocumentMoniker": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Infrastructure\\Migrations\\20251005122542_SimplifyShippingZonesAndMakeDeliveryFeesRequired.cs",
+              "RelativeDocumentMoniker": "Bazario.Infrastructure\\Migrations\\20251005122542_SimplifyShippingZonesAndMakeDeliveryFeesRequired.cs",
+              "ToolTip": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Infrastructure\\Migrations\\20251005122542_SimplifyShippingZonesAndMakeDeliveryFeesRequired.cs",
+              "RelativeToolTip": "Bazario.Infrastructure\\Migrations\\20251005122542_SimplifyShippingZonesAndMakeDeliveryFeesRequired.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-10-01T20:11:26.235Z",
+              "WhenOpened": "2025-10-05T12:25:43.116Z",
               "EditorCaption": ""
             }
           ]

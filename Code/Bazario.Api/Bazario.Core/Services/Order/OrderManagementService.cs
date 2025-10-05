@@ -7,6 +7,7 @@ using Bazario.Core.DTO.Order;
 using Bazario.Core.Enums;
 using Bazario.Core.Extensions;
 using Bazario.Core.ServiceContracts.Order;
+using Bazario.Core.Helpers.Product;
 using Microsoft.Extensions.Logging;
 
 namespace Bazario.Core.Services.Order
@@ -19,15 +20,18 @@ namespace Bazario.Core.Services.Order
     {
         private readonly IOrderRepository _orderRepository;
         private readonly IOrderValidationService _validationService;
+        private readonly IProductValidationHelper _validationHelper;
         private readonly ILogger<OrderManagementService> _logger;
 
         public OrderManagementService(
             IOrderRepository orderRepository,
             IOrderValidationService validationService,
+            IProductValidationHelper validationHelper,
             ILogger<OrderManagementService> logger)
         {
             _orderRepository = orderRepository ?? throw new ArgumentNullException(nameof(orderRepository));
             _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
+            _validationHelper = validationHelper ?? throw new ArgumentNullException(nameof(validationHelper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -223,24 +227,70 @@ namespace Bazario.Core.Services.Order
             }
         }
 
-        public async Task<bool> DeleteOrderAsync(Guid orderId, CancellationToken cancellationToken = default)
+        public async Task<bool> DeleteOrderAsync(Guid orderId, Guid deletedBy, string? reason = null, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Deleting order: {OrderId}", orderId);
+            _logger.LogInformation("Admin user {DeletedBy} attempting to delete order: {OrderId}, Reason: {Reason}", deletedBy, orderId, reason);
 
             try
             {
+                // Validate inputs
+                if (orderId == Guid.Empty)
+                {
+                    throw new ArgumentException("Order ID cannot be empty", nameof(orderId));
+                }
+
+                if (deletedBy == Guid.Empty)
+                {
+                    throw new ArgumentException("DeletedBy user ID cannot be empty", nameof(deletedBy));
+                }
+
+                if (string.IsNullOrWhiteSpace(reason))
+                {
+                    throw new ArgumentException("Reason is required for hard deletion", nameof(reason));
+                }
+
+                // Check if user has admin privileges
+                if (!await _validationHelper.HasAdminPrivilegesAsync(deletedBy, cancellationToken))
+                {
+                    _logger.LogWarning("User {UserId} attempted hard delete of order {OrderId} without admin privileges", deletedBy, orderId);
+                    throw new UnauthorizedAccessException("Only administrators can perform hard deletion of orders");
+                }
+
+                // Check if order exists before deletion
+                var existingOrder = await _orderRepository.GetOrderByIdAsync(orderId, cancellationToken);
+                if (existingOrder == null)
+                {
+                    _logger.LogWarning("Order {OrderId} not found for deletion", orderId);
+                    return false;
+                }
+
+                _logger.LogInformation("Admin user {UserId} performing hard delete of order {OrderId}", deletedBy, orderId);
+
+                _logger.LogCritical("PERFORMING HARD DELETE - This action is IRREVERSIBLE. OrderId: {OrderId}, DeletedBy: {DeletedBy}, Reason: {Reason}", 
+                    orderId, deletedBy, reason);
+
                 var result = await _orderRepository.DeleteOrderByIdAsync(orderId, cancellationToken);
 
                 if (result)
                 {
-                    _logger.LogInformation("Successfully deleted order: {OrderId}", orderId);
+                    _logger.LogInformation("Successfully deleted order: {OrderId} by admin user: {DeletedBy}", orderId, deletedBy);
                 }
                 else
                 {
-                    _logger.LogWarning("Order not found for deletion: {OrderId}", orderId);
+                    _logger.LogWarning("Failed to delete order: {OrderId}", orderId);
                 }
 
                 return result;
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Validation error while deleting order: {OrderId}", orderId);
+                throw; // Re-throw argument exceptions as-is
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Authorization error while deleting order: {OrderId}", orderId);
+                throw; // Re-throw authorization exceptions as-is
             }
             catch (Exception ex)
             {

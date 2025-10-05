@@ -6,38 +6,23 @@ namespace Bazario.Core.Enums
     public enum ShippingZone
     {
         /// <summary>
-        /// Local delivery within the same city
+        /// Local delivery within the same governorate (e.g., Cairo)
         /// </summary>
         Local = 1,
 
         /// <summary>
-        /// Regional delivery within the same state/province
+        /// National delivery outside the local governorate but within Egypt
         /// </summary>
-        Regional = 2,
+        National = 2,
 
         /// <summary>
-        /// National delivery within the same country
+        /// Same-day delivery option
         /// </summary>
-        National = 3,
+        SameDay = 3,
 
         /// <summary>
-        /// International delivery to other countries
+        /// Shipping not supported for this address
         /// </summary>
-        International = 4,
-
-        /// <summary>
-        /// Remote or hard-to-reach areas
-        /// </summary>
-        Remote = 5,
-
-        /// <summary>
-        /// Express delivery zones
-        /// </summary>
-        Express = 6,
-
-        /// <summary>
-        /// Same-day delivery zones
-        /// </summary>
-        SameDay = 7
+        NotSupported = 4
     }
 }

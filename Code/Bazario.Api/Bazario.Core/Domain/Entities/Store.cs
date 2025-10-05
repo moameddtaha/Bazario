@@ -71,6 +71,5 @@ namespace Bazario.Core.Domain.Entities
 
         public ICollection<Product>? Products { get; set; }
 
-        public ICollection<StoreShippingRate>? StoreShippingRates { get; set; }
     }
 }

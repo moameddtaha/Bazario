@@ -156,7 +156,7 @@ Bazario aims to democratize e-commerce by providing an accessible, secure, and f
 - **Content Moderation**: Review and approve content
 - **System Configuration**: Platform settings and maintenance
 - **Discount Management**: Create and manage discount codes and campaigns
-- **Shipping Configuration**: Global shipping zone and rate management
+- **Shipping Configuration**: Store-specific shipping zone and rate management
 - **Order Management**: Advanced order processing and analytics tools
 
 ---
@@ -304,7 +304,7 @@ GET    /api/inventory/analytics # Get inventory analytics
 2. **As an admin**, I want to view platform analytics so that I can make data-driven decisions.
 3. **As an admin**, I want to manage user accounts so that I can ensure platform security.
 4. **As an admin**, I want to manage discount campaigns across the platform so that I can drive sales.
-5. **As an admin**, I want to configure global shipping zones so that I can standardize shipping.
+5. **As an admin**, I want to configure store-specific shipping zones so that each store can customize their shipping options.
 6. **As an admin**, I want to monitor inventory levels across all stores so that I can identify issues.
 7. **As an admin**, I want to analyze discount performance and revenue impact so that I can optimize the platform.
 

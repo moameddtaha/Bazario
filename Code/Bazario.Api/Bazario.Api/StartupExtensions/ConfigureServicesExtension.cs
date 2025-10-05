@@ -66,8 +66,8 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<IReviewRepository, ReviewRepository>();
             services.AddScoped<IStoreRepository, StoreRepository>();
             services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
-            services.AddScoped<IStoreShippingRepository, StoreShippingRepository>();
             services.AddScoped<IDiscountRepository, DiscountRepository>();
+            services.AddScoped<IStoreShippingConfigurationRepository, StoreShippingConfigurationRepository>();
 
             // Register Core Services
             services.AddScoped<IJwtService, JwtService>();
@@ -77,6 +77,7 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<IStoreQueryService, StoreQueryService>();
             services.AddScoped<IStoreAnalyticsService, StoreAnalyticsService>();
             services.AddScoped<IStoreManagementService, StoreManagementService>();
+            services.AddScoped<IStoreShippingConfigurationService, StoreShippingConfigurationService>();
             services.AddScoped<IStoreService, StoreService>(); // Composite interface
             
             // Register Store Helpers

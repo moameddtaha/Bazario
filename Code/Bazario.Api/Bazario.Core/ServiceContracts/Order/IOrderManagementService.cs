@@ -55,12 +55,16 @@ namespace Bazario.Core.ServiceContracts.Order
         Task<bool> CancelOrderAsync(Guid orderId, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Soft deletes an order (marks as deleted but preserves data)
+        /// Hard deletes an order (completely removes from database) - ADMIN ONLY
         /// </summary>
         /// <param name="orderId">Order ID to delete</param>
+        /// <param name="deletedBy">Admin user ID performing the deletion</param>
+        /// <param name="reason">Reason for deletion (required)</param>
         /// <param name="cancellationToken">Cancellation token</param>
         /// <returns>True if successfully deleted</returns>
+        /// <exception cref="ArgumentException">Thrown when required parameters are invalid</exception>
+        /// <exception cref="UnauthorizedAccessException">Thrown when user is not an admin</exception>
         /// <exception cref="OrderNotFoundException">Thrown when order is not found</exception>
-        Task<bool> DeleteOrderAsync(Guid orderId, CancellationToken cancellationToken = default);
+        Task<bool> DeleteOrderAsync(Guid orderId, Guid deletedBy, string? reason = null, CancellationToken cancellationToken = default);
     }
 }

@@ -66,10 +66,10 @@ namespace Bazario.Core.Services.Order
             return await _managementService.CancelOrderAsync(orderId, cancellationToken);
         }
 
-        public async Task<bool> DeleteOrderAsync(Guid orderId, CancellationToken cancellationToken = default)
+        public async Task<bool> DeleteOrderAsync(Guid orderId, Guid deletedBy, string? reason = null, CancellationToken cancellationToken = default)
         {
             _logger.LogDebug("Delegating DeleteOrderAsync to OrderManagementService");
-            return await _managementService.DeleteOrderAsync(orderId, cancellationToken);
+            return await _managementService.DeleteOrderAsync(orderId, deletedBy, reason, cancellationToken);
         }
 
         // IOrderQueryService methods

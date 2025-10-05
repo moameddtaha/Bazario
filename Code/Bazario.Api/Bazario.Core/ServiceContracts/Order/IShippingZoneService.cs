@@ -6,15 +6,10 @@ using Bazario.Core.Enums;
 namespace Bazario.Core.ServiceContracts.Order
 {
     /// <summary>
-    /// Service for calculating shipping zones and delivery multipliers
+    /// Service for calculating store-specific shipping zones and delivery multipliers
     /// </summary>
     public interface IShippingZoneService
     {
-        /// <summary>
-        /// Determines the shipping zone for a given address
-        /// </summary>
-        Task<ShippingZone> DetermineShippingZoneAsync(string address, string city, string state, string country, string postalCode, CancellationToken cancellationToken = default);
-
         /// <summary>
         /// Gets the delivery time multiplier for a shipping zone
         /// </summary>
@@ -26,13 +21,49 @@ namespace Bazario.Core.ServiceContracts.Order
         int GetEstimatedDeliveryHours(ShippingZone zone);
 
         /// <summary>
-        /// Checks if an address is eligible for express delivery
+        /// Determines the shipping zone for a specific store and city
         /// </summary>
-        Task<bool> IsEligibleForExpressDeliveryAsync(string address, string city, string state, string country, string postalCode, CancellationToken cancellationToken = default);
+        Task<ShippingZone> DetermineStoreShippingZoneAsync(Guid storeId, string city, string country, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Checks if an address is eligible for same-day delivery
+        /// Checks if a city is eligible for same-day delivery from a specific store
         /// </summary>
-        Task<bool> IsEligibleForSameDayDeliveryAsync(string address, string city, string state, string country, string postalCode, CancellationToken cancellationToken = default);
+        Task<bool> IsEligibleForStoreSameDayDeliveryAsync(Guid storeId, string city, string country, CancellationToken cancellationToken = default);
+
+
+        /// <summary>
+        /// Gets the delivery fee for a specific store and city
+        /// </summary>
+        Task<decimal> GetStoreDeliveryFeeAsync(Guid storeId, string city, string country, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets available delivery options for a specific store and city
+        /// </summary>
+        Task<List<ShippingZone>> GetAvailableDeliveryOptionsAsync(Guid storeId, string city, string country, CancellationToken cancellationToken = default);
+
+        #region Fallback Methods (No Store ID Required)
+
+        /// <summary>
+        /// Determines shipping zone using simple fallback logic when store ID is not available
+        /// </summary>
+        ShippingZone DetermineShippingZoneFallback(string city, string country);
+
+        /// <summary>
+        /// Checks if a city is eligible for same-day delivery using simple fallback logic
+        /// </summary>
+        bool IsEligibleForSameDayDeliveryFallback(string city, string country);
+
+
+        /// <summary>
+        /// Gets delivery fee using simple fallback logic when store ID is not available
+        /// </summary>
+        decimal GetDeliveryFeeFallback(string city, string country);
+
+        /// <summary>
+        /// Gets available delivery options using simple fallback logic when store ID is not available
+        /// </summary>
+        List<ShippingZone> GetAvailableDeliveryOptionsFallback(string city, string country);
+
+        #endregion
     }
 }
