@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using Bazario.Core.Models.Store;
 using Bazario.Core.Models.Shared;
-using Bazario.Core.Enums;
+using Bazario.Core.Enums.Inventory;
 
 namespace Bazario.Core.Models.Inventory
 {

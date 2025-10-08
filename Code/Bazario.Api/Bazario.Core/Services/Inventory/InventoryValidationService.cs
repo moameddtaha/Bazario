@@ -3,11 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Models.Inventory;
 using Bazario.Core.ServiceContracts.Inventory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
+using Bazario.Core.Domain.RepositoryContracts.Catalog;
+using Bazario.Core.Domain.RepositoryContracts.Store;
 
 namespace Bazario.Core.Services.Inventory
 {
@@ -276,7 +277,7 @@ namespace Bazario.Core.Services.Inventory
             }
         }
 
-        private int CalculateStoreThreshold(Domain.Entities.Store store)
+        private int CalculateStoreThreshold(Domain.Entities.Store.Store store)
         {
             // Calculate threshold based on store characteristics
             // This is a business logic implementation that could be enhanced

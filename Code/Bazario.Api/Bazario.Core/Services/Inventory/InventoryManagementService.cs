@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Bazario.Core.Domain.RepositoryContracts;
+using Bazario.Core.Domain.RepositoryContracts.Catalog;
 using Bazario.Core.Models.Inventory;
 using Bazario.Core.ServiceContracts.Inventory;
 using Microsoft.Extensions.Logging;

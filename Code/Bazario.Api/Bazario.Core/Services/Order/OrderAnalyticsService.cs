@@ -3,13 +3,15 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Models.Order;
-using Bazario.Core.Models.Discount;
 using Bazario.Core.ServiceContracts.Order;
 using Bazario.Core.Helpers.Order;
 using Microsoft.Extensions.Logging;
 using Bazario.Core.Enums;
+using Bazario.Core.Domain.RepositoryContracts.Catalog;
+using Bazario.Core.Domain.RepositoryContracts.Store;
+using Bazario.Core.Domain.RepositoryContracts.Order;
+using Bazario.Core.Models.Catalog.Discount;
 
 namespace Bazario.Core.Services.Order
 {
@@ -272,7 +274,7 @@ namespace Bazario.Core.Services.Order
                 
                 var stores = storeIds.Any() 
                     ? await _storeRepository.GetStoresByIdsAsync(storeIds, cancellationToken)
-                    : new List<Bazario.Core.Domain.Entities.Store>();
+                    : new List<Domain.Entities.Store.Store>();
                 var storeDict = stores.ToDictionary(s => s.StoreId, s => s);
 
                 // Calculate total orders for proper conversion rate

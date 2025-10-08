@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.DTO.Order;
-using Bazario.Core.Enums;
+using Bazario.Core.Enums.Order;
 using Bazario.Core.Models.Order;
 using Bazario.Core.Models.Shared;
 

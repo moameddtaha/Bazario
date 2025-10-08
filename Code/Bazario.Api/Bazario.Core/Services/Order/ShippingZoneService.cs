@@ -5,9 +5,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Bazario.Core.Enums;
 using Bazario.Core.ServiceContracts.Order;
 using Bazario.Core.ServiceContracts.Store;
+using Bazario.Core.Domain.RepositoryContracts.Location;
+using Bazario.Core.Enums.Order;
 
 namespace Bazario.Core.Services.Order
 {
@@ -19,18 +20,80 @@ namespace Bazario.Core.Services.Order
         private readonly IConfiguration _configuration;
         private readonly ILogger<ShippingZoneService> _logger;
         private readonly IStoreShippingConfigurationService _storeShippingConfigurationService;
+        private readonly IStoreGovernorateSupportRepository _governorateSupportRepository;
+        private readonly ICityRepository _cityRepository;
 
         public ShippingZoneService(
-            IConfiguration configuration, 
+            IConfiguration configuration,
             ILogger<ShippingZoneService> logger,
-            IStoreShippingConfigurationService storeShippingConfigurationService)
+            IStoreShippingConfigurationService storeShippingConfigurationService,
+            IStoreGovernorateSupportRepository governorateSupportRepository,
+            ICityRepository cityRepository)
         {
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _storeShippingConfigurationService = storeShippingConfigurationService ?? throw new ArgumentNullException(nameof(storeShippingConfigurationService));
-            
+            _governorateSupportRepository = governorateSupportRepository ?? throw new ArgumentNullException(nameof(governorateSupportRepository));
+            _cityRepository = cityRepository ?? throw new ArgumentNullException(nameof(cityRepository));
         }
 
+
+        /// <summary>
+        /// Production-ready method to resolve city name to governorate ID via database lookup
+        /// </summary>
+        private async Task<Guid?> ResolveGovernorateFromCityAsync(string cityName, string country, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(country) || country.ToUpperInvariant() != "EG")
+            {
+                _logger.LogDebug("Country {Country} not supported for governorate resolution", country);
+                return null;
+            }
+
+            if (string.IsNullOrWhiteSpace(cityName))
+            {
+                _logger.LogDebug("City name is empty, cannot resolve governorate");
+                return null;
+            }
+
+            try
+            {
+                // Search for city in database (case-insensitive)
+                var cities = await _cityRepository.SearchByNameAsync(cityName, cancellationToken);
+                var city = cities.FirstOrDefault(c => c.Name.Equals(cityName, StringComparison.OrdinalIgnoreCase));
+
+                if (city == null)
+                {
+                    _logger.LogDebug("City {CityName} not found in database", cityName);
+                    return null;
+                }
+
+                _logger.LogDebug("Resolved city {CityName} to governorate {GovernorateName} (ID: {GovernorateId})",
+                    cityName, city.Governorate.Name, city.GovernorateId);
+
+                return city.GovernorateId;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error resolving governorate for city: {CityName}", cityName);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Checks if a store supports shipping to a specific governorate
+        /// </summary>
+        private async Task<bool> IsGovernorateSupported(Guid storeId, Guid governorateId, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                return await _governorateSupportRepository.IsGovernorateSupportedAsync(storeId, governorateId, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error checking governorate support for store {StoreId}, governorate {GovernorateId}", storeId, governorateId);
+                return false;
+            }
+        }
 
         public decimal GetZoneMultiplier(ShippingZone zone)
         {
@@ -143,30 +206,46 @@ namespace Bazario.Core.Services.Order
 
         public async Task<ShippingZone> DetermineStoreShippingZoneAsync(Guid storeId, string city, string country, CancellationToken cancellationToken = default)
         {
-            _logger.LogDebug("Determining store-specific shipping zone for store: {StoreId}, city: {City}, country: {Country}", 
+            _logger.LogDebug("Determining store-specific shipping zone for store: {StoreId}, city: {City}, country: {Country}",
                 storeId, city, country);
 
             try
             {
-                // First check store-specific same-day delivery
+                // Production-ready approach: Resolve city to governorate and check junction table
+                var governorateId = await ResolveGovernorateFromCityAsync(city, country, cancellationToken);
+
+                if (governorateId.HasValue)
+                {
+                    // Check if store supports this governorate
+                    var isSupported = await IsGovernorateSupported(storeId, governorateId.Value, cancellationToken);
+
+                    if (!isSupported)
+                    {
+                        _logger.LogDebug("Store {StoreId} does not support governorate {GovernorateId}", storeId, governorateId.Value);
+                        return ShippingZone.NotSupported;
+                    }
+
+                    _logger.LogDebug("Store {StoreId} supports governorate {GovernorateId} for {City}", storeId, governorateId.Value, city);
+                }
+
+                // Check store-specific same-day delivery (city-based, legacy support)
                 if (await _storeShippingConfigurationService.IsSameDayDeliveryAvailableAsync(storeId, city, cancellationToken))
                 {
                     _logger.LogDebug("Store {StoreId} offers same-day delivery to {City}", storeId, city);
                     return ShippingZone.SameDay;
                 }
 
-
                 // Fall back to simple zone determination
                 var fallbackZone = GetSimpleFallbackZone(city, country);
                 _logger.LogDebug("Using fallback zone {Zone} for store {StoreId} and city {City}", fallbackZone, storeId, city);
-                
+
                 return fallbackZone;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error determining store shipping zone for store: {StoreId}, city: {City}, country: {Country}", 
+                _logger.LogError(ex, "Error determining store shipping zone for store: {StoreId}, city: {City}, country: {Country}",
                     storeId, city, country);
-                
+
                 // Fall back to simple zone determination
                 return GetSimpleFallbackZone(city, country);
             }

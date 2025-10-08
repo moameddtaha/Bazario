@@ -4,8 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Bazario.Core.Domain.Entities;
-using ReviewEntity = Bazario.Core.Domain.Entities.Review;
+using ReviewEntity = Bazario.Core.Domain.Entities.Review.Review;
 
 namespace Bazario.Core.DTO.Review
 {

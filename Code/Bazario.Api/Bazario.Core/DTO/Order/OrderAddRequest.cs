@@ -4,10 +4,9 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Bazario.Core.Domain.Entities;
-using Bazario.Core.Enums;
+using Bazario.Core.Enums.Order;
 using Bazario.Core.Models.Order;
-using OrderEntity = Bazario.Core.Domain.Entities.Order;
+using OrderEntity = Bazario.Core.Domain.Entities.Order.Order;
 
 namespace Bazario.Core.DTO.Order
 {

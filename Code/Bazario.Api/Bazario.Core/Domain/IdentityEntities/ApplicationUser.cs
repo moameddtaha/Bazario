@@ -4,7 +4,9 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Bazario.Core.Domain.Entities;
+using Bazario.Core.Domain.Entities.Order;
+using Bazario.Core.Domain.Entities.Review;
+using Bazario.Core.Domain.Entities.Store;
 using Microsoft.AspNetCore.Identity;
 
 namespace Bazario.Core.Domain.IdentityEntities

@@ -1,7 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Bazario.Core.Domain.RepositoryContracts;
+using Bazario.Core.Domain.RepositoryContracts.Order;
 using Bazario.Core.Models.Order;
 using Bazario.Core.ServiceContracts.Order;
 using Microsoft.Extensions.Logging;

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Bazario.Core.Domain.RepositoryContracts;
+using Bazario.Core.Domain.RepositoryContracts.Catalog;
 using Bazario.Core.Models.Inventory;
 using Bazario.Core.Models.Shared;
 using Bazario.Core.ServiceContracts.Inventory;
@@ -64,7 +64,7 @@ namespace Bazario.Core.Services.Inventory
             _logger.LogInformation("Getting low stock alerts for store {StoreId} with threshold {Threshold}", 
                 storeId, threshold);
 
-            List<Domain.Entities.Product> products;
+            List<Domain.Entities.Catalog.Product> products;
             
             if (storeId.HasValue)
             {

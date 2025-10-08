@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.DTO.Order;
-using Bazario.Core.Enums;
+using Bazario.Core.Enums.Order;
+using Bazario.Core.Models.Catalog.Discount;
 using Bazario.Core.Models.Order;
 using Bazario.Core.Models.Shared;
 using Bazario.Core.ServiceContracts.Order;
@@ -122,10 +123,16 @@ namespace Bazario.Core.Services.Order
             return await _validationService.CalculateOrderTotalAsync(orderItems, customerId, shippingAddress, discountCodes, cancellationToken);
         }
 
-        public async Task<bool> ValidateStockAvailabilityAsync(List<OrderItemAddRequest> orderItems, CancellationToken cancellationToken = default)
+        public async Task<StockValidationResult> ValidateStockAvailabilityWithDetailsAsync(List<OrderItemAddRequest> orderItems, CancellationToken cancellationToken = default)
         {
-            _logger.LogDebug("Delegating ValidateStockAvailabilityAsync to OrderValidationService");
-            return await _validationService.ValidateStockAvailabilityAsync(orderItems, cancellationToken);
+            _logger.LogDebug("Delegating ValidateStockAvailabilityWithDetailsAsync to OrderValidationService");
+            return await _validationService.ValidateStockAvailabilityWithDetailsAsync(orderItems, cancellationToken);
+        }
+
+        public void ValidateOrderUpdateBusinessRules(OrderUpdateRequest orderUpdateRequest, Domain.Entities.Order.Order existingOrder)
+        {
+            _logger.LogDebug("Delegating ValidateOrderUpdateBusinessRules to OrderValidationService");
+            _validationService.ValidateOrderUpdateBusinessRules(orderUpdateRequest, existingOrder);
         }
 
         // IOrderAnalyticsService methods
@@ -161,19 +168,19 @@ namespace Bazario.Core.Services.Order
         }
 
         // IOrderAnalyticsService discount methods
-        public async Task<Bazario.Core.Models.Discount.DiscountUsageStats?> GetDiscountUsageStatsAsync(string discountCode, CancellationToken cancellationToken = default)
+        public async Task<DiscountUsageStats?> GetDiscountUsageStatsAsync(string discountCode, CancellationToken cancellationToken = default)
         {
             _logger.LogDebug("Delegating GetDiscountUsageStatsAsync to OrderAnalyticsService");
             return await _analyticsService.GetDiscountUsageStatsAsync(discountCode, cancellationToken);
         }
 
-        public async Task<List<Bazario.Core.Models.Discount.DiscountPerformance>> GetDiscountPerformanceAsync(DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default)
+        public async Task<List<DiscountPerformance>> GetDiscountPerformanceAsync(DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default)
         {
             _logger.LogDebug("Delegating GetDiscountPerformanceAsync to OrderAnalyticsService");
             return await _analyticsService.GetDiscountPerformanceAsync(startDate, endDate, cancellationToken);
         }
 
-        public async Task<Bazario.Core.Models.Discount.DiscountRevenueImpact> GetDiscountRevenueImpactAsync(DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default)
+        public async Task<DiscountRevenueImpact> GetDiscountRevenueImpactAsync(DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default)
         {
             _logger.LogDebug("Delegating GetDiscountRevenueImpactAsync to OrderAnalyticsService");
             return await _analyticsService.GetDiscountRevenueImpactAsync(startDate, endDate, cancellationToken);

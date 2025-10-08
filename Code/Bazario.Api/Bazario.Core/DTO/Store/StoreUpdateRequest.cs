@@ -4,8 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Bazario.Core.Domain.Entities;
-using StoreEntity = Bazario.Core.Domain.Entities.Store;
+using StoreEntity = Bazario.Core.Domain.Entities.Store.Store;
 
 namespace Bazario.Core.DTO.Store
 {

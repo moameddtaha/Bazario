@@ -22,6 +22,84 @@ namespace Bazario.Infrastructure.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("Bazario.Core.Domain.Entities.City", b =>
+                {
+                    b.Property<Guid>("CityId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("GovernorateId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("NameArabic")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("SupportsSameDayDelivery")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("CityId");
+
+                    b.HasIndex("GovernorateId");
+
+                    b.ToTable("Cities");
+                });
+
+            modelBuilder.Entity("Bazario.Core.Domain.Entities.Country", b =>
+                {
+                    b.Property<Guid>("CountryId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("NameArabic")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("SupportsPostalCodes")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("CountryId");
+
+                    b.ToTable("Countries");
+                });
+
             modelBuilder.Entity("Bazario.Core.Domain.Entities.Discount", b =>
                 {
                     b.Property<Guid>("DiscountId")
@@ -99,6 +177,47 @@ namespace Bazario.Infrastructure.Migrations
                     b.HasIndex("Code", "IsActive", "IsUsed");
 
                     b.ToTable("Discounts");
+                });
+
+            modelBuilder.Entity("Bazario.Core.Domain.Entities.Governorate", b =>
+                {
+                    b.Property<Guid>("GovernorateId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("CountryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("NameArabic")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("SupportsSameDayDelivery")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("GovernorateId");
+
+                    b.HasIndex("CountryId");
+
+                    b.ToTable("Governorates");
                 });
 
             modelBuilder.Entity("Bazario.Core.Domain.Entities.Order", b =>
@@ -352,6 +471,42 @@ namespace Bazario.Infrastructure.Migrations
                     b.ToTable("Stores");
                 });
 
+            modelBuilder.Entity("Bazario.Core.Domain.Entities.StoreGovernorateSupport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("GovernorateId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsSupported")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("StoreId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("StoreId1")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GovernorateId");
+
+                    b.HasIndex("StoreId1");
+
+                    b.HasIndex("StoreId", "GovernorateId")
+                        .IsUnique();
+
+                    b.ToTable("StoreGovernorateSupports");
+                });
+
             modelBuilder.Entity("Bazario.Core.Domain.Entities.StoreShippingConfiguration", b =>
                 {
                     b.Property<Guid>("ConfigurationId")
@@ -362,14 +517,6 @@ namespace Bazario.Infrastructure.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("DefaultShippingZone")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("ExcludedCities")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.PrimitiveCollection<string>("ExcludedCitiesList")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
@@ -401,13 +548,8 @@ namespace Bazario.Infrastructure.Migrations
                     b.Property<Guid>("StoreId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("SupportedCities")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.PrimitiveCollection<string>("SupportedCitiesList")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<Guid?>("StoreId1")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -420,6 +562,10 @@ namespace Bazario.Infrastructure.Migrations
                     b.HasIndex("StoreId")
                         .IsUnique()
                         .HasFilter("[IsActive] = 1");
+
+                    b.HasIndex("StoreId1")
+                        .IsUnique()
+                        .HasFilter("[StoreId1] IS NOT NULL");
 
                     b.ToTable("StoreShippingConfigurations", (string)null);
                 });
@@ -645,6 +791,17 @@ namespace Bazario.Infrastructure.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("Bazario.Core.Domain.Entities.City", b =>
+                {
+                    b.HasOne("Bazario.Core.Domain.Entities.Governorate", "Governorate")
+                        .WithMany("Cities")
+                        .HasForeignKey("GovernorateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Governorate");
+                });
+
             modelBuilder.Entity("Bazario.Core.Domain.Entities.Discount", b =>
                 {
                     b.HasOne("Bazario.Core.Domain.Entities.Store", "Store")
@@ -653,6 +810,17 @@ namespace Bazario.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Store");
+                });
+
+            modelBuilder.Entity("Bazario.Core.Domain.Entities.Governorate", b =>
+                {
+                    b.HasOne("Bazario.Core.Domain.Entities.Country", "Country")
+                        .WithMany("Governorates")
+                        .HasForeignKey("CountryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Country");
                 });
 
             modelBuilder.Entity("Bazario.Core.Domain.Entities.Order", b =>
@@ -737,6 +905,29 @@ namespace Bazario.Infrastructure.Migrations
                     b.Navigation("Seller");
                 });
 
+            modelBuilder.Entity("Bazario.Core.Domain.Entities.StoreGovernorateSupport", b =>
+                {
+                    b.HasOne("Bazario.Core.Domain.Entities.Governorate", "Governorate")
+                        .WithMany()
+                        .HasForeignKey("GovernorateId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Bazario.Core.Domain.Entities.Store", "Store")
+                        .WithMany()
+                        .HasForeignKey("StoreId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Bazario.Core.Domain.Entities.Store", null)
+                        .WithMany("GovernorateSupports")
+                        .HasForeignKey("StoreId1");
+
+                    b.Navigation("Governorate");
+
+                    b.Navigation("Store");
+                });
+
             modelBuilder.Entity("Bazario.Core.Domain.Entities.StoreShippingConfiguration", b =>
                 {
                     b.HasOne("Bazario.Core.Domain.Entities.Store", "Store")
@@ -744,6 +935,10 @@ namespace Bazario.Infrastructure.Migrations
                         .HasForeignKey("StoreId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("Bazario.Core.Domain.Entities.Store", null)
+                        .WithOne("ShippingConfiguration")
+                        .HasForeignKey("Bazario.Core.Domain.Entities.StoreShippingConfiguration", "StoreId1");
 
                     b.Navigation("Store");
                 });
@@ -799,6 +994,16 @@ namespace Bazario.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Bazario.Core.Domain.Entities.Country", b =>
+                {
+                    b.Navigation("Governorates");
+                });
+
+            modelBuilder.Entity("Bazario.Core.Domain.Entities.Governorate", b =>
+                {
+                    b.Navigation("Cities");
+                });
+
             modelBuilder.Entity("Bazario.Core.Domain.Entities.Order", b =>
                 {
                     b.Navigation("OrderItems");
@@ -813,7 +1018,11 @@ namespace Bazario.Infrastructure.Migrations
 
             modelBuilder.Entity("Bazario.Core.Domain.Entities.Store", b =>
                 {
+                    b.Navigation("GovernorateSupports");
+
                     b.Navigation("Products");
+
+                    b.Navigation("ShippingConfiguration");
                 });
 
             modelBuilder.Entity("Bazario.Core.Domain.IdentityEntities.ApplicationUser", b =>

@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.Models.Order;
-using Bazario.Core.Models.Discount;
+using Bazario.Core.Models.Catalog.Discount;
 
 namespace Bazario.Core.ServiceContracts.Order
 {

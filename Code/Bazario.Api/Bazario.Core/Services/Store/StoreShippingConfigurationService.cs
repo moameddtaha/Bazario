@@ -1,10 +1,15 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Bazario.Core.Domain.Entities;
-using Bazario.Core.Domain.RepositoryContracts;
+using Bazario.Core.Domain.Entities.Location;
+using Bazario.Core.Domain.Entities.Store;
+using Bazario.Core.Domain.RepositoryContracts.Location;
+using Bazario.Core.Domain.RepositoryContracts.Store;
 using Bazario.Core.DTO.Store;
-using Bazario.Core.Helpers.Product;
+using Bazario.Core.Enums.Order;
+using Bazario.Core.Helpers.Catalog.Product;
 using Bazario.Core.ServiceContracts.Store;
 using Microsoft.Extensions.Logging;
 
@@ -18,17 +23,23 @@ namespace Bazario.Core.Services.Store
         private readonly IStoreShippingConfigurationRepository _configurationRepository;
         private readonly IStoreRepository _storeRepository;
         private readonly IProductValidationHelper _validationHelper;
+        private readonly IStoreGovernorateSupportRepository _governorateSupportRepository;
+        private readonly ICityRepository _cityRepository;
         private readonly ILogger<StoreShippingConfigurationService> _logger;
 
         public StoreShippingConfigurationService(
             IStoreShippingConfigurationRepository configurationRepository,
             IStoreRepository storeRepository,
             IProductValidationHelper validationHelper,
+            IStoreGovernorateSupportRepository governorateSupportRepository,
+            ICityRepository cityRepository,
             ILogger<StoreShippingConfigurationService> logger)
         {
             _configurationRepository = configurationRepository ?? throw new ArgumentNullException(nameof(configurationRepository));
             _storeRepository = storeRepository ?? throw new ArgumentNullException(nameof(storeRepository));
             _validationHelper = validationHelper ?? throw new ArgumentNullException(nameof(validationHelper));
+            _governorateSupportRepository = governorateSupportRepository ?? throw new ArgumentNullException(nameof(governorateSupportRepository));
+            _cityRepository = cityRepository ?? throw new ArgumentNullException(nameof(cityRepository));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -46,7 +57,7 @@ namespace Bazario.Core.Services.Store
                     return new StoreShippingConfigurationResponse
                     {
                         StoreId = storeId,
-                        DefaultShippingZone = Enums.ShippingZone.Local,
+                        DefaultShippingZone = ShippingZone.Local,
                         OffersSameDayDelivery = false,
                         OffersStandardDelivery = true,
                         IsActive = false
@@ -54,12 +65,16 @@ namespace Bazario.Core.Services.Store
                 }
 
                 var store = await _storeRepository.GetStoreByIdAsync(storeId, cancellationToken);
-                
+
+                // Get governorate support data
+                var supportedGovernorates = await _governorateSupportRepository.GetSupportedGovernorates(storeId, cancellationToken);
+                var excludedGovernorates = await _governorateSupportRepository.GetExcludedGovernorates(storeId, cancellationToken);
+
                 return new StoreShippingConfigurationResponse
                 {
                     StoreId = storeId,
                     StoreName = store?.Name ?? "Unknown Store",
-                    DefaultShippingZone = Enum.TryParse<Enums.ShippingZone>(configuration.DefaultShippingZone, out var zone) ? zone : Enums.ShippingZone.Local,
+                    DefaultShippingZone = Enum.TryParse<ShippingZone>(configuration.DefaultShippingZone, out var zone) ? zone : ShippingZone.Local,
                     OffersSameDayDelivery = configuration.OffersSameDayDelivery,
                     OffersStandardDelivery = configuration.OffersStandardDelivery,
                     SameDayCutoffHour = configuration.SameDayCutoffHour,
@@ -67,8 +82,24 @@ namespace Bazario.Core.Services.Store
                     SameDayDeliveryFee = configuration.SameDayDeliveryFee,
                     StandardDeliveryFee = configuration.StandardDeliveryFee,
                     NationalDeliveryFee = configuration.NationalDeliveryFee,
-                    SupportedCities = configuration.SupportedCitiesList,
-                    ExcludedCities = configuration.ExcludedCitiesList,
+                    SupportedGovernorates = supportedGovernorates.Select(sg => new GovernorateShippingInfo
+                    {
+                        GovernorateId = sg.Governorate.GovernorateId,
+                        GovernorateName = sg.Governorate.Name,
+                        GovernorateNameArabic = sg.Governorate.NameArabic,
+                        CountryId = sg.Governorate.CountryId,
+                        CountryName = sg.Governorate.Country.Name,
+                        SupportsSameDayDelivery = sg.Governorate.SupportsSameDayDelivery
+                    }).ToList(),
+                    ExcludedGovernorates = excludedGovernorates.Select(sg => new GovernorateShippingInfo
+                    {
+                        GovernorateId = sg.Governorate.GovernorateId,
+                        GovernorateName = sg.Governorate.Name,
+                        GovernorateNameArabic = sg.Governorate.NameArabic,
+                        CountryId = sg.Governorate.CountryId,
+                        CountryName = sg.Governorate.Country.Name,
+                        SupportsSameDayDelivery = sg.Governorate.SupportsSameDayDelivery
+                    }).ToList(),
                     CreatedAt = configuration.CreatedAt,
                     UpdatedAt = configuration.UpdatedAt,
                     IsActive = configuration.IsActive
@@ -112,20 +143,47 @@ namespace Bazario.Core.Services.Store
                     ShippingNotes = request.ShippingNotes,
                     SameDayDeliveryFee = request.SameDayDeliveryFee,
                     StandardDeliveryFee = request.StandardDeliveryFee,
-                    NationalDeliveryFee = request.NationalDeliveryFee,
-                    SupportedCitiesList = request.SupportedCities ?? new List<string>(),
-                    ExcludedCitiesList = request.ExcludedCities ?? new List<string>()
+                    NationalDeliveryFee = request.NationalDeliveryFee
                 };
 
                 var createdConfiguration = await _configurationRepository.CreateAsync(configuration, cancellationToken);
 
+                // Create junction table records for governorates
+                if (request.SupportedGovernorateIds != null && request.SupportedGovernorateIds.Any())
+                {
+                    var supportedRecords = request.SupportedGovernorateIds.Select(govId => new StoreGovernorateSupport
+                    {
+                        StoreId = request.StoreId,
+                        GovernorateId = govId,
+                        IsSupported = true
+                    }).ToList();
+
+                    await _governorateSupportRepository.AddRangeAsync(supportedRecords, cancellationToken);
+                }
+
+                if (request.ExcludedGovernorateIds != null && request.ExcludedGovernorateIds.Any())
+                {
+                    var excludedRecords = request.ExcludedGovernorateIds.Select(govId => new StoreGovernorateSupport
+                    {
+                        StoreId = request.StoreId,
+                        GovernorateId = govId,
+                        IsSupported = false
+                    }).ToList();
+
+                    await _governorateSupportRepository.AddRangeAsync(excludedRecords, cancellationToken);
+                }
+
                 _logger.LogInformation("Successfully created shipping configuration for store: {StoreId}", request.StoreId);
+
+                // Get governorate data for response
+                var supportedGovernorates = await _governorateSupportRepository.GetSupportedGovernorates(request.StoreId, cancellationToken);
+                var excludedGovernorates = await _governorateSupportRepository.GetExcludedGovernorates(request.StoreId, cancellationToken);
 
                 return new StoreShippingConfigurationResponse
                 {
                     StoreId = createdConfiguration.StoreId,
                     StoreName = store?.Name ?? "Unknown Store",
-                    DefaultShippingZone = Enum.TryParse<Enums.ShippingZone>(createdConfiguration.DefaultShippingZone, out var createdZone) ? createdZone : Enums.ShippingZone.Local,
+                    DefaultShippingZone = Enum.TryParse<ShippingZone>(createdConfiguration.DefaultShippingZone, out var createdZone) ? createdZone : ShippingZone.Local,
                     OffersSameDayDelivery = createdConfiguration.OffersSameDayDelivery,
                     OffersStandardDelivery = createdConfiguration.OffersStandardDelivery,
                     SameDayCutoffHour = createdConfiguration.SameDayCutoffHour,
@@ -133,8 +191,24 @@ namespace Bazario.Core.Services.Store
                     SameDayDeliveryFee = createdConfiguration.SameDayDeliveryFee,
                     StandardDeliveryFee = createdConfiguration.StandardDeliveryFee,
                     NationalDeliveryFee = createdConfiguration.NationalDeliveryFee,
-                    SupportedCities = createdConfiguration.SupportedCitiesList,
-                    ExcludedCities = createdConfiguration.ExcludedCitiesList,
+                    SupportedGovernorates = supportedGovernorates.Select(sg => new GovernorateShippingInfo
+                    {
+                        GovernorateId = sg.Governorate.GovernorateId,
+                        GovernorateName = sg.Governorate.Name,
+                        GovernorateNameArabic = sg.Governorate.NameArabic,
+                        CountryId = sg.Governorate.CountryId,
+                        CountryName = sg.Governorate.Country.Name,
+                        SupportsSameDayDelivery = sg.Governorate.SupportsSameDayDelivery
+                    }).ToList(),
+                    ExcludedGovernorates = excludedGovernorates.Select(sg => new GovernorateShippingInfo
+                    {
+                        GovernorateId = sg.Governorate.GovernorateId,
+                        GovernorateName = sg.Governorate.Name,
+                        GovernorateNameArabic = sg.Governorate.NameArabic,
+                        CountryId = sg.Governorate.CountryId,
+                        CountryName = sg.Governorate.Country.Name,
+                        SupportsSameDayDelivery = sg.Governorate.SupportsSameDayDelivery
+                    }).ToList(),
                     CreatedAt = createdConfiguration.CreatedAt,
                     UpdatedAt = createdConfiguration.UpdatedAt,
                     IsActive = createdConfiguration.IsActive
@@ -169,12 +243,39 @@ namespace Bazario.Core.Services.Store
                 existingConfiguration.SameDayDeliveryFee = request.SameDayDeliveryFee;
                 existingConfiguration.StandardDeliveryFee = request.StandardDeliveryFee;
                 existingConfiguration.NationalDeliveryFee = request.NationalDeliveryFee;
-                existingConfiguration.SupportedCitiesList = request.SupportedCities ?? new List<string>();
-                existingConfiguration.ExcludedCitiesList = request.ExcludedCities ?? new List<string>();
 
                 var updatedConfiguration = await _configurationRepository.UpdateAsync(existingConfiguration, cancellationToken);
 
+                // Update junction table records for governorates using replace strategy
+                var newGovernorateRecords = new List<StoreGovernorateSupport>();
+
+                if (request.SupportedGovernorateIds != null && request.SupportedGovernorateIds.Any())
+                {
+                    newGovernorateRecords.AddRange(request.SupportedGovernorateIds.Select(govId => new StoreGovernorateSupport
+                    {
+                        StoreId = request.StoreId,
+                        GovernorateId = govId,
+                        IsSupported = true
+                    }));
+                }
+
+                if (request.ExcludedGovernorateIds != null && request.ExcludedGovernorateIds.Any())
+                {
+                    newGovernorateRecords.AddRange(request.ExcludedGovernorateIds.Select(govId => new StoreGovernorateSupport
+                    {
+                        StoreId = request.StoreId,
+                        GovernorateId = govId,
+                        IsSupported = false
+                    }));
+                }
+
+                await _governorateSupportRepository.ReplaceStoreGovernorates(request.StoreId, newGovernorateRecords, cancellationToken);
+
                 var store = await _storeRepository.GetStoreByIdAsync(request.StoreId, cancellationToken);
+
+                // Get updated governorate data for response
+                var supportedGovernorates = await _governorateSupportRepository.GetSupportedGovernorates(request.StoreId, cancellationToken);
+                var excludedGovernorates = await _governorateSupportRepository.GetExcludedGovernorates(request.StoreId, cancellationToken);
 
                 _logger.LogInformation("Successfully updated shipping configuration for store: {StoreId}", request.StoreId);
 
@@ -182,7 +283,7 @@ namespace Bazario.Core.Services.Store
                 {
                     StoreId = updatedConfiguration.StoreId,
                     StoreName = store?.Name ?? "Unknown Store",
-                    DefaultShippingZone = Enum.TryParse<Enums.ShippingZone>(updatedConfiguration.DefaultShippingZone, out var updatedZone) ? updatedZone : Enums.ShippingZone.Local,
+                    DefaultShippingZone = Enum.TryParse<ShippingZone>(updatedConfiguration.DefaultShippingZone, out var updatedZone) ? updatedZone : ShippingZone.Local,
                     OffersSameDayDelivery = updatedConfiguration.OffersSameDayDelivery,
                     OffersStandardDelivery = updatedConfiguration.OffersStandardDelivery,
                     SameDayCutoffHour = updatedConfiguration.SameDayCutoffHour,
@@ -190,8 +291,24 @@ namespace Bazario.Core.Services.Store
                     SameDayDeliveryFee = updatedConfiguration.SameDayDeliveryFee,
                     StandardDeliveryFee = updatedConfiguration.StandardDeliveryFee,
                     NationalDeliveryFee = updatedConfiguration.NationalDeliveryFee,
-                    SupportedCities = updatedConfiguration.SupportedCitiesList,
-                    ExcludedCities = updatedConfiguration.ExcludedCitiesList,
+                    SupportedGovernorates = supportedGovernorates.Select(sg => new GovernorateShippingInfo
+                    {
+                        GovernorateId = sg.Governorate.GovernorateId,
+                        GovernorateName = sg.Governorate.Name,
+                        GovernorateNameArabic = sg.Governorate.NameArabic,
+                        CountryId = sg.Governorate.CountryId,
+                        CountryName = sg.Governorate.Country.Name,
+                        SupportsSameDayDelivery = sg.Governorate.SupportsSameDayDelivery
+                    }).ToList(),
+                    ExcludedGovernorates = excludedGovernorates.Select(sg => new GovernorateShippingInfo
+                    {
+                        GovernorateId = sg.Governorate.GovernorateId,
+                        GovernorateName = sg.Governorate.Name,
+                        GovernorateNameArabic = sg.Governorate.NameArabic,
+                        CountryId = sg.Governorate.CountryId,
+                        CountryName = sg.Governorate.Country.Name,
+                        SupportsSameDayDelivery = sg.Governorate.SupportsSameDayDelivery
+                    }).ToList(),
                     CreatedAt = updatedConfiguration.CreatedAt,
                     UpdatedAt = updatedConfiguration.UpdatedAt,
                     IsActive = updatedConfiguration.IsActive
@@ -285,15 +402,28 @@ namespace Bazario.Core.Services.Store
                     return false;
                 }
 
-                // Check if city is excluded
-                if (configuration.ExcludedCitiesList.Contains(city.ToUpperInvariant()))
+                // Resolve city to governorate using database lookup
+                var cities = await _cityRepository.SearchByNameAsync(city, cancellationToken);
+                var cityEntity = cities.FirstOrDefault(c => c.Name.Equals(city, StringComparison.OrdinalIgnoreCase));
+
+                if (cityEntity == null)
                 {
+                    _logger.LogDebug("City {City} not found in database, same-day delivery unavailable", city);
                     return false;
                 }
 
-                // Check if city is in supported cities (if specified)
-                if (configuration.SupportedCitiesList.Any() && !configuration.SupportedCitiesList.Contains(city.ToUpperInvariant()))
+                // Check if store supports this governorate
+                var isSupported = await _governorateSupportRepository.IsGovernorateSupportedAsync(storeId, cityEntity.GovernorateId, cancellationToken);
+                if (!isSupported)
                 {
+                    _logger.LogDebug("Store {StoreId} does not support governorate {GovernorateId} for city {City}", storeId, cityEntity.GovernorateId, city);
+                    return false;
+                }
+
+                // Check if the city's governorate supports same-day delivery
+                if (!cityEntity.Governorate.SupportsSameDayDelivery)
+                {
+                    _logger.LogDebug("Governorate {GovernorateName} does not support same-day delivery", cityEntity.Governorate.Name);
                     return false;
                 }
 

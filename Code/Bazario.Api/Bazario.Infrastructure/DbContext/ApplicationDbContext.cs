@@ -4,7 +4,12 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
-using Bazario.Core.Domain.Entities;
+using Bazario.Core.Domain.Entities.Authentication;
+using Bazario.Core.Domain.Entities.Catalog;
+using Bazario.Core.Domain.Entities.Location;
+using Bazario.Core.Domain.Entities.Order;
+using Bazario.Core.Domain.Entities.Review;
+using Bazario.Core.Domain.Entities.Store;
 using Bazario.Core.Domain.IdentityEntities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -26,6 +31,10 @@ namespace Bazario.Infrastructure.DbContext
         public DbSet<RefreshToken> RefreshTokens { get; set; }
         public DbSet<Discount> Discounts { get; set; }
         public DbSet<StoreShippingConfiguration> StoreShippingConfigurations { get; set; }
+        public DbSet<Country> Countries { get; set; }
+        public DbSet<Governorate> Governorates { get; set; }
+        public DbSet<City> Cities { get; set; }
+        public DbSet<StoreGovernorateSupport> StoreGovernorateSupports { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {

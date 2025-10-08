@@ -1,5 +1,5 @@
 using System;
-using Bazario.Core.Enums;
+using Bazario.Core.Enums.Order;
 
 namespace Bazario.Core.Models.Order
 {

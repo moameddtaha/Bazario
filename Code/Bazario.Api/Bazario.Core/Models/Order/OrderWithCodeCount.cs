@@ -1,5 +1,3 @@
-using Bazario.Core.Domain.Entities;
-
 namespace Bazario.Core.Models.Order
 {
     /// <summary>
@@ -7,7 +5,7 @@ namespace Bazario.Core.Models.Order
     /// </summary>
     public class OrderWithCodeCount
     {
-        public Domain.Entities.Order Order { get; set; } = null!;
+        public Domain.Entities.Order.Order Order { get; set; } = null!;
         public int CodeCount { get; set; }
         public decimal ProportionalDiscountAmount { get; set; }
         public decimal ProportionalTotalAmount { get; set; }

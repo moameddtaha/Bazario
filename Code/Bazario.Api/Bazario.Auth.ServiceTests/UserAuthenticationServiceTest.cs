@@ -1,10 +1,10 @@
 using Bazario.Core.Domain.IdentityEntities;
 using Bazario.Core.Domain.RepositoryContracts;
-using Bazario.Core.DTO.Auth;
-using Bazario.Core.Enums;
-using Bazario.Core.Models.User;
-using Bazario.Core.ServiceContracts.Auth;
-using Bazario.Core.Services.Auth;
+using Bazario.Core.DTO.Authentication;
+using Bazario.Core.Enums.Authentication;
+using Bazario.Core.Models.UserManagement;
+using Bazario.Core.ServiceContracts.Authentication;
+using Bazario.Core.Services.Authentication;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;

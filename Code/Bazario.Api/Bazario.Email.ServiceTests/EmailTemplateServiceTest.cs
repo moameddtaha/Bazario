@@ -1,4 +1,4 @@
-using Bazario.Core.Services.Email;
+using Bazario.Core.Services.Infrastructure;
 using Microsoft.Extensions.Logging;
 using Moq;
 

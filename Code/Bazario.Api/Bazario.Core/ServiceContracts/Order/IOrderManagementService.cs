@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.DTO.Order;
-using Bazario.Core.Enums;
+using Bazario.Core.Enums.Order;
 
 namespace Bazario.Core.ServiceContracts.Order
 {

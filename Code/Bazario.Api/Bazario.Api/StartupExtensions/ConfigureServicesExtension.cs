@@ -1,6 +1,5 @@
 ﻿using Bazario.Infrastructure.DbContext;
 using Bazario.Infrastructure.DbContext.Configurations;
-using Bazario.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
@@ -11,26 +10,42 @@ using System.Text;
 
 using Bazario.Core.Helpers.Store;
 using Bazario.Core.ServiceContracts.Store;
-using Bazario.Core.ServiceContracts.Product;
 using Bazario.Core.ServiceContracts.Order;
 using Bazario.Core.ServiceContracts.Inventory;
+using Bazario.Core.ServiceContracts.Location;
 using Bazario.Core.Domain.IdentityEntities;
-using Bazario.Core.Domain.RepositoryContracts;
 
 using Bazario.Core.Services.Store;
-using Bazario.Core.Services.Product;
 using Bazario.Core.Services.Order;
 using Bazario.Core.Services.Inventory;
-using Bazario.Core.Models.Email;
-using Bazario.Core.ServiceContracts.Auth;
+using Bazario.Core.Services.Location;
 using Bazario.Core.Services.Auth;
-using Bazario.Core.ServiceContracts.Email;
-using Bazario.Core.Services.Email;
-using Bazario.Core.Helpers.Auth;
-using Bazario.Core.Helpers.Email;
 using Bazario.Core.Helpers.Order;
-using Bazario.Core.Helpers.Product;
 using Bazario.Core.Helpers.Inventory;
+using Bazario.Core.Domain.RepositoryContracts.Authentication;
+using Bazario.Core.Domain.RepositoryContracts.Catalog;
+using Bazario.Core.Domain.RepositoryContracts.Store;
+using Bazario.Core.Domain.RepositoryContracts.Order;
+using Bazario.Core.Domain.RepositoryContracts.Review;
+using Bazario.Core.Domain.RepositoryContracts.Location;
+using Bazario.Core.Domain.RepositoryContracts.UserManagement;
+using Bazario.Core.Helpers.Authentication;
+using Bazario.Core.Helpers.Catalog.Product;
+using Bazario.Core.Helpers.Infrastructure;
+using Bazario.Core.Models.Infrastructure;
+using Bazario.Core.ServiceContracts.Authentication;
+using Bazario.Core.ServiceContracts.Catalog.Product;
+using Bazario.Core.ServiceContracts.Infrastructure;
+using Bazario.Core.Services.Authentication;
+using Bazario.Core.Services.Catalog.Product;
+using Bazario.Core.Services.Infrastructure;
+using Bazario.Infrastructure.Repositories.Authentication;
+using Bazario.Infrastructure.Repositories.UserManagement;
+using Bazario.Infrastructure.Repositories.Catalog;
+using Bazario.Infrastructure.Repositories.Review;
+using Bazario.Infrastructure.Repositories.Location;
+using Bazario.Infrastructure.Repositories.Order;
+using Bazario.Infrastructure.Repositories.Store;
 
 namespace Bazario.Api.StartupExtensions
 {
@@ -68,6 +83,15 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
             services.AddScoped<IDiscountRepository, DiscountRepository>();
             services.AddScoped<IStoreShippingConfigurationRepository, StoreShippingConfigurationRepository>();
+            services.AddScoped<ICountryRepository, CountryRepository>(); // Location-based shipping
+            services.AddScoped<IGovernorateRepository, GovernorateRepository>(); // Location-based shipping
+            services.AddScoped<ICityRepository, CityRepository>(); // Location-based shipping (city-governorate resolution)
+            services.AddScoped<IStoreGovernorateSupportRepository, StoreGovernorateSupportRepository>(); // Store-governorate junction table
+
+            // Register Location Management Services
+            services.AddScoped<ICountryManagementService, CountryManagementService>();
+            services.AddScoped<IGovernorateManagementService, GovernorateManagementService>();
+            services.AddScoped<ICityManagementService, CityManagementService>();
 
             // Register Core Services
             services.AddScoped<IJwtService, JwtService>();
@@ -133,6 +157,7 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<IEmailHelper, EmailHelper>();
             services.AddScoped<IShippingZoneService, ShippingZoneService>();
             services.AddScoped<IOrderMetricsHelper, OrderMetricsHelper>();
+            services.AddScoped<OrderCalculator>(); // Order calculation helper (KISS refactoring)
             services.AddScoped<IProductValidationHelper, ProductValidationHelper>();
             services.AddScoped<IInventoryHelper, InventoryHelper>();
             

@@ -1,5 +1,5 @@
 using Bazario.Core.Domain.IdentityEntities;
-using Bazario.Core.Services.Auth;
+using Bazario.Core.Services.Authentication;
 using Microsoft.Extensions.Configuration;
 using Moq;
 using System.IdentityModel.Tokens.Jwt;

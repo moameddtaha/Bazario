@@ -5,9 +5,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.Models.Inventory;
 using Bazario.Core.ServiceContracts.Inventory;
-using Bazario.Core.ServiceContracts.Email;
 using Bazario.Core.Helpers.Inventory;
 using Microsoft.Extensions.Logging;
+using Bazario.Core.ServiceContracts.Infrastructure;
 
 namespace Bazario.Core.Services.Inventory
 {

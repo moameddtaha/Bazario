@@ -1,0 +1,73 @@
+using Bazario.Core.ServiceContracts.Infrastructure;
+using Microsoft.Extensions.Logging;
+
+namespace Bazario.Core.Services.Infrastructure
+{
+    /// <summary>
+    /// Simple email template service for loading and rendering email templates
+    /// </summary>
+    public class EmailTemplateService : IEmailTemplateService
+    {
+        private readonly ILogger<EmailTemplateService> _logger;
+        private readonly string _templatesPath;
+
+        public EmailTemplateService(ILogger<EmailTemplateService> logger, string templatesPath)
+        {
+            _logger = logger;
+            _templatesPath = templatesPath;
+        }
+
+        public async Task<string> RenderTemplateAsync(string templateName, Dictionary<string, string> data)
+        {
+            try
+            {
+                var templatePath = Path.Combine(_templatesPath, $"{templateName}.html");
+                
+                if (!File.Exists(templatePath))
+                {
+                    _logger.LogError("Email template not found: {TemplatePath}", templatePath);
+                    throw new FileNotFoundException($"Email template not found: {templateName}");
+                }
+
+                var templateContent = await File.ReadAllTextAsync(templatePath);
+                
+                // Simple template replacement using {{Key}} syntax
+                foreach (var kvp in data)
+                {
+                    templateContent = templateContent.Replace($"{{{{{kvp.Key}}}}}", kvp.Value);
+                }
+
+                return templateContent;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to render email template: {TemplateName}", templateName);
+                throw;
+            }
+        }
+
+        public async Task<string> RenderPasswordResetEmailAsync(string userName, string resetUrl, string resetToken)
+        {
+            var data = new Dictionary<string, string>
+            {
+                { "UserName", userName },
+                { "ResetUrl", resetUrl },
+                { "ResetToken", resetToken }
+            };
+
+            return await RenderTemplateAsync("PasswordResetEmail", data);
+        }
+
+        public async Task<string> RenderEmailConfirmationAsync(string userName, string confirmationUrl, string confirmationToken)
+        {
+            var data = new Dictionary<string, string>
+            {
+                { "UserName", userName },
+                { "ConfirmationUrl", confirmationUrl },
+                { "ConfirmationToken", confirmationToken }
+            };
+
+            return await RenderTemplateAsync("EmailConfirmation", data);
+        }
+    }
+}

@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Bazario.Core.Enums;
+using Bazario.Core.Enums.Order;
 
 namespace Bazario.Core.DTO.Order
 {

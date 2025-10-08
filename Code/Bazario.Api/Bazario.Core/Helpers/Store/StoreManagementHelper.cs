@@ -1,11 +1,11 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Bazario.Core.Domain.RepositoryContracts;
-using Bazario.Core.Helpers.Auth;
 using Bazario.Core.Domain.IdentityEntities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
+using Bazario.Core.Domain.RepositoryContracts.Store;
+using Bazario.Core.Helpers.Authentication;
 
 namespace Bazario.Core.Helpers.Store
 {

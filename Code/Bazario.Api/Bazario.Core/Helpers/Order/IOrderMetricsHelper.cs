@@ -2,8 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Bazario.Core.Domain.Entities;
-using OrderEntity = Bazario.Core.Domain.Entities.Order;
+using OrderEntity = Bazario.Core.Domain.Entities.Order.Order;
 
 namespace Bazario.Core.Helpers.Order
 {

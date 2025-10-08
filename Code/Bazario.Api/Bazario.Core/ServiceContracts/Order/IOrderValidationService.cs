@@ -49,11 +49,21 @@ namespace Bazario.Core.ServiceContracts.Order
         Task<OrderTotalCalculation> CalculateOrderTotalAsync(List<OrderItemAddRequest> orderItems, Guid customerId, ShippingAddress shippingAddress, List<string>? discountCodes = null, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Validates order items have sufficient stock
+        /// Validates business rules for order updates (moved from OrderManagementService for KISS)
+        /// Ensures order financial data is consistent and follows business rules
+        /// </summary>
+        /// <param name="orderUpdateRequest">Order update request to validate</param>
+        /// <param name="existingOrder">Existing order entity</param>
+        void ValidateOrderUpdateBusinessRules(OrderUpdateRequest orderUpdateRequest, Domain.Entities.Order.Order existingOrder);
+
+        /// <summary>
+        /// Validates stock availability with detailed feedback about which items failed
+        /// Provides specific information about out-of-stock items for better error messages
+        /// Replaces the old ValidateStockAvailabilityAsync (removed for KISS - detailed version is always better)
         /// </summary>
         /// <param name="orderItems">List of order items to validate</param>
         /// <param name="cancellationToken">Cancellation token</param>
-        /// <returns>True if all items have sufficient stock</returns>
-        Task<bool> ValidateStockAvailabilityAsync(List<OrderItemAddRequest> orderItems, CancellationToken cancellationToken = default);
+        /// <returns>Detailed validation result with specific failure information</returns>
+        Task<StockValidationResult> ValidateStockAvailabilityWithDetailsAsync(List<OrderItemAddRequest> orderItems, CancellationToken cancellationToken = default);
     }
 }

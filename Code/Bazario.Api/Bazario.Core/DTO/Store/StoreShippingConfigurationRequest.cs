@@ -1,5 +1,5 @@
 using System.ComponentModel.DataAnnotations;
-using Bazario.Core.Enums;
+using Bazario.Core.Enums.Order;
 
 namespace Bazario.Core.DTO.Store
 {
@@ -39,7 +39,8 @@ namespace Bazario.Core.DTO.Store
         [Range(0, double.MaxValue, ErrorMessage = "National delivery fee must be 0 or greater")]
         public decimal NationalDeliveryFee { get; set; } = 0m;
 
-        public List<string>? SupportedCities { get; set; } // Cities where this store delivers
-        public List<string>? ExcludedCities { get; set; } // Cities where this store does NOT deliver
+        // Governorate-based shipping configuration
+        public List<Guid>? SupportedGovernorateIds { get; set; } // Governorates where this store delivers
+        public List<Guid>? ExcludedGovernorateIds { get; set; } // Governorates where this store does NOT deliver
     }
 }

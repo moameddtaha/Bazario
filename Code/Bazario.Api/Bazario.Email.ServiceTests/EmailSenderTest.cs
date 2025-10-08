@@ -1,5 +1,5 @@
-using Bazario.Core.Models.Email;
-using Bazario.Core.Services.Email;
+using Bazario.Core.Models.Infrastructure;
+using Bazario.Core.Services.Infrastructure;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;

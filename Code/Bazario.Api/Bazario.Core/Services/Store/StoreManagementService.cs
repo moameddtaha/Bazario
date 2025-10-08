@@ -1,9 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.DTO;
-using Bazario.Core.Extensions;
 using Bazario.Core.Models.Shared;
 using Bazario.Core.ServiceContracts.Store;
 using Microsoft.Extensions.Logging;
@@ -11,8 +9,13 @@ using Bazario.Core.Enums;
 using Bazario.Core.Domain.IdentityEntities;
 using Microsoft.AspNetCore.Identity;
 using Bazario.Core.DTO.Store;
-using Bazario.Core.Helpers.Auth;
+using Bazario.Core.Helpers.Authentication;
 using Bazario.Core.Helpers.Store;
+using Bazario.Core.Domain.RepositoryContracts.Catalog;
+using Bazario.Core.Domain.RepositoryContracts.Store;
+using Bazario.Core.Domain.RepositoryContracts.Order;
+using Bazario.Core.Domain.RepositoryContracts.UserManagement;
+using Bazario.Core.Extensions.Store;
 
 namespace Bazario.Core.Services.Store
 {

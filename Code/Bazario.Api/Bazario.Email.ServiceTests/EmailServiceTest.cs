@@ -1,6 +1,6 @@
 using Bazario.Core.Domain.IdentityEntities;
-using Bazario.Core.ServiceContracts.Email;
-using Bazario.Core.Services.Email;
+using Bazario.Core.ServiceContracts.Infrastructure;
+using Bazario.Core.Services.Infrastructure;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;

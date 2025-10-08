@@ -1,4 +1,4 @@
-using Bazario.Core.Enums;
+using Bazario.Core.Enums.Order;
 
 namespace Bazario.Core.DTO.Store
 {
@@ -17,8 +17,11 @@ namespace Bazario.Core.DTO.Store
         public decimal SameDayDeliveryFee { get; set; }
         public decimal StandardDeliveryFee { get; set; }
         public decimal NationalDeliveryFee { get; set; }
-        public List<string> SupportedCities { get; set; } = new();
-        public List<string> ExcludedCities { get; set; } = new();
+
+        // Governorate-based shipping configuration
+        public List<GovernorateShippingInfo> SupportedGovernorates { get; set; } = new();
+        public List<GovernorateShippingInfo> ExcludedGovernorates { get; set; } = new();
+
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
         public bool IsActive { get; set; }

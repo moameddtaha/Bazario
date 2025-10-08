@@ -17,7 +17,7 @@ namespace Bazario.Core.ServiceContracts.Order
         // This interface inherits all methods from the specialized interfaces:
         // - IOrderManagementService: CreateOrderAsync, UpdateOrderAsync, UpdateOrderStatusAsync, CancelOrderAsync, DeleteOrderAsync
         // - IOrderQueryService: GetOrderByIdAsync, GetOrdersByCustomerIdAsync, GetOrdersByStatusAsync, SearchOrdersAsync
-        // - IOrderValidationService: CanOrderBeModifiedAsync, CanOrderBeCancelledAsync, IsValidStatusTransition, CalculateOrderTotalAsync, ValidateStockAvailabilityAsync
+        // - IOrderValidationService: CanOrderBeModifiedAsync, CanOrderBeCancelledAsync, IsValidStatusTransition, CalculateOrderTotalAsync, ValidateStockAvailabilityWithDetailsAsync
         // - IOrderAnalyticsService: GetCustomerOrderAnalyticsAsync, GetRevenueAnalyticsAsync, GetOrderPerformanceMetricsAsync
         // - IOrderPaymentService: ProcessOrderPaymentAsync, RefundOrderPaymentAsync
     }

@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Models.Inventory;
 using Bazario.Core.ServiceContracts.Inventory;
 using Bazario.Core.Helpers.Inventory;
 using Microsoft.Extensions.Logging;
+using Bazario.Core.Domain.RepositoryContracts.Catalog;
 
 namespace Bazario.Core.Services.Inventory
 {

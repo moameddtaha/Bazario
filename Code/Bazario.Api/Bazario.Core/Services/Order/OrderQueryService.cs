@@ -3,15 +3,15 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Bazario.Core.Domain.RepositoryContracts;
+using Bazario.Core.Domain.RepositoryContracts.Order;
 using Bazario.Core.DTO.Order;
-using Bazario.Core.Enums;
-using Bazario.Core.Extensions;
+using Bazario.Core.Enums.Order;
+using Bazario.Core.Extensions.Order;
 using Bazario.Core.Models.Order;
 using Bazario.Core.Models.Shared;
 using Bazario.Core.ServiceContracts.Order;
 using Microsoft.Extensions.Logging;
-using OrderEntity = Bazario.Core.Domain.Entities.Order;
+using OrderEntity = Bazario.Core.Domain.Entities.Order.Order;
 
 namespace Bazario.Core.Services.Order
 {
