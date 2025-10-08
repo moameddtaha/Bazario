@@ -728,5 +728,38 @@ namespace Bazario.Infrastructure.Repositories.Store
                 throw new InvalidOperationException($"Failed to get stores by IDs: {ex.Message}", ex);
             }
         }
+
+        public async Task<bool> IsStoreNameTakenAsync(string storeName, Guid? excludeStoreId, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Checking if store name is taken: {StoreName} (excluding: {ExcludeId})", storeName, excludeStoreId);
+
+            try
+            {
+                if (string.IsNullOrWhiteSpace(storeName))
+                {
+                    _logger.LogWarning("Store name is null or empty");
+                    return false; // Empty name is not "taken"
+                }
+
+                var query = _context.Stores
+                    .Where(s => s.Name != null && s.Name.ToLower() == storeName.ToLower());
+
+                // Exclude specific store ID (for update scenarios)
+                if (excludeStoreId.HasValue && excludeStoreId.Value != Guid.Empty)
+                {
+                    query = query.Where(s => s.StoreId != excludeStoreId.Value);
+                }
+
+                var exists = await query.AnyAsync(cancellationToken);
+
+                _logger.LogDebug("Store name '{StoreName}' is {Status}", storeName, exists ? "taken" : "available");
+                return exists;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to check if store name is taken: {StoreName}", storeName);
+                throw new InvalidOperationException($"Failed to check store name availability: {ex.Message}", ex);
+            }
+        }
     }
 }

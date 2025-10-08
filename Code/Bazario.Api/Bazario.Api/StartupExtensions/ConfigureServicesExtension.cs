@@ -35,9 +35,11 @@ using Bazario.Core.Helpers.Infrastructure;
 using Bazario.Core.Models.Infrastructure;
 using Bazario.Core.ServiceContracts.Authentication;
 using Bazario.Core.ServiceContracts.Catalog.Product;
+using Bazario.Core.ServiceContracts.Catalog.Discount;
 using Bazario.Core.ServiceContracts.Infrastructure;
 using Bazario.Core.Services.Authentication;
 using Bazario.Core.Services.Catalog.Product;
+using Bazario.Core.Services.Catalog.Discount;
 using Bazario.Core.Services.Infrastructure;
 using Bazario.Infrastructure.Repositories.Authentication;
 using Bazario.Infrastructure.Repositories.UserManagement;
@@ -130,7 +132,13 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<IInventoryAnalyticsService, InventoryAnalyticsService>();
             services.AddScoped<IInventoryAlertService, InventoryAlertService>();
             services.AddScoped<IInventoryService, InventoryService>(); // Composite interface
-            
+
+            // Register Discount Services (SOLID principle separation)
+            services.AddScoped<IDiscountManagementService, DiscountManagementService>();
+            services.AddScoped<IDiscountValidationService, DiscountValidationService>();
+            services.AddScoped<IDiscountAnalyticsService, DiscountAnalyticsService>();
+            services.AddScoped<IDiscountService, DiscountService>(); // Composite interface
+
             // Configure EmailSettings
             services.Configure<EmailSettings>(configuration.GetSection("EmailSettings"));
             

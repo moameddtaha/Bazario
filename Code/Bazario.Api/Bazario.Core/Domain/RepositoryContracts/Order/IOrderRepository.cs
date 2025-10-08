@@ -61,5 +61,25 @@ namespace Bazario.Core.Domain.RepositoryContracts.Order
         /// Gets orders with pre-calculated discount code counts for performance optimization
         /// </summary>
         Task<List<OrderWithCodeCount>> GetOrdersWithCodeCountsByDiscountCodeAsync(string discountCode, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets orders by discount code within a date range
+        /// </summary>
+        Task<List<OrderEntity>> GetOrdersByDiscountCodeAndDateRangeAsync(string discountCode, DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets all orders with discounts within a date range
+        /// </summary>
+        Task<List<OrderEntity>> GetOrdersWithDiscountsAsync(DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets orders count by discount code
+        /// </summary>
+        Task<int> GetOrderCountByDiscountCodeAsync(string discountCode, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets total count of orders within a date range
+        /// </summary>
+        Task<int> GetOrdersCountByDateRangeAsync(DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default);
     }
 }

@@ -797,5 +797,102 @@ namespace Bazario.Infrastructure.Repositories.Order
                 throw new InvalidOperationException($"Failed to get orders with code counts by discount code: {ex.Message}", ex);
             }
         }
+
+        public async Task<List<OrderEntity>> GetOrdersByDiscountCodeAndDateRangeAsync(string discountCode, DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Getting orders by discount code: {DiscountCode} between {StartDate} and {EndDate}", discountCode, startDate, endDate);
+
+            try
+            {
+                if (string.IsNullOrWhiteSpace(discountCode))
+                {
+                    _logger.LogWarning("Discount code is null or empty");
+                    return new List<OrderEntity>();
+                }
+
+                var orders = await _context.Orders
+                    .Where(o => o.Date >= startDate && o.Date <= endDate &&
+                                o.AppliedDiscountCodes != null && o.AppliedDiscountCodes.Contains(discountCode))
+                    .AsNoTracking()
+                    .ToListAsync(cancellationToken);
+
+                _logger.LogDebug("Found {OrderCount} orders for discount code: {DiscountCode} in date range", orders.Count, discountCode);
+
+                return orders;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get orders by discount code and date range: {DiscountCode}", discountCode);
+                throw new InvalidOperationException($"Failed to get orders by discount code and date range: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<List<OrderEntity>> GetOrdersWithDiscountsAsync(DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Getting all orders with discounts between {StartDate} and {EndDate}", startDate, endDate);
+
+            try
+            {
+                var orders = await _context.Orders
+                    .Where(o => o.Date >= startDate && o.Date <= endDate && o.DiscountAmount > 0)
+                    .AsNoTracking()
+                    .ToListAsync(cancellationToken);
+
+                _logger.LogDebug("Found {OrderCount} orders with discounts in date range", orders.Count);
+
+                return orders;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get orders with discounts");
+                throw new InvalidOperationException($"Failed to get orders with discounts: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<int> GetOrderCountByDiscountCodeAsync(string discountCode, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Getting order count by discount code: {DiscountCode}", discountCode);
+
+            try
+            {
+                if (string.IsNullOrWhiteSpace(discountCode))
+                {
+                    _logger.LogWarning("Discount code is null or empty");
+                    return 0;
+                }
+
+                var count = await _context.Orders
+                    .CountAsync(o => o.AppliedDiscountCodes != null && o.AppliedDiscountCodes.Contains(discountCode), cancellationToken);
+
+                _logger.LogDebug("Found {OrderCount} orders for discount code: {DiscountCode}", count, discountCode);
+
+                return count;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get order count by discount code: {DiscountCode}", discountCode);
+                throw new InvalidOperationException($"Failed to get order count by discount code: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<int> GetOrdersCountByDateRangeAsync(DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Getting order count between {StartDate} and {EndDate}", startDate, endDate);
+
+            try
+            {
+                var count = await _context.Orders
+                    .CountAsync(o => o.Date >= startDate && o.Date <= endDate, cancellationToken);
+
+                _logger.LogDebug("Found {OrderCount} orders in date range", count);
+
+                return count;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get order count by date range");
+                throw new InvalidOperationException($"Failed to get order count by date range: {ex.Message}", ex);
+            }
+        }
     }
 }

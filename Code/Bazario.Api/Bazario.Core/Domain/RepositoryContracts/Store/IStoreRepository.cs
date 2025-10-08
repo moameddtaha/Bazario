@@ -74,5 +74,14 @@ namespace Bazario.Core.Domain.RepositoryContracts.Store
         /// Gets multiple stores by their IDs in a single query to avoid N+1 problem.
         /// </summary>
         Task<List<StoreEntity>> GetStoresByIdsAsync(List<Guid> storeIds, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Checks if a store name is already taken on the platform (case-insensitive)
+        /// </summary>
+        /// <param name="storeName">Store name to check</param>
+        /// <param name="excludeStoreId">Store ID to exclude from check (for updates)</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>True if name is taken, false if available</returns>
+        Task<bool> IsStoreNameTakenAsync(string storeName, Guid? excludeStoreId, CancellationToken cancellationToken = default);
     }
 }

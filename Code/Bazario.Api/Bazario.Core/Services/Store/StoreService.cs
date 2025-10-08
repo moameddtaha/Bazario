@@ -133,8 +133,20 @@ namespace Bazario.Core.Services.Store
 
         public async Task<StoreValidationResult> ValidateStoreCreationAsync(Guid sellerId, string storeName, CancellationToken cancellationToken = default)
         {
-            _logger.LogDebug("Delegating store validation to validation service");
+            _logger.LogDebug("Delegating store creation validation to validation service");
             return await _validationService.ValidateStoreCreationAsync(sellerId, storeName, cancellationToken);
+        }
+
+        public async Task<StoreValidationResult> ValidateStoreUpdateAsync(Guid storeId, Guid sellerId, string? newStoreName, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Delegating store update validation to validation service");
+            return await _validationService.ValidateStoreUpdateAsync(storeId, sellerId, newStoreName, cancellationToken);
+        }
+
+        public async Task<StoreValidationResult> ValidateStoreDeletionAsync(Guid storeId, Guid sellerId, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Delegating store deletion validation to validation service");
+            return await _validationService.ValidateStoreDeletionAsync(storeId, sellerId, cancellationToken);
         }
 
         #endregion
