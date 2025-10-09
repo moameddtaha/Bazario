@@ -8,7 +8,6 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
-using Bazario.Core.Helpers.Store;
 using Bazario.Core.ServiceContracts.Store;
 using Bazario.Core.ServiceContracts.Order;
 using Bazario.Core.ServiceContracts.Inventory;
@@ -99,15 +98,13 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<IJwtService, JwtService>();
             
             // Register Store Services (SOLID principle separation)
+            services.AddScoped<IStoreAuthorizationService, StoreAuthorizationService>();
             services.AddScoped<IStoreValidationService, StoreValidationService>();
             services.AddScoped<IStoreQueryService, StoreQueryService>();
             services.AddScoped<IStoreAnalyticsService, StoreAnalyticsService>();
             services.AddScoped<IStoreManagementService, StoreManagementService>();
             services.AddScoped<IStoreShippingConfigurationService, StoreShippingConfigurationService>();
             services.AddScoped<IStoreService, StoreService>(); // Composite interface
-            
-            // Register Store Helpers
-            services.AddScoped<IStoreManagementHelper, StoreManagementHelper>();
             
             // Register Product Services (SOLID principle separation)
             services.AddScoped<IProductManagementService, ProductManagementService>();

@@ -2,13 +2,13 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Bazario.Core.Helpers.Store
+namespace Bazario.Core.ServiceContracts.Store
 {
     /// <summary>
-    /// Interface for store management helper operations
-    /// Provides methods for store permission checking and validation
+    /// Service interface for store authorization operations
+    /// Provides methods for checking store permissions and user privileges
     /// </summary>
-    public interface IStoreManagementHelper
+    public interface IStoreAuthorizationService
     {
         /// <summary>
         /// Checks if a user has admin privileges

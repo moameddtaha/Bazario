@@ -2,29 +2,30 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.IdentityEntities;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Logging;
 using Bazario.Core.Domain.RepositoryContracts.Store;
 using Bazario.Core.Helpers.Authentication;
+using Bazario.Core.ServiceContracts.Store;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Logging;
 
-namespace Bazario.Core.Helpers.Store
+namespace Bazario.Core.Services.Store
 {
     /// <summary>
-    /// Helper class for store management operations
-    /// Contains common business logic for store permissions and validation
+    /// Service implementation for store authorization operations
+    /// Handles permission checking and user privilege validation for stores
     /// </summary>
-    public class StoreManagementHelper : IStoreManagementHelper
+    public class StoreAuthorizationService : IStoreAuthorizationService
     {
         private readonly IStoreRepository _storeRepository;
         private readonly IRoleManagementHelper _roleManagementHelper;
         private readonly UserManager<ApplicationUser> _userManager;
-        private readonly ILogger<StoreManagementHelper> _logger;
+        private readonly ILogger<StoreAuthorizationService> _logger;
 
-        public StoreManagementHelper(
+        public StoreAuthorizationService(
             IStoreRepository storeRepository,
             IRoleManagementHelper roleManagementHelper,
             UserManager<ApplicationUser> userManager,
-            ILogger<StoreManagementHelper> logger)
+            ILogger<StoreAuthorizationService> logger)
         {
             _storeRepository = storeRepository ?? throw new ArgumentNullException(nameof(storeRepository));
             _roleManagementHelper = roleManagementHelper ?? throw new ArgumentNullException(nameof(roleManagementHelper));

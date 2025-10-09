@@ -10,7 +10,6 @@ using Bazario.Core.Domain.IdentityEntities;
 using Microsoft.AspNetCore.Identity;
 using Bazario.Core.DTO.Store;
 using Bazario.Core.Helpers.Authentication;
-using Bazario.Core.Helpers.Store;
 using Bazario.Core.Domain.RepositoryContracts.Catalog;
 using Bazario.Core.Domain.RepositoryContracts.Store;
 using Bazario.Core.Domain.RepositoryContracts.Order;
@@ -30,7 +29,7 @@ namespace Bazario.Core.Services.Store
         private readonly IProductRepository _productRepository;
         private readonly IOrderRepository _orderRepository;
         private readonly IStoreValidationService _validationService;
-        private readonly IStoreManagementHelper _storeManagementHelper;
+        private readonly IStoreAuthorizationService _authorizationService;
         private readonly ILogger<StoreManagementService> _logger;
 
         public StoreManagementService(
@@ -39,7 +38,7 @@ namespace Bazario.Core.Services.Store
             IProductRepository productRepository,
             IOrderRepository orderRepository,
             IStoreValidationService validationService,
-            IStoreManagementHelper storeManagementHelper,
+            IStoreAuthorizationService authorizationService,
             ILogger<StoreManagementService> logger)
         {
             _storeRepository = storeRepository ?? throw new ArgumentNullException(nameof(storeRepository));
@@ -47,7 +46,7 @@ namespace Bazario.Core.Services.Store
             _productRepository = productRepository ?? throw new ArgumentNullException(nameof(productRepository));
             _orderRepository = orderRepository ?? throw new ArgumentNullException(nameof(orderRepository));
             _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
-            _storeManagementHelper = storeManagementHelper ?? throw new ArgumentNullException(nameof(storeManagementHelper));
+            _authorizationService = authorizationService ?? throw new ArgumentNullException(nameof(authorizationService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -208,7 +207,7 @@ namespace Bazario.Core.Services.Store
                 }
 
                 // Check if user can manage the store (owner or admin)
-                var canManage = await _storeManagementHelper.CanUserManageStoreAsync(deletedBy, storeId, cancellationToken);
+                var canManage = await _authorizationService.CanUserManageStoreAsync(deletedBy, storeId, cancellationToken);
                 if (!canManage)
                 {
                     _logger.LogWarning("Store deletion failed: User {UserId} is not authorized to delete store {StoreId}", deletedBy, storeId);
@@ -266,7 +265,7 @@ namespace Bazario.Core.Services.Store
                 }
 
                 // Check if user is an admin (hard delete requires admin privileges)
-                var isAdmin = await _storeManagementHelper.IsUserAdminAsync(deletedBy, cancellationToken);
+                var isAdmin = await _authorizationService.IsUserAdminAsync(deletedBy, cancellationToken);
                 if (!isAdmin)
                 {
                     _logger.LogError("Unauthorized hard delete attempt by non-admin user: {UserId}", deletedBy);
@@ -396,7 +395,7 @@ namespace Bazario.Core.Services.Store
                 }
 
                 // Check if user can manage the store (owner or admin)
-                var canManage = await _storeManagementHelper.CanUserManageStoreAsync(restoredBy, storeId, cancellationToken);
+                var canManage = await _authorizationService.CanUserManageStoreAsync(restoredBy, storeId, cancellationToken);
                 if (!canManage)
                 {
                     _logger.LogWarning("Store restoration failed: User {UserId} is not authorized to restore store {StoreId}", restoredBy, storeId);
