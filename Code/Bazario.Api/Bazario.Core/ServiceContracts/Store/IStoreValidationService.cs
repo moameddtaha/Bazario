@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Bazario.Core.DTO.Store;
 using Bazario.Core.Models.Store;
 
 namespace Bazario.Core.ServiceContracts.Store
@@ -21,13 +22,13 @@ namespace Bazario.Core.ServiceContracts.Store
 
         /// <summary>
         /// Validates if a store can be updated
+        /// Validates ownership, permissions, store status, and all updatable fields
         /// </summary>
-        /// <param name="storeId">Store ID to update</param>
         /// <param name="sellerId">Seller ID (must be the owner)</param>
-        /// <param name="newStoreName">New store name (null if not changing)</param>
+        /// <param name="updateRequest">Store update request with all fields to validate</param>
         /// <param name="cancellationToken">Cancellation token</param>
         /// <returns>Validation result</returns>
-        Task<StoreValidationResult> ValidateStoreUpdateAsync(Guid storeId, Guid sellerId, string? newStoreName, CancellationToken cancellationToken = default);
+        Task<StoreValidationResult> ValidateStoreUpdateAsync(Guid sellerId, StoreUpdateRequest updateRequest, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Validates if a store can be deleted

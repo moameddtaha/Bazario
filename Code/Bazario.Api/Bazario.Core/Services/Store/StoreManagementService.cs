@@ -135,34 +135,57 @@ namespace Bazario.Core.Services.Store
                     }
                 }
 
-                // Update store properties (only if provided)
-                if (!string.IsNullOrEmpty(storeUpdateRequest.Name))
+                // Track if any changes were made
+                bool hasChanges = false;
+
+                // Update store properties (only if provided AND different from current value)
+                if (!string.IsNullOrEmpty(storeUpdateRequest.Name) &&
+                    !string.Equals(existingStore.Name, storeUpdateRequest.Name, StringComparison.OrdinalIgnoreCase))
                 {
                     existingStore.Name = storeUpdateRequest.Name;
-                }
-                
-                if (storeUpdateRequest.Description != null)
-                {
-                    existingStore.Description = storeUpdateRequest.Description;
-                }
-                
-                if (storeUpdateRequest.Category != null)
-                {
-                    existingStore.Category = storeUpdateRequest.Category;
-                }
-                
-                if (storeUpdateRequest.Logo != null)
-                {
-                    existingStore.Logo = storeUpdateRequest.Logo;
-                }
-                
-                // Update IsActive if provided
-                if (storeUpdateRequest.IsActive.HasValue)
-                {
-                    existingStore.IsActive = storeUpdateRequest.IsActive.Value;
+                    hasChanges = true;
+                    _logger.LogDebug("Store name changed to: {NewName}", storeUpdateRequest.Name);
                 }
 
-                _logger.LogDebug("Updating store with ID: {StoreId}, Name: {StoreName}, IsActive: {IsActive}", 
+                if (storeUpdateRequest.Description != null &&
+                    !string.Equals(existingStore.Description, storeUpdateRequest.Description, StringComparison.Ordinal))
+                {
+                    existingStore.Description = storeUpdateRequest.Description;
+                    hasChanges = true;
+                    _logger.LogDebug("Store description changed");
+                }
+
+                if (storeUpdateRequest.Category != null &&
+                    !string.Equals(existingStore.Category, storeUpdateRequest.Category, StringComparison.OrdinalIgnoreCase))
+                {
+                    existingStore.Category = storeUpdateRequest.Category;
+                    hasChanges = true;
+                    _logger.LogDebug("Store category changed to: {NewCategory}", storeUpdateRequest.Category);
+                }
+
+                if (storeUpdateRequest.Logo != null &&
+                    !string.Equals(existingStore.Logo, storeUpdateRequest.Logo, StringComparison.Ordinal))
+                {
+                    existingStore.Logo = storeUpdateRequest.Logo;
+                    hasChanges = true;
+                    _logger.LogDebug("Store logo changed");
+                }
+
+                // Note: IsActive is handled separately via UpdateStoreStatusAsync
+                if (storeUpdateRequest.IsActive.HasValue &&
+                    existingStore.IsActive != storeUpdateRequest.IsActive.Value)
+                {
+                    _logger.LogWarning("IsActive change requested in UpdateStore for store {StoreId}. Use UpdateStoreStatus instead", existingStore.StoreId);
+                }
+
+                // Only update if there are actual changes
+                if (!hasChanges)
+                {
+                    _logger.LogInformation("No changes detected for store {StoreId}. Skipping database update", existingStore.StoreId);
+                    return existingStore.ToStoreResponse();
+                }
+
+                _logger.LogDebug("Updating store with ID: {StoreId}, Name: {StoreName}, IsActive: {IsActive}",
                     existingStore.StoreId, existingStore.Name, existingStore.IsActive);
 
                 // Save to repository

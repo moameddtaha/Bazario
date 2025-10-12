@@ -5,6 +5,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.RepositoryContracts.Store;
 using Bazario.Core.Domain.RepositoryContracts.UserManagement;
+using Bazario.Core.DTO.Store;
+using Bazario.Core.Enums.Catalog;
 using Bazario.Core.Models.Store;
 using Bazario.Core.ServiceContracts.Store;
 using Microsoft.Extensions.Logging;
@@ -174,10 +176,10 @@ namespace Bazario.Core.Services.Store
             }
         }
 
-        public async Task<StoreValidationResult> ValidateStoreUpdateAsync(Guid storeId, Guid sellerId, string? newStoreName, CancellationToken cancellationToken = default)
+        public async Task<StoreValidationResult> ValidateStoreUpdateAsync(Guid sellerId, StoreUpdateRequest updateRequest, CancellationToken cancellationToken = default)
         {
-            _logger.LogDebug("Validating store update for storeId: {StoreId}, sellerId: {SellerId}, newName: {NewName}",
-                storeId, sellerId, newStoreName);
+            _logger.LogDebug("Validating store update for storeId: {StoreId}, sellerId: {SellerId}",
+                updateRequest?.StoreId, sellerId);
 
             try
             {
@@ -186,7 +188,13 @@ namespace Bazario.Core.Services.Store
                 // STEP 1: Validate input parameters
                 _logger.LogDebug("Validating input parameters for store update");
 
-                if (storeId == Guid.Empty)
+                if (updateRequest == null)
+                {
+                    result.ValidationErrors.Add("Update request cannot be null");
+                    return result;
+                }
+
+                if (updateRequest.StoreId == Guid.Empty)
                 {
                     result.ValidationErrors.Add("Store ID cannot be empty");
                     return result;
@@ -201,19 +209,19 @@ namespace Bazario.Core.Services.Store
                 // STEP 2: Check if store exists and belongs to seller
                 _logger.LogDebug("Checking store ownership");
 
-                var store = await _storeRepository.GetStoreByIdAsync(storeId, cancellationToken);
+                var store = await _storeRepository.GetStoreByIdAsync(updateRequest.StoreId, cancellationToken);
 
                 if (store == null)
                 {
-                    result.ValidationErrors.Add($"Store with ID '{storeId}' does not exist");
-                    _logger.LogWarning("Validation failed: Store {StoreId} not found", storeId);
+                    result.ValidationErrors.Add($"Store with ID '{updateRequest.StoreId}' does not exist");
+                    _logger.LogWarning("Validation failed: Store {StoreId} not found", updateRequest.StoreId);
                     return result;
                 }
 
                 if (store.SellerId != sellerId)
                 {
                     result.ValidationErrors.Add("You do not have permission to update this store");
-                    _logger.LogWarning("Validation failed: Seller {SellerId} does not own store {StoreId}", sellerId, storeId);
+                    _logger.LogWarning("Validation failed: Seller {SellerId} does not own store {StoreId}", sellerId, updateRequest.StoreId);
                     return result;
                 }
 
@@ -221,69 +229,100 @@ namespace Bazario.Core.Services.Store
                 if (store.IsDeleted)
                 {
                     result.ValidationErrors.Add("Cannot update a deleted store. Please restore it first");
-                    _logger.LogWarning("Validation failed: Store {StoreId} is deleted", storeId);
+                    _logger.LogWarning("Validation failed: Store {StoreId} is deleted", updateRequest.StoreId);
                     return result;
                 }
 
                 if (!store.IsActive)
                 {
-                    _logger.LogInformation("Updating inactive store {StoreId}", storeId);
+                    _logger.LogInformation("Updating inactive store {StoreId}", updateRequest.StoreId);
                     // Allow but log - business decision: inactive stores can be updated
                 }
 
-                // STEP 4: If new name provided, validate it
-                if (!string.IsNullOrWhiteSpace(newStoreName))
-                {
-                    _logger.LogDebug("Validating new store name");
+                // STEP 4: Validate updatable fields
+                _logger.LogDebug("Validating store update fields");
 
-                    // Sanitize
-                    newStoreName = newStoreName.Trim();
+                // Validate Name (if provided)
+                if (!string.IsNullOrWhiteSpace(updateRequest.Name))
+                {
+                    var trimmedName = updateRequest.Name.Trim();
 
                     // Validate format using helper method
-                    ValidateStoreNameFormat(newStoreName, result);
+                    ValidateStoreNameFormat(trimmedName, result);
 
                     // Only check uniqueness if format validation passed
                     if (result.ValidationErrors.Count == 0)
                     {
-                        // Check if name is actually changing (with null safety)
+                        // Check if name is actually changing
                         bool nameIsChanging = string.IsNullOrEmpty(store.Name) ||
-                                              !string.Equals(store.Name, newStoreName, StringComparison.OrdinalIgnoreCase);
+                                              !string.Equals(store.Name, trimmedName, StringComparison.OrdinalIgnoreCase);
 
                         if (nameIsChanging)
                         {
                             // Check platform-wide uniqueness (excluding current store)
-                            var nameExistsGlobally = await _storeRepository.IsStoreNameTakenAsync(newStoreName, storeId, cancellationToken);
+                            var nameExists = await _storeRepository.IsStoreNameTakenAsync(trimmedName, updateRequest.StoreId, cancellationToken);
 
-                            if (nameExistsGlobally)
+                            if (nameExists)
                             {
-                                result.ValidationErrors.Add($"Store name '{newStoreName}' is already in use. Please choose a different name");
-                                _logger.LogWarning("Validation failed: Store name '{StoreName}' already exists", newStoreName);
+                                result.ValidationErrors.Add($"Store name '{trimmedName}' is already in use. Please choose a different name");
+                                _logger.LogWarning("Validation failed: Store name '{StoreName}' already exists", trimmedName);
                             }
                         }
-                        else
-                        {
-                            _logger.LogDebug("Store name unchanged, skipping uniqueness check");
-                        }
-                    }
-                    else
-                    {
-                        _logger.LogDebug("Format validation failed ({ErrorCount} errors), skipping uniqueness check", result.ValidationErrors.Count);
                     }
                 }
-                else
+
+                // Validate Description (if provided)
+                if (!string.IsNullOrWhiteSpace(updateRequest.Description))
                 {
-                    _logger.LogDebug("No new store name provided, skipping name validation");
+                    if (updateRequest.Description.Length > 100)
+                    {
+                        result.ValidationErrors.Add("Description cannot exceed 100 characters");
+                        _logger.LogDebug("Validation failed: Description too long ({Length} chars)", updateRequest.Description.Length);
+                    }
+                }
+
+                // Validate Category (if provided)
+                if (!string.IsNullOrWhiteSpace(updateRequest.Category))
+                {
+                    var trimmedCategory = updateRequest.Category.Trim();
+
+                    // Validate against Category enum
+                    if (!Enum.TryParse<Category>(trimmedCategory, ignoreCase: true, out _))
+                    {
+                        var validCategories = string.Join(", ", Enum.GetNames(typeof(Category)));
+                        result.ValidationErrors.Add($"Invalid category. Valid categories are: {validCategories}");
+                        _logger.LogDebug("Validation failed: Invalid category '{Category}'", trimmedCategory);
+                    }
+                }
+
+                // Validate Logo (if provided)
+                if (!string.IsNullOrWhiteSpace(updateRequest.Logo))
+                {
+                    var trimmedLogo = updateRequest.Logo.Trim();
+
+                    // Validate URL format
+                    if (!Uri.TryCreate(trimmedLogo, UriKind.Absolute, out var logoUri) ||
+                        (logoUri.Scheme != Uri.UriSchemeHttp && logoUri.Scheme != Uri.UriSchemeHttps))
+                    {
+                        result.ValidationErrors.Add("Logo must be a valid HTTP or HTTPS URL");
+                        _logger.LogDebug("Validation failed: Invalid logo URL format");
+                    }
+                    else if (trimmedLogo.Length > 500)
+                    {
+                        result.ValidationErrors.Add("Logo URL cannot exceed 500 characters");
+                        _logger.LogDebug("Validation failed: Logo URL too long ({Length} chars)", trimmedLogo.Length);
+                    }
                 }
 
                 // IsValid is computed automatically based on ValidationErrors.Count
                 _logger.LogDebug("Store update validation completed for store: {StoreId}. IsValid: {IsValid}, Errors: {ErrorCount}",
-                    storeId, result.IsValid, result.ValidationErrors.Count);
+                    updateRequest.StoreId, result.IsValid, result.ValidationErrors.Count);
 
                 return result;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unexpected error during store update validation for store: {StoreId}", storeId);
+                _logger.LogError(ex, "Unexpected error during store update validation for store: {StoreId}", updateRequest?.StoreId);
                 throw new InvalidOperationException($"Failed to validate store update: {ex.Message}", ex);
             }
         }
