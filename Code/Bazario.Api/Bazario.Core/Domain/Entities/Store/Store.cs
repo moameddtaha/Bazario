@@ -34,6 +34,11 @@ namespace Bazario.Core.Domain.Entities.Store
         [DataType(DataType.DateTime)]
         public DateTime? CreatedAt { get; set; }
 
+        [DataType(DataType.DateTime)]
+        public DateTime? UpdatedAt { get; set; }
+
+        public Guid? UpdatedBy { get; set; }
+
         // ---------- Store Status Properties ----------
         
         /// <summary>

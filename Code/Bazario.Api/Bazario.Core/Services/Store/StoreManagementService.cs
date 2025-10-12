@@ -428,10 +428,10 @@ namespace Bazario.Core.Services.Store
             }
         }
 
-        public async Task<StoreResponse> UpdateStoreStatusAsync(Guid storeId, bool isActive, string? reason = null, CancellationToken cancellationToken = default)
+        public async Task<StoreResponse> UpdateStoreStatusAsync(Guid storeId, Guid userId, bool isActive, string? reason = null, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Updating store status for store: {StoreId}, NewStatus: {IsActive}, Reason: {Reason}", 
-                storeId, isActive, reason);
+            _logger.LogInformation("Updating store status for store: {StoreId}, User: {UserId}, NewStatus: {IsActive}, Reason: {Reason}",
+                storeId, userId, isActive, reason);
 
             try
             {
@@ -439,6 +439,11 @@ namespace Bazario.Core.Services.Store
                 if (storeId == Guid.Empty)
                 {
                     throw new ArgumentException("Store ID cannot be empty", nameof(storeId));
+                }
+
+                if (userId == Guid.Empty)
+                {
+                    throw new ArgumentException("User ID cannot be empty", nameof(userId));
                 }
 
                 // Get existing store
@@ -449,6 +454,21 @@ namespace Bazario.Core.Services.Store
                     throw new InvalidOperationException($"Store with ID {storeId} not found");
                 }
 
+                // Check authorization (owner or admin)
+                var canManage = await _authorizationService.CanUserManageStoreAsync(userId, storeId, cancellationToken);
+                if (!canManage)
+                {
+                    _logger.LogWarning("Store status update failed: User {UserId} is not authorized to manage store {StoreId}", userId, storeId);
+                    throw new UnauthorizedAccessException($"User {userId} is not authorized to manage store {storeId}");
+                }
+
+                // Business validation: Cannot activate a deleted store
+                if (store.IsDeleted && isActive)
+                {
+                    _logger.LogWarning("Cannot activate deleted store: {StoreId}. Please restore it first.", storeId);
+                    throw new InvalidOperationException($"Cannot activate deleted store {storeId}. Please restore it first.");
+                }
+
                 // Check if status is actually changing
                 if (store.IsActive == isActive)
                 {
@@ -456,23 +476,25 @@ namespace Bazario.Core.Services.Store
                     return store.ToStoreResponse();
                 }
 
-                // Update store status
+                // Update store status and audit fields
                 store.IsActive = isActive;
+                store.UpdatedBy = userId;
+                store.UpdatedAt = DateTime.UtcNow;
 
-                _logger.LogDebug("Updating store status. StoreId: {StoreId}, NewStatus: {IsActive}, Reason: {Reason}", 
-                    storeId, isActive, reason);
+                _logger.LogDebug("Updating store status. StoreId: {StoreId}, NewStatus: {IsActive}, UpdatedBy: {UserId}, Reason: {Reason}",
+                    storeId, isActive, userId, reason);
 
                 // Save to repository
                 var updatedStore = await _storeRepository.UpdateStoreAsync(store, cancellationToken);
 
-                _logger.LogInformation("Successfully updated store status. StoreId: {StoreId}, NewStatus: {IsActive}, Reason: {Reason}", 
-                    storeId, isActive, reason);
+                _logger.LogInformation("Successfully updated store status. StoreId: {StoreId}, NewStatus: {IsActive}, UpdatedBy: {UserId}, Reason: {Reason}",
+                    storeId, isActive, userId, reason);
 
                 return updatedStore.ToStoreResponse();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to update store status for store: {StoreId}, NewStatus: {IsActive}", storeId, isActive);
+                _logger.LogError(ex, "Failed to update store status for store: {StoreId}, User: {UserId}, NewStatus: {IsActive}", storeId, userId, isActive);
                 throw;
             }
         }

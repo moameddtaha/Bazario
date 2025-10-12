@@ -71,10 +71,10 @@ namespace Bazario.Core.Services.Store
             return await _managementService.RestoreStoreAsync(storeId, restoredBy, cancellationToken);
         }
 
-        public async Task<StoreResponse> UpdateStoreStatusAsync(Guid storeId, bool isActive, string? reason = null, CancellationToken cancellationToken = default)
+        public async Task<StoreResponse> UpdateStoreStatusAsync(Guid storeId, Guid userId, bool isActive, string? reason = null, CancellationToken cancellationToken = default)
         {
             _logger.LogDebug("Delegating store status update to management service");
-            return await _managementService.UpdateStoreStatusAsync(storeId, isActive, reason, cancellationToken);
+            return await _managementService.UpdateStoreStatusAsync(storeId, userId, isActive, reason, cancellationToken);
         }
 
         #endregion

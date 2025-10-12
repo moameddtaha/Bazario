@@ -70,11 +70,13 @@ namespace Bazario.Core.ServiceContracts.Store
         /// Updates store status (active/inactive)
         /// </summary>
         /// <param name="storeId">Store ID</param>
+        /// <param name="userId">ID of user performing the status change (for authorization)</param>
         /// <param name="isActive">New active status</param>
         /// <param name="reason">Reason for status change</param>
         /// <param name="cancellationToken">Cancellation token</param>
         /// <returns>Updated store response</returns>
         /// <exception cref="InvalidOperationException">Thrown when store not found</exception>
-        Task<StoreResponse> UpdateStoreStatusAsync(Guid storeId, bool isActive, string? reason = null, CancellationToken cancellationToken = default);
+        /// <exception cref="UnauthorizedAccessException">Thrown when user lacks permission</exception>
+        Task<StoreResponse> UpdateStoreStatusAsync(Guid storeId, Guid userId, bool isActive, string? reason = null, CancellationToken cancellationToken = default);
     }
 }
