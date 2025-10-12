@@ -8,7 +8,11 @@ namespace Bazario.Core.Models.Store
     /// </summary>
     public class StoreValidationResult
     {
-        public bool IsValid { get; set; }
+        /// <summary>
+        /// Computed property - automatically returns false if any validation errors exist
+        /// </summary>
+        public bool IsValid => ValidationErrors.Count == 0;
+
         public List<string> ValidationErrors { get; set; } = new();
         public bool NameAvailable { get; set; }
         public bool SellerEligible { get; set; }

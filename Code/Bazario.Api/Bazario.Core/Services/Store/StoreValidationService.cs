@@ -91,7 +91,6 @@ namespace Bazario.Core.Services.Store
                 if (sellerId == Guid.Empty)
                 {
                     result.ValidationErrors.Add("Seller ID cannot be empty");
-                    result.IsValid = false;
                     _logger.LogWarning("Validation failed: Empty seller ID");
                     return result;
                 }
@@ -100,7 +99,6 @@ namespace Bazario.Core.Services.Store
                 if (string.IsNullOrWhiteSpace(storeName))
                 {
                     result.ValidationErrors.Add("Store name cannot be empty");
-                    result.IsValid = false;
                     _logger.LogWarning("Validation failed: Empty store name for seller {SellerId}", sellerId);
                     return result;
                 }
@@ -115,7 +113,6 @@ namespace Bazario.Core.Services.Store
                 // If format validation failed, return early
                 if (result.ValidationErrors.Count > 0)
                 {
-                    result.IsValid = false;
                     _logger.LogDebug("Store creation validation failed at input validation stage. Errors: {ErrorCount}", result.ValidationErrors.Count);
                     return result;
                 }
@@ -131,7 +128,6 @@ namespace Bazario.Core.Services.Store
                 {
                     result.ValidationErrors.Add($"Seller with ID '{sellerId}' does not exist or is not eligible to create stores");
                     _logger.LogWarning("Validation failed: Seller {SellerId} not found", sellerId);
-                    result.IsValid = false;
                     return result; // Early return - no need to check further
                 }
 
@@ -159,9 +155,7 @@ namespace Bazario.Core.Services.Store
                     _logger.LogWarning("Validation failed: Store name '{StoreName}' already exists", storeName);
                 }
 
-                // Final validation result
-                result.IsValid = result.ValidationErrors.Count == 0;
-
+                // Final validation result (IsValid is computed automatically)
                 _logger.LogDebug("Store creation validation completed for seller: {SellerId}. IsValid: {IsValid}, Errors: {ErrorCount}",
                     sellerId, result.IsValid, result.ValidationErrors.Count);
 
@@ -195,14 +189,12 @@ namespace Bazario.Core.Services.Store
                 if (storeId == Guid.Empty)
                 {
                     result.ValidationErrors.Add("Store ID cannot be empty");
-                    result.IsValid = false;
                     return result;
                 }
 
                 if (sellerId == Guid.Empty)
                 {
                     result.ValidationErrors.Add("Seller ID cannot be empty");
-                    result.IsValid = false;
                     return result;
                 }
 
@@ -214,7 +206,6 @@ namespace Bazario.Core.Services.Store
                 if (store == null)
                 {
                     result.ValidationErrors.Add($"Store with ID '{storeId}' does not exist");
-                    result.IsValid = false;
                     _logger.LogWarning("Validation failed: Store {StoreId} not found", storeId);
                     return result;
                 }
@@ -222,7 +213,6 @@ namespace Bazario.Core.Services.Store
                 if (store.SellerId != sellerId)
                 {
                     result.ValidationErrors.Add("You do not have permission to update this store");
-                    result.IsValid = false;
                     _logger.LogWarning("Validation failed: Seller {SellerId} does not own store {StoreId}", sellerId, storeId);
                     return result;
                 }
@@ -231,7 +221,6 @@ namespace Bazario.Core.Services.Store
                 if (store.IsDeleted)
                 {
                     result.ValidationErrors.Add("Cannot update a deleted store. Please restore it first");
-                    result.IsValid = false;
                     _logger.LogWarning("Validation failed: Store {StoreId} is deleted", storeId);
                     return result;
                 }
@@ -286,8 +275,7 @@ namespace Bazario.Core.Services.Store
                     _logger.LogDebug("No new store name provided, skipping name validation");
                 }
 
-                result.IsValid = result.ValidationErrors.Count == 0;
-
+                // IsValid is computed automatically based on ValidationErrors.Count
                 _logger.LogDebug("Store update validation completed for store: {StoreId}. IsValid: {IsValid}, Errors: {ErrorCount}",
                     storeId, result.IsValid, result.ValidationErrors.Count);
 
@@ -312,14 +300,12 @@ namespace Bazario.Core.Services.Store
                 if (storeId == Guid.Empty)
                 {
                     result.ValidationErrors.Add("Store ID cannot be empty");
-                    result.IsValid = false;
                     return result;
                 }
 
                 if (sellerId == Guid.Empty)
                 {
                     result.ValidationErrors.Add("Seller ID cannot be empty");
-                    result.IsValid = false;
                     return result;
                 }
 
@@ -331,7 +317,6 @@ namespace Bazario.Core.Services.Store
                 if (store == null)
                 {
                     result.ValidationErrors.Add($"Store with ID '{storeId}' does not exist");
-                    result.IsValid = false;
                     _logger.LogWarning("Validation failed: Store {StoreId} not found", storeId);
                     return result;
                 }
@@ -339,7 +324,6 @@ namespace Bazario.Core.Services.Store
                 if (store.SellerId != sellerId)
                 {
                     result.ValidationErrors.Add("You do not have permission to delete this store");
-                    result.IsValid = false;
                     _logger.LogWarning("Validation failed: Seller {SellerId} does not own store {StoreId}", sellerId, storeId);
                     return result;
                 }
@@ -348,7 +332,6 @@ namespace Bazario.Core.Services.Store
                 if (store.IsDeleted)
                 {
                     result.ValidationErrors.Add("Store is already deleted");
-                    result.IsValid = false;
                     _logger.LogWarning("Validation failed: Store {StoreId} is already deleted", storeId);
                     return result;
                 }
@@ -370,8 +353,7 @@ namespace Bazario.Core.Services.Store
                     _logger.LogInformation("Deleting inactive store {StoreId}", storeId);
                 }
 
-                result.IsValid = result.ValidationErrors.Count == 0;
-
+                // IsValid is computed automatically based on ValidationErrors.Count
                 _logger.LogDebug("Store deletion validation completed for store: {StoreId}. IsValid: {IsValid}, Errors: {ErrorCount}",
                     storeId, result.IsValid, result.ValidationErrors.Count);
 
