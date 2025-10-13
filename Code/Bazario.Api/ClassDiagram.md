@@ -375,7 +375,7 @@ classDiagram
         <<interface>>
         +ValidateStoreCreationAsync(request)
         +ValidateStoreUpdateAsync(storeId, request)
-        +ValidateStoreDeletionAsync(storeId)
+        +ValidateStoreSoftDeletionAsync(storeId)
         +ValidateStoreOwnershipAsync(storeId, userId)
     }
 

@@ -327,9 +327,9 @@ namespace Bazario.Core.Services.Store
             }
         }
 
-        public async Task<StoreValidationResult> ValidateStoreDeletionAsync(Guid storeId, Guid sellerId, CancellationToken cancellationToken = default)
+        public async Task<StoreValidationResult> ValidateStoreSoftDeletionAsync(Guid storeId, Guid sellerId, CancellationToken cancellationToken = default)
         {
-            _logger.LogDebug("Validating store deletion for storeId: {StoreId}, sellerId: {SellerId}", storeId, sellerId);
+            _logger.LogDebug("Validating store soft deletion for storeId: {StoreId}, sellerId: {SellerId}", storeId, sellerId);
 
             try
             {
@@ -349,59 +349,59 @@ namespace Bazario.Core.Services.Store
                 }
 
                 // STEP 2: Check if store exists and belongs to seller
-                _logger.LogDebug("Checking store ownership for deletion");
+                _logger.LogDebug("Checking store ownership for soft deletion");
 
                 var store = await _storeRepository.GetStoreByIdAsync(storeId, cancellationToken);
 
                 if (store == null)
                 {
                     result.ValidationErrors.Add($"Store with ID '{storeId}' does not exist");
-                    _logger.LogWarning("Validation failed: Store {StoreId} not found", storeId);
+                    _logger.LogWarning("Soft deletion validation failed: Store {StoreId} not found", storeId);
                     return result;
                 }
 
                 if (store.SellerId != sellerId)
                 {
                     result.ValidationErrors.Add("You do not have permission to delete this store");
-                    _logger.LogWarning("Validation failed: Seller {SellerId} does not own store {StoreId}", sellerId, storeId);
+                    _logger.LogWarning("Soft deletion validation failed: Seller {SellerId} does not own store {StoreId}", sellerId, storeId);
                     return result;
                 }
 
-                // STEP 3: Check if store is already deleted
+                // STEP 3: Check if store is already soft deleted
                 if (store.IsDeleted)
                 {
-                    result.ValidationErrors.Add("Store is already deleted");
-                    _logger.LogWarning("Validation failed: Store {StoreId} is already deleted", storeId);
+                    result.ValidationErrors.Add("Store is already soft deleted");
+                    _logger.LogWarning("Soft deletion validation failed: Store {StoreId} is already deleted", storeId);
                     return result;
                 }
 
                 // STEP 4: Check if store has active products
-                _logger.LogDebug("Checking if store has active products");
+                _logger.LogDebug("Checking if store has active products for soft deletion");
 
                 var productCount = await _storeRepository.GetProductCountByStoreIdAsync(storeId, cancellationToken);
 
                 if (productCount > 0)
                 {
-                    result.ValidationErrors.Add($"Cannot delete store with {productCount} active product(s). Please remove or deactivate all products first");
-                    _logger.LogWarning("Validation failed: Store {StoreId} has {ProductCount} active products", storeId, productCount);
+                    result.ValidationErrors.Add($"Cannot soft delete store with {productCount} active product(s). Please remove or deactivate all products first");
+                    _logger.LogWarning("Soft deletion validation failed: Store {StoreId} has {ProductCount} active products", storeId, productCount);
                 }
 
-                // Log if deleting inactive store (allowed but noteworthy)
+                // Log if soft deleting inactive store (allowed but noteworthy)
                 if (!store.IsActive)
                 {
-                    _logger.LogInformation("Deleting inactive store {StoreId}", storeId);
+                    _logger.LogInformation("Soft deleting inactive store {StoreId}", storeId);
                 }
 
                 // IsValid is computed automatically based on ValidationErrors.Count
-                _logger.LogDebug("Store deletion validation completed for store: {StoreId}. IsValid: {IsValid}, Errors: {ErrorCount}",
+                _logger.LogDebug("Store soft deletion validation completed for store: {StoreId}. IsValid: {IsValid}, Errors: {ErrorCount}",
                     storeId, result.IsValid, result.ValidationErrors.Count);
 
                 return result;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unexpected error during store deletion validation for store: {StoreId}", storeId);
-                throw new InvalidOperationException($"Failed to validate store deletion: {ex.Message}", ex);
+                _logger.LogError(ex, "Unexpected error during store soft deletion validation for store: {StoreId}", storeId);
+                throw new InvalidOperationException($"Failed to validate store soft deletion: {ex.Message}", ex);
             }
         }
     }

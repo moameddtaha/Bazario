@@ -31,12 +31,13 @@ namespace Bazario.Core.ServiceContracts.Store
         Task<StoreValidationResult> ValidateStoreUpdateAsync(Guid sellerId, StoreUpdateRequest updateRequest, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Validates if a store can be deleted
+        /// Validates if a store can be soft deleted (sets IsDeleted flag)
+        /// Used for seller-initiated deletions. Admins use HardDeleteStoreAsync which bypasses this validation.
         /// </summary>
-        /// <param name="storeId">Store ID to delete</param>
+        /// <param name="storeId">Store ID to soft delete</param>
         /// <param name="sellerId">Seller ID (must be the owner)</param>
         /// <param name="cancellationToken">Cancellation token</param>
         /// <returns>Validation result</returns>
-        Task<StoreValidationResult> ValidateStoreDeletionAsync(Guid storeId, Guid sellerId, CancellationToken cancellationToken = default);
+        Task<StoreValidationResult> ValidateStoreSoftDeletionAsync(Guid storeId, Guid sellerId, CancellationToken cancellationToken = default);
     }
 }

@@ -143,10 +143,10 @@ namespace Bazario.Core.Services.Store
             return await _validationService.ValidateStoreUpdateAsync(sellerId, updateRequest, cancellationToken);
         }
 
-        public async Task<StoreValidationResult> ValidateStoreDeletionAsync(Guid storeId, Guid sellerId, CancellationToken cancellationToken = default)
+        public async Task<StoreValidationResult> ValidateStoreSoftDeletionAsync(Guid storeId, Guid sellerId, CancellationToken cancellationToken = default)
         {
-            _logger.LogDebug("Delegating store deletion validation to validation service");
-            return await _validationService.ValidateStoreDeletionAsync(storeId, sellerId, cancellationToken);
+            _logger.LogDebug("Delegating store soft deletion validation to validation service");
+            return await _validationService.ValidateStoreSoftDeletionAsync(storeId, sellerId, cancellationToken);
         }
 
         #endregion
