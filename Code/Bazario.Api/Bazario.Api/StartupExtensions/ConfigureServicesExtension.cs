@@ -21,6 +21,7 @@ using Bazario.Core.Services.Location;
 using Bazario.Core.Services.Auth;
 using Bazario.Core.Helpers.Order;
 using Bazario.Core.Helpers.Inventory;
+using Bazario.Core.Helpers.Store;
 using Bazario.Core.Domain.RepositoryContracts.Authentication;
 using Bazario.Core.Domain.RepositoryContracts.Catalog;
 using Bazario.Core.Domain.RepositoryContracts.Store;
@@ -165,7 +166,8 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<OrderCalculator>(); // Order calculation helper (KISS refactoring)
             services.AddScoped<IProductValidationHelper, ProductValidationHelper>();
             services.AddScoped<IInventoryHelper, InventoryHelper>();
-            
+            services.AddScoped<IStoreShippingConfigurationHelper, StoreShippingConfigurationHelper>();
+
             // Register Service Aggregators (Dependency Bundling)
             services.AddScoped<IUserAuthenticationDependencies, UserAuthenticationDependencies>();
             services.AddScoped<IUserRegistrationDependencies, UserRegistrationDependencies>();

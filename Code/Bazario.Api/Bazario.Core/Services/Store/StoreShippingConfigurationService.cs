@@ -9,6 +9,7 @@ using Bazario.Core.Domain.RepositoryContracts.Location;
 using Bazario.Core.Domain.RepositoryContracts.Store;
 using Bazario.Core.DTO.Store;
 using Bazario.Core.Enums.Order;
+using Bazario.Core.Helpers.Store;
 using Bazario.Core.ServiceContracts.Store;
 using Microsoft.Extensions.Logging;
 
@@ -24,6 +25,7 @@ namespace Bazario.Core.Services.Store
         private readonly IStoreAuthorizationService _authorizationService;
         private readonly IStoreGovernorateSupportRepository _governorateSupportRepository;
         private readonly ICityRepository _cityRepository;
+        private readonly IStoreShippingConfigurationHelper _helper;
         private readonly ILogger<StoreShippingConfigurationService> _logger;
 
         public StoreShippingConfigurationService(
@@ -32,6 +34,7 @@ namespace Bazario.Core.Services.Store
             IStoreAuthorizationService authorizationService,
             IStoreGovernorateSupportRepository governorateSupportRepository,
             ICityRepository cityRepository,
+            IStoreShippingConfigurationHelper helper,
             ILogger<StoreShippingConfigurationService> logger)
         {
             _configurationRepository = configurationRepository ?? throw new ArgumentNullException(nameof(configurationRepository));
@@ -39,65 +42,8 @@ namespace Bazario.Core.Services.Store
             _authorizationService = authorizationService ?? throw new ArgumentNullException(nameof(authorizationService));
             _governorateSupportRepository = governorateSupportRepository ?? throw new ArgumentNullException(nameof(governorateSupportRepository));
             _cityRepository = cityRepository ?? throw new ArgumentNullException(nameof(cityRepository));
+            _helper = helper ?? throw new ArgumentNullException(nameof(helper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        }
-
-        /// <summary>
-        /// Maps a collection of StoreGovernorateSupport entities to GovernorateShippingInfo DTOs
-        /// </summary>
-        private static List<GovernorateShippingInfo> MapGovernorateShippingInfo(IEnumerable<StoreGovernorateSupport> governorates) =>
-            [.. governorates.Select(sg => new GovernorateShippingInfo
-            {
-                GovernorateId = sg.Governorate.GovernorateId,
-                GovernorateName = sg.Governorate.Name,
-                GovernorateNameArabic = sg.Governorate.NameArabic,
-                CountryId = sg.Governorate.CountryId,
-                CountryName = sg.Governorate.Country.Name,
-                SupportsSameDayDelivery = sg.Governorate.SupportsSameDayDelivery
-            })];
-
-        /// <summary>
-        /// Validates the shipping configuration request for business rules
-        /// </summary>
-        private void ValidateConfigurationBusinessRules(StoreShippingConfigurationRequest request)
-        {
-            // Validate no conflicting governorates (can't be both supported AND excluded)
-            if (request.SupportedGovernorateIds != null && request.ExcludedGovernorateIds != null)
-            {
-                var conflicts = request.SupportedGovernorateIds.Intersect(request.ExcludedGovernorateIds).ToList();
-                if (conflicts.Count > 0)
-                {
-                    var conflictIds = string.Join(", ", conflicts);
-                    throw new ArgumentException($"Governorates cannot be both supported and excluded. Conflicting IDs: {conflictIds}");
-                }
-            }
-
-            // Validate same-day delivery requires cutoff hour
-            if (request.OffersSameDayDelivery && !request.SameDayCutoffHour.HasValue)
-            {
-                throw new ArgumentException("Same-day delivery requires a cutoff hour to be specified");
-            }
-
-            // Validate same-day delivery requires at least some supported governorates
-            if (request.OffersSameDayDelivery &&
-                (request.SupportedGovernorateIds == null || request.SupportedGovernorateIds.Count == 0))
-            {
-                throw new ArgumentException("Same-day delivery requires at least one supported governorate");
-            }
-
-            // Validate pricing logic - same-day should be >= standard (warning via log)
-            if (request.OffersSameDayDelivery &&
-                request.SameDayDeliveryFee < request.StandardDeliveryFee)
-            {
-                _logger.LogWarning("Same-day delivery fee ({SameDayFee}) is less than standard delivery fee ({StandardFee}). This is unusual pricing.",
-                    request.SameDayDeliveryFee, request.StandardDeliveryFee);
-            }
-
-            // Validate at least one delivery option is offered
-            if (!request.OffersSameDayDelivery && !request.OffersStandardDelivery)
-            {
-                throw new ArgumentException("At least one delivery option (same-day or standard) must be offered");
-            }
         }
 
         public async Task<StoreShippingConfigurationResponse> GetConfigurationAsync(Guid storeId, CancellationToken cancellationToken = default)
@@ -150,8 +96,8 @@ namespace Bazario.Core.Services.Store
                     SameDayDeliveryFee = configuration.SameDayDeliveryFee,
                     StandardDeliveryFee = configuration.StandardDeliveryFee,
                     NationalDeliveryFee = configuration.NationalDeliveryFee,
-                    SupportedGovernorates = MapGovernorateShippingInfo(supportedGovernorates),
-                    ExcludedGovernorates = MapGovernorateShippingInfo(excludedGovernorates),
+                    SupportedGovernorates = _helper.MapGovernorateShippingInfo(supportedGovernorates),
+                    ExcludedGovernorates = _helper.MapGovernorateShippingInfo(excludedGovernorates),
                     CreatedAt = configuration.CreatedAt,
                     UpdatedAt = configuration.UpdatedAt,
                     IsActive = configuration.IsActive
@@ -187,7 +133,7 @@ namespace Bazario.Core.Services.Store
                 }
 
                 // Validate business rules
-                ValidateConfigurationBusinessRules(request);
+                _helper.ValidateConfigurationBusinessRules(request);
 
                 // Validate store exists
                 var store = await _storeRepository.GetStoreByIdAsync(request.StoreId, cancellationToken);
@@ -275,8 +221,8 @@ namespace Bazario.Core.Services.Store
                     SameDayDeliveryFee = createdConfiguration.SameDayDeliveryFee,
                     StandardDeliveryFee = createdConfiguration.StandardDeliveryFee,
                     NationalDeliveryFee = createdConfiguration.NationalDeliveryFee,
-                    SupportedGovernorates = MapGovernorateShippingInfo(supportedGovernorates),
-                    ExcludedGovernorates = MapGovernorateShippingInfo(excludedGovernorates),
+                    SupportedGovernorates = _helper.MapGovernorateShippingInfo(supportedGovernorates),
+                    ExcludedGovernorates = _helper.MapGovernorateShippingInfo(excludedGovernorates),
                     CreatedAt = createdConfiguration.CreatedAt,
                     UpdatedAt = createdConfiguration.UpdatedAt,
                     IsActive = createdConfiguration.IsActive
@@ -284,7 +230,7 @@ namespace Bazario.Core.Services.Store
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to create shipping configuration for store: {StoreId}", request.StoreId);
+                _logger.LogError(ex, "Failed to create shipping configuration for store: {StoreId}", request?.StoreId);
                 throw;
             }
         }
@@ -312,7 +258,7 @@ namespace Bazario.Core.Services.Store
                 }
 
                 // Validate business rules
-                ValidateConfigurationBusinessRules(request);
+                _helper.ValidateConfigurationBusinessRules(request);
 
                 // Check authorization - user must be store owner or admin
                 var canManage = await _authorizationService.CanUserManageStoreAsync(userId, request.StoreId, cancellationToken);
@@ -391,8 +337,8 @@ namespace Bazario.Core.Services.Store
                     SameDayDeliveryFee = updatedConfiguration.SameDayDeliveryFee,
                     StandardDeliveryFee = updatedConfiguration.StandardDeliveryFee,
                     NationalDeliveryFee = updatedConfiguration.NationalDeliveryFee,
-                    SupportedGovernorates = MapGovernorateShippingInfo(supportedGovernorates),
-                    ExcludedGovernorates = MapGovernorateShippingInfo(excludedGovernorates),
+                    SupportedGovernorates = _helper.MapGovernorateShippingInfo(supportedGovernorates),
+                    ExcludedGovernorates = _helper.MapGovernorateShippingInfo(excludedGovernorates),
                     CreatedAt = updatedConfiguration.CreatedAt,
                     UpdatedAt = updatedConfiguration.UpdatedAt,
                     IsActive = updatedConfiguration.IsActive
@@ -400,7 +346,7 @@ namespace Bazario.Core.Services.Store
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to update shipping configuration for store: {StoreId}", request.StoreId);
+                _logger.LogError(ex, "Failed to update shipping configuration for store: {StoreId}", request?.StoreId);
                 throw;
             }
         }
