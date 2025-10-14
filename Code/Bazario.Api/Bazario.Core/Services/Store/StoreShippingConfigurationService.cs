@@ -83,11 +83,16 @@ namespace Bazario.Core.Services.Store
                     };
                 }
 
-                var store = await _storeRepository.GetStoreByIdAsync(storeId, cancellationToken);
+                // Parallelize independent database queries for better performance
+                var storeTask = _storeRepository.GetStoreByIdAsync(storeId, cancellationToken);
+                var supportedGovernoratesTask = _governorateSupportRepository.GetSupportedGovernorates(storeId, cancellationToken);
+                var excludedGovernoratesTask = _governorateSupportRepository.GetExcludedGovernorates(storeId, cancellationToken);
 
-                // Get governorate support data
-                var supportedGovernorates = await _governorateSupportRepository.GetSupportedGovernorates(storeId, cancellationToken);
-                var excludedGovernorates = await _governorateSupportRepository.GetExcludedGovernorates(storeId, cancellationToken);
+                await Task.WhenAll(storeTask, supportedGovernoratesTask, excludedGovernoratesTask);
+
+                var store = await storeTask;
+                var supportedGovernorates = await supportedGovernoratesTask;
+                var excludedGovernorates = await excludedGovernoratesTask;
 
                 return new StoreShippingConfigurationResponse
                 {
@@ -202,9 +207,14 @@ namespace Bazario.Core.Services.Store
 
                 _logger.LogInformation("Successfully created shipping configuration for store: {StoreId}", request.StoreId);
 
-                // Get governorate data for response
-                var supportedGovernorates = await _governorateSupportRepository.GetSupportedGovernorates(request.StoreId, cancellationToken);
-                var excludedGovernorates = await _governorateSupportRepository.GetExcludedGovernorates(request.StoreId, cancellationToken);
+                // Get governorate data for response - parallelize for better performance
+                var supportedGovernoratesTask = _governorateSupportRepository.GetSupportedGovernorates(request.StoreId, cancellationToken);
+                var excludedGovernoratesTask = _governorateSupportRepository.GetExcludedGovernorates(request.StoreId, cancellationToken);
+
+                await Task.WhenAll(supportedGovernoratesTask, excludedGovernoratesTask);
+
+                var supportedGovernorates = await supportedGovernoratesTask;
+                var excludedGovernorates = await excludedGovernoratesTask;
 
                 return new StoreShippingConfigurationResponse
                 {
@@ -306,11 +316,16 @@ namespace Bazario.Core.Services.Store
 
                 await _governorateSupportRepository.ReplaceStoreGovernorates(request.StoreId, newGovernorateRecords, cancellationToken);
 
-                var store = await _storeRepository.GetStoreByIdAsync(request.StoreId, cancellationToken);
+                // Get updated governorate data and store for response - parallelize for better performance
+                var storeTask = _storeRepository.GetStoreByIdAsync(request.StoreId, cancellationToken);
+                var supportedGovernoratesTask = _governorateSupportRepository.GetSupportedGovernorates(request.StoreId, cancellationToken);
+                var excludedGovernoratesTask = _governorateSupportRepository.GetExcludedGovernorates(request.StoreId, cancellationToken);
 
-                // Get updated governorate data for response
-                var supportedGovernorates = await _governorateSupportRepository.GetSupportedGovernorates(request.StoreId, cancellationToken);
-                var excludedGovernorates = await _governorateSupportRepository.GetExcludedGovernorates(request.StoreId, cancellationToken);
+                await Task.WhenAll(storeTask, supportedGovernoratesTask, excludedGovernoratesTask);
+
+                var store = await storeTask;
+                var supportedGovernorates = await supportedGovernoratesTask;
+                var excludedGovernorates = await excludedGovernoratesTask;
 
                 _logger.LogInformation("Successfully updated shipping configuration for store: {StoreId}", request.StoreId);
 
