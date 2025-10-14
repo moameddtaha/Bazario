@@ -319,9 +319,45 @@ This document outlines the comprehensive security and performance enhancements f
   - Add API response caching
   - Implement background job processing
 
+### 2.12 Store Timezone Support
+- [ ] **Multi-Region Timezone Support**
+  - Implement per-store timezone configuration
+  - Add TimeZoneId column to Store table
+  - Create timezone validation service
+  - Update cutoff time logic to use store-specific timezones
+  - Add API documentation for timezone handling
+- [ ] **Create Database Migration**
+  - File: `Bazario.Infrastructure/Migrations/AddStoreTimeZone.cs`
+  - Add TimeZoneId column (string, 100 chars) to Store table
+  - Set default value to "Africa/Cairo" (Egypt Standard Time)
+  - Add index for performance
+  - Backfill existing stores with default timezone
+- [ ] **Update Store Entity**
+  - File: `Bazario.Core/Domain/Entities/Store/Store.cs`
+  - Add property: `[StringLength(100)] public string TimeZoneId { get; set; } = "Africa/Cairo";`
+  - Add XML documentation explaining timezone usage
+  - Add validation attribute for valid timezone IDs
+- [ ] **Create Timezone Validation Helper**
+  - File: `Bazario.Core/Helpers/Store/ITimezoneValidationHelper.cs`
+  - File: `Bazario.Core/Helpers/Store/TimezoneValidationHelper.cs`
+  - Validate timezone ID against system timezones
+  - Provide timezone listing for UI
+  - Handle timezone conversion utilities
+- [ ] **Update StoreShippingConfigurationService**
+  - Replace hardcoded "Egypt Standard Time" with store.TimeZoneId
+  - Update IsSameDayDeliveryAvailableAsync cutoff logic
+  - Update GetDeliveryFeeAsync cutoff logic
+  - Add timezone-aware logging
+  - Update XML documentation
+- [ ] **Update API Documentation**
+  - Document timezone behavior in API specs
+  - Add timezone field to store DTOs
+  - Document cutoff hour interpretation
+  - Add timezone best practices guide
+
 ## Monitoring & Observability (Priority 3 for V2)
 
-### 2.12 Security Monitoring
+### 2.13 Security Monitoring
 - [ ] **Security Event Monitoring**
   - Implement security event logging and monitoring
   - Add intrusion detection and prevention
@@ -329,7 +365,7 @@ This document outlines the comprehensive security and performance enhancements f
   - Add automated security scanning
   - Implement incident response procedures
 
-### 2.13 Application Monitoring
+### 2.14 Application Monitoring
 - [ ] **Comprehensive Monitoring**
   - Implement application performance monitoring (APM)
   - Add health checks and uptime monitoring

@@ -132,8 +132,14 @@ namespace Bazario.Core.Services.Store
                     throw new ArgumentException("User ID cannot be empty", nameof(userId));
                 }
 
-                // Validate business rules
-                _helper.ValidateConfigurationBusinessRules(request);
+                // Check authorization FIRST - user must be store owner or admin
+                // This prevents unauthorized users from probing business rules through validation errors
+                var canManage = await _authorizationService.CanUserManageStoreAsync(userId, request.StoreId, cancellationToken);
+                if (!canManage)
+                {
+                    _logger.LogWarning("User {UserId} attempted to create shipping configuration for store {StoreId} without authorization", userId, request.StoreId);
+                    throw new UnauthorizedAccessException($"User is not authorized to create shipping configuration for store {request.StoreId}");
+                }
 
                 // Validate store exists
                 var store = await _storeRepository.GetStoreByIdAsync(request.StoreId, cancellationToken);
@@ -142,13 +148,8 @@ namespace Bazario.Core.Services.Store
                     throw new InvalidOperationException($"Store with ID {request.StoreId} not found");
                 }
 
-                // Check authorization - user must be store owner or admin
-                var canManage = await _authorizationService.CanUserManageStoreAsync(userId, request.StoreId, cancellationToken);
-                if (!canManage)
-                {
-                    _logger.LogWarning("User {UserId} attempted to create shipping configuration for store {StoreId} without authorization", userId, request.StoreId);
-                    throw new UnauthorizedAccessException($"User is not authorized to create shipping configuration for store {request.StoreId}");
-                }
+                // Validate business rules (after authorization check)
+                _helper.ValidateConfigurationBusinessRules(request);
 
                 // Check if configuration already exists
                 var existingConfig = await _configurationRepository.GetByStoreIdAsync(request.StoreId, cancellationToken);
@@ -158,6 +159,9 @@ namespace Bazario.Core.Services.Store
                 }
 
                 // Create new configuration
+                // TODO: Consider wrapping these operations in a database transaction for data consistency.
+                // If governorate record creation fails, configuration will be left in incomplete state.
+                // Implement Unit of Work pattern or use explicit transaction scope.
                 var configuration = new StoreShippingConfiguration
                 {
                     StoreId = request.StoreId,
@@ -257,10 +261,8 @@ namespace Bazario.Core.Services.Store
                     throw new ArgumentException("User ID cannot be empty", nameof(userId));
                 }
 
-                // Validate business rules
-                _helper.ValidateConfigurationBusinessRules(request);
-
-                // Check authorization - user must be store owner or admin
+                // Check authorization FIRST - user must be store owner or admin
+                // This prevents unauthorized users from probing business rules through validation errors
                 var canManage = await _authorizationService.CanUserManageStoreAsync(userId, request.StoreId, cancellationToken);
                 if (!canManage)
                 {
@@ -274,6 +276,9 @@ namespace Bazario.Core.Services.Store
                 {
                     throw new InvalidOperationException($"No shipping configuration found for store {request.StoreId}");
                 }
+
+                // Validate business rules (after authorization check)
+                _helper.ValidateConfigurationBusinessRules(request);
 
                 // Update configuration
                 existingConfiguration.DefaultShippingZone = request.DefaultShippingZone.ToString();
@@ -472,12 +477,28 @@ namespace Bazario.Core.Services.Store
                 }
 
                 // Check cutoff time
+                // TODO: FUTURE ENHANCEMENT - Implement per-store timezone support (see detailed plan below)
+                // Current implementation assumes all stores operate in Egypt Standard Time (UTC+2).
+                //
+                // For multi-region support in the future:
+                // 1. Add TimeZoneId column (string, 100 chars) to Store table with default "Africa/Cairo"
+                // 2. Create EF Core migration: Add-Migration AddStoreTimeZone
+                // 3. Update Store entity with: [StringLength(100)] public string TimeZoneId { get; set; } = "Africa/Cairo";
+                // 4. Replace hardcoded "Egypt Standard Time" below with: store.TimeZoneId
+                // 5. Add timezone validation in StoreShippingConfigurationHelper
+                // 6. Update API documentation to specify timezone handling
+                //
+                // Current behavior: All cutoff times are interpreted as Egypt Standard Time (UTC+2)
                 if (configuration.SameDayCutoffHour.HasValue)
                 {
-                    var currentHour = DateTime.UtcNow.Hour;
-                    if (currentHour > configuration.SameDayCutoffHour.Value)
+                    // Convert UTC time to Egypt Standard Time for accurate cutoff comparison
+                    var egyptTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Egypt Standard Time");
+                    var currentEgyptTime = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, egyptTimeZone);
+
+                    if (currentEgyptTime.Hour > configuration.SameDayCutoffHour.Value)
                     {
-                        _logger.LogDebug("Same-day delivery cutoff time passed for store: {StoreId}", storeId);
+                        _logger.LogDebug("Same-day delivery cutoff time passed for store: {StoreId}. Current Egypt time hour: {CurrentHour}, Cutoff: {CutoffHour}",
+                            storeId, currentEgyptTime.Hour, configuration.SameDayCutoffHour.Value);
                         return false;
                     }
                 }
@@ -490,7 +511,6 @@ namespace Bazario.Core.Services.Store
                 return false;
             }
         }
-
 
         public async Task<decimal> GetDeliveryFeeAsync(Guid storeId, string city, CancellationToken cancellationToken = default)
         {
@@ -517,12 +537,38 @@ namespace Bazario.Core.Services.Store
                     return 0; // No configuration means no delivery fee
                 }
 
-                // Check for same-day delivery
-                if (await IsSameDayDeliveryAvailableAsync(storeId, city, cancellationToken))
+                // Check for same-day delivery availability inline to avoid duplicate database query
+                if (configuration.OffersSameDayDelivery)
                 {
-                    return configuration.SameDayDeliveryFee;
-                }
+                    // Resolve city to governorate using database lookup
+                    var cities = await _cityRepository.SearchByNameAsync(city, cancellationToken);
+                    var cityEntity = cities.FirstOrDefault(c => c.Name.Equals(city, StringComparison.OrdinalIgnoreCase));
 
+                    if (cityEntity != null)
+                    {
+                        // Check if store supports this governorate
+                        var isSupported = await _governorateSupportRepository.IsGovernorateSupportedAsync(storeId, cityEntity.GovernorateId, cancellationToken);
+
+                        if (isSupported && cityEntity.Governorate.SupportsSameDayDelivery)
+                        {
+                            // Check cutoff time (Egypt timezone)
+                            // Uses same timezone logic as IsSameDayDeliveryAvailableAsync - see detailed TODO there
+                            if (!configuration.SameDayCutoffHour.HasValue)
+                            {
+                                return configuration.SameDayDeliveryFee;
+                            }
+
+                            // Convert UTC time to Egypt Standard Time for accurate cutoff comparison
+                            var egyptTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Egypt Standard Time");
+                            var currentEgyptTime = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, egyptTimeZone);
+
+                            if (currentEgyptTime.Hour <= configuration.SameDayCutoffHour.Value)
+                            {
+                                return configuration.SameDayDeliveryFee;
+                            }
+                        }
+                    }
+                }
 
                 // Standard delivery
                 return configuration.StandardDeliveryFee;

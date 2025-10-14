@@ -22,6 +22,9 @@ namespace Bazario.Core.Helpers.Store
         /// <summary>
         /// Maps a collection of StoreGovernorateSupport entities to GovernorateShippingInfo DTOs
         /// </summary>
+        /// <remarks>
+        /// Requires navigation properties (Governorate, Governorate.Country) to be eagerly loaded via Include()
+        /// </remarks>
         public List<GovernorateShippingInfo> MapGovernorateShippingInfo(IEnumerable<StoreGovernorateSupport> governorates)
         {
             if (governorates == null)
@@ -29,14 +32,29 @@ namespace Bazario.Core.Helpers.Store
                 throw new ArgumentNullException(nameof(governorates));
             }
 
-            return [.. governorates.Select(sg => new GovernorateShippingInfo
+            return [.. governorates.Select(sg =>
             {
-                GovernorateId = sg.Governorate.GovernorateId,
-                GovernorateName = sg.Governorate.Name,
-                GovernorateNameArabic = sg.Governorate.NameArabic,
-                CountryId = sg.Governorate.CountryId,
-                CountryName = sg.Governorate.Country.Name,
-                SupportsSameDayDelivery = sg.Governorate.SupportsSameDayDelivery
+                if (sg.Governorate == null)
+                {
+                    _logger.LogWarning("StoreGovernorateSupport entity has null Governorate navigation property. Store: {StoreId}", sg.StoreId);
+                    throw new InvalidOperationException($"Governorate navigation property not loaded for StoreId: {sg.StoreId}, GovernorateId: {sg.GovernorateId}");
+                }
+
+                if (sg.Governorate.Country == null)
+                {
+                    _logger.LogWarning("Governorate entity has null Country navigation property. GovernorateId: {GovernorateId}", sg.Governorate.GovernorateId);
+                    throw new InvalidOperationException($"Country navigation property not loaded for GovernorateId: {sg.Governorate.GovernorateId}");
+                }
+
+                return new GovernorateShippingInfo
+                {
+                    GovernorateId = sg.Governorate.GovernorateId,
+                    GovernorateName = sg.Governorate.Name,
+                    GovernorateNameArabic = sg.Governorate.NameArabic,
+                    CountryId = sg.Governorate.CountryId,
+                    CountryName = sg.Governorate.Country.Name,
+                    SupportsSameDayDelivery = sg.Governorate.SupportsSameDayDelivery
+                };
             })];
         }
 
