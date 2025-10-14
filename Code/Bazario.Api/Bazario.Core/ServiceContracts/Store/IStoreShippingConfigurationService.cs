@@ -25,26 +25,34 @@ namespace Bazario.Core.ServiceContracts.Store
         /// Creates a new shipping configuration for a store with delivery options, fees, and geographic coverage.
         /// </summary>
         /// <param name="request">Configuration details including delivery types, fees, and supported governorates</param>
+        /// <param name="userId">The user ID creating the configuration (must be store owner or admin)</param>
         /// <param name="cancellationToken">Cancellation token</param>
         /// <returns>The newly created shipping configuration</returns>
         /// <exception cref="InvalidOperationException">
         /// Thrown when the store does not exist or already has a configuration.
         /// </exception>
-        Task<StoreShippingConfigurationResponse> CreateConfigurationAsync(StoreShippingConfigurationRequest request, CancellationToken cancellationToken = default);
+        /// <exception cref="UnauthorizedAccessException">
+        /// Thrown when the user is not authorized to create configuration for this store.
+        /// </exception>
+        Task<StoreShippingConfigurationResponse> CreateConfigurationAsync(StoreShippingConfigurationRequest request, Guid userId, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Updates an existing shipping configuration for a store using a replace strategy for governorate associations.
         /// </summary>
         /// <param name="request">Updated configuration details</param>
+        /// <param name="userId">The user ID updating the configuration (must be store owner or admin)</param>
         /// <param name="cancellationToken">Cancellation token</param>
         /// <returns>The updated shipping configuration</returns>
         /// <exception cref="InvalidOperationException">
         /// Thrown when no configuration exists for the store.
         /// </exception>
+        /// <exception cref="UnauthorizedAccessException">
+        /// Thrown when the user is not authorized to update configuration for this store.
+        /// </exception>
         /// <remarks>
         /// Replaces all governorate associations to prevent orphaned records.
         /// </remarks>
-        Task<StoreShippingConfigurationResponse> UpdateConfigurationAsync(StoreShippingConfigurationRequest request, CancellationToken cancellationToken = default);
+        Task<StoreShippingConfigurationResponse> UpdateConfigurationAsync(StoreShippingConfigurationRequest request, Guid userId, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Permanently deletes a shipping configuration from the database. Requires administrator privileges.

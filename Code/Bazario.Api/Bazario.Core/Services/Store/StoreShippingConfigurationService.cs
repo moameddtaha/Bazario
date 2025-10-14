@@ -9,7 +9,6 @@ using Bazario.Core.Domain.RepositoryContracts.Location;
 using Bazario.Core.Domain.RepositoryContracts.Store;
 using Bazario.Core.DTO.Store;
 using Bazario.Core.Enums.Order;
-using Bazario.Core.Helpers.Catalog.Product;
 using Bazario.Core.ServiceContracts.Store;
 using Microsoft.Extensions.Logging;
 
@@ -22,7 +21,7 @@ namespace Bazario.Core.Services.Store
     {
         private readonly IStoreShippingConfigurationRepository _configurationRepository;
         private readonly IStoreRepository _storeRepository;
-        private readonly IProductValidationHelper _validationHelper;
+        private readonly IStoreAuthorizationService _authorizationService;
         private readonly IStoreGovernorateSupportRepository _governorateSupportRepository;
         private readonly ICityRepository _cityRepository;
         private readonly ILogger<StoreShippingConfigurationService> _logger;
@@ -30,18 +29,32 @@ namespace Bazario.Core.Services.Store
         public StoreShippingConfigurationService(
             IStoreShippingConfigurationRepository configurationRepository,
             IStoreRepository storeRepository,
-            IProductValidationHelper validationHelper,
+            IStoreAuthorizationService authorizationService,
             IStoreGovernorateSupportRepository governorateSupportRepository,
             ICityRepository cityRepository,
             ILogger<StoreShippingConfigurationService> logger)
         {
             _configurationRepository = configurationRepository ?? throw new ArgumentNullException(nameof(configurationRepository));
             _storeRepository = storeRepository ?? throw new ArgumentNullException(nameof(storeRepository));
-            _validationHelper = validationHelper ?? throw new ArgumentNullException(nameof(validationHelper));
+            _authorizationService = authorizationService ?? throw new ArgumentNullException(nameof(authorizationService));
             _governorateSupportRepository = governorateSupportRepository ?? throw new ArgumentNullException(nameof(governorateSupportRepository));
             _cityRepository = cityRepository ?? throw new ArgumentNullException(nameof(cityRepository));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
+
+        /// <summary>
+        /// Maps a collection of StoreGovernorateSupport entities to GovernorateShippingInfo DTOs
+        /// </summary>
+        private static List<GovernorateShippingInfo> MapGovernorateShippingInfo(IEnumerable<StoreGovernorateSupport> governorates) =>
+            [.. governorates.Select(sg => new GovernorateShippingInfo
+            {
+                GovernorateId = sg.Governorate.GovernorateId,
+                GovernorateName = sg.Governorate.Name,
+                GovernorateNameArabic = sg.Governorate.NameArabic,
+                CountryId = sg.Governorate.CountryId,
+                CountryName = sg.Governorate.Country.Name,
+                SupportsSameDayDelivery = sg.Governorate.SupportsSameDayDelivery
+            })];
 
         public async Task<StoreShippingConfigurationResponse> GetConfigurationAsync(Guid storeId, CancellationToken cancellationToken = default)
         {
@@ -49,6 +62,12 @@ namespace Bazario.Core.Services.Store
 
             try
             {
+                // Validate input
+                if (storeId == Guid.Empty)
+                {
+                    throw new ArgumentException("Store ID cannot be empty", nameof(storeId));
+                }
+
                 var configuration = await _configurationRepository.GetByStoreIdAsync(storeId, cancellationToken);
                 
                 if (configuration == null)
@@ -82,24 +101,8 @@ namespace Bazario.Core.Services.Store
                     SameDayDeliveryFee = configuration.SameDayDeliveryFee,
                     StandardDeliveryFee = configuration.StandardDeliveryFee,
                     NationalDeliveryFee = configuration.NationalDeliveryFee,
-                    SupportedGovernorates = supportedGovernorates.Select(sg => new GovernorateShippingInfo
-                    {
-                        GovernorateId = sg.Governorate.GovernorateId,
-                        GovernorateName = sg.Governorate.Name,
-                        GovernorateNameArabic = sg.Governorate.NameArabic,
-                        CountryId = sg.Governorate.CountryId,
-                        CountryName = sg.Governorate.Country.Name,
-                        SupportsSameDayDelivery = sg.Governorate.SupportsSameDayDelivery
-                    }).ToList(),
-                    ExcludedGovernorates = excludedGovernorates.Select(sg => new GovernorateShippingInfo
-                    {
-                        GovernorateId = sg.Governorate.GovernorateId,
-                        GovernorateName = sg.Governorate.Name,
-                        GovernorateNameArabic = sg.Governorate.NameArabic,
-                        CountryId = sg.Governorate.CountryId,
-                        CountryName = sg.Governorate.Country.Name,
-                        SupportsSameDayDelivery = sg.Governorate.SupportsSameDayDelivery
-                    }).ToList(),
+                    SupportedGovernorates = MapGovernorateShippingInfo(supportedGovernorates),
+                    ExcludedGovernorates = MapGovernorateShippingInfo(excludedGovernorates),
                     CreatedAt = configuration.CreatedAt,
                     UpdatedAt = configuration.UpdatedAt,
                     IsActive = configuration.IsActive
@@ -112,17 +115,41 @@ namespace Bazario.Core.Services.Store
             }
         }
 
-        public async Task<StoreShippingConfigurationResponse> CreateConfigurationAsync(StoreShippingConfigurationRequest request, CancellationToken cancellationToken = default)
+        public async Task<StoreShippingConfigurationResponse> CreateConfigurationAsync(StoreShippingConfigurationRequest request, Guid userId, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Creating shipping configuration for store: {StoreId}", request.StoreId);
+            _logger.LogInformation("Creating shipping configuration for store: {StoreId} by user: {UserId}", request?.StoreId, userId);
 
             try
             {
+                // Validate input
+                if (request == null)
+                {
+                    throw new ArgumentNullException(nameof(request), "Configuration request cannot be null");
+                }
+
+                if (request.StoreId == Guid.Empty)
+                {
+                    throw new ArgumentException("Store ID cannot be empty", nameof(request));
+                }
+
+                if (userId == Guid.Empty)
+                {
+                    throw new ArgumentException("User ID cannot be empty", nameof(userId));
+                }
+
                 // Validate store exists
                 var store = await _storeRepository.GetStoreByIdAsync(request.StoreId, cancellationToken);
                 if (store == null)
                 {
                     throw new InvalidOperationException($"Store with ID {request.StoreId} not found");
+                }
+
+                // Check authorization - user must be store owner or admin
+                var canManage = await _authorizationService.CanUserManageStoreAsync(userId, request.StoreId, cancellationToken);
+                if (!canManage)
+                {
+                    _logger.LogWarning("User {UserId} attempted to create shipping configuration for store {StoreId} without authorization", userId, request.StoreId);
+                    throw new UnauthorizedAccessException($"User is not authorized to create shipping configuration for store {request.StoreId}");
                 }
 
                 // Check if configuration already exists
@@ -191,24 +218,8 @@ namespace Bazario.Core.Services.Store
                     SameDayDeliveryFee = createdConfiguration.SameDayDeliveryFee,
                     StandardDeliveryFee = createdConfiguration.StandardDeliveryFee,
                     NationalDeliveryFee = createdConfiguration.NationalDeliveryFee,
-                    SupportedGovernorates = supportedGovernorates.Select(sg => new GovernorateShippingInfo
-                    {
-                        GovernorateId = sg.Governorate.GovernorateId,
-                        GovernorateName = sg.Governorate.Name,
-                        GovernorateNameArabic = sg.Governorate.NameArabic,
-                        CountryId = sg.Governorate.CountryId,
-                        CountryName = sg.Governorate.Country.Name,
-                        SupportsSameDayDelivery = sg.Governorate.SupportsSameDayDelivery
-                    }).ToList(),
-                    ExcludedGovernorates = excludedGovernorates.Select(sg => new GovernorateShippingInfo
-                    {
-                        GovernorateId = sg.Governorate.GovernorateId,
-                        GovernorateName = sg.Governorate.Name,
-                        GovernorateNameArabic = sg.Governorate.NameArabic,
-                        CountryId = sg.Governorate.CountryId,
-                        CountryName = sg.Governorate.Country.Name,
-                        SupportsSameDayDelivery = sg.Governorate.SupportsSameDayDelivery
-                    }).ToList(),
+                    SupportedGovernorates = MapGovernorateShippingInfo(supportedGovernorates),
+                    ExcludedGovernorates = MapGovernorateShippingInfo(excludedGovernorates),
                     CreatedAt = createdConfiguration.CreatedAt,
                     UpdatedAt = createdConfiguration.UpdatedAt,
                     IsActive = createdConfiguration.IsActive
@@ -221,12 +232,36 @@ namespace Bazario.Core.Services.Store
             }
         }
 
-        public async Task<StoreShippingConfigurationResponse> UpdateConfigurationAsync(StoreShippingConfigurationRequest request, CancellationToken cancellationToken = default)
+        public async Task<StoreShippingConfigurationResponse> UpdateConfigurationAsync(StoreShippingConfigurationRequest request, Guid userId, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Updating shipping configuration for store: {StoreId}", request.StoreId);
+            _logger.LogInformation("Updating shipping configuration for store: {StoreId} by user: {UserId}", request?.StoreId, userId);
 
             try
             {
+                // Validate input
+                if (request == null)
+                {
+                    throw new ArgumentNullException(nameof(request), "Configuration request cannot be null");
+                }
+
+                if (request.StoreId == Guid.Empty)
+                {
+                    throw new ArgumentException("Store ID cannot be empty", nameof(request));
+                }
+
+                if (userId == Guid.Empty)
+                {
+                    throw new ArgumentException("User ID cannot be empty", nameof(userId));
+                }
+
+                // Check authorization - user must be store owner or admin
+                var canManage = await _authorizationService.CanUserManageStoreAsync(userId, request.StoreId, cancellationToken);
+                if (!canManage)
+                {
+                    _logger.LogWarning("User {UserId} attempted to update shipping configuration for store {StoreId} without authorization", userId, request.StoreId);
+                    throw new UnauthorizedAccessException($"User is not authorized to update shipping configuration for store {request.StoreId}");
+                }
+
                 // Get existing configuration
                 var existingConfiguration = await _configurationRepository.GetByStoreIdAsync(request.StoreId, cancellationToken);
                 if (existingConfiguration == null)
@@ -291,24 +326,8 @@ namespace Bazario.Core.Services.Store
                     SameDayDeliveryFee = updatedConfiguration.SameDayDeliveryFee,
                     StandardDeliveryFee = updatedConfiguration.StandardDeliveryFee,
                     NationalDeliveryFee = updatedConfiguration.NationalDeliveryFee,
-                    SupportedGovernorates = supportedGovernorates.Select(sg => new GovernorateShippingInfo
-                    {
-                        GovernorateId = sg.Governorate.GovernorateId,
-                        GovernorateName = sg.Governorate.Name,
-                        GovernorateNameArabic = sg.Governorate.NameArabic,
-                        CountryId = sg.Governorate.CountryId,
-                        CountryName = sg.Governorate.Country.Name,
-                        SupportsSameDayDelivery = sg.Governorate.SupportsSameDayDelivery
-                    }).ToList(),
-                    ExcludedGovernorates = excludedGovernorates.Select(sg => new GovernorateShippingInfo
-                    {
-                        GovernorateId = sg.Governorate.GovernorateId,
-                        GovernorateName = sg.Governorate.Name,
-                        GovernorateNameArabic = sg.Governorate.NameArabic,
-                        CountryId = sg.Governorate.CountryId,
-                        CountryName = sg.Governorate.Country.Name,
-                        SupportsSameDayDelivery = sg.Governorate.SupportsSameDayDelivery
-                    }).ToList(),
+                    SupportedGovernorates = MapGovernorateShippingInfo(supportedGovernorates),
+                    ExcludedGovernorates = MapGovernorateShippingInfo(excludedGovernorates),
                     CreatedAt = updatedConfiguration.CreatedAt,
                     UpdatedAt = updatedConfiguration.UpdatedAt,
                     IsActive = updatedConfiguration.IsActive
@@ -344,7 +363,8 @@ namespace Bazario.Core.Services.Store
                 }
 
                 // Check if user has admin privileges
-                if (!await _validationHelper.HasAdminPrivilegesAsync(deletedBy, cancellationToken))
+                var isAdmin = await _authorizationService.IsUserAdminAsync(deletedBy, cancellationToken);
+                if (!isAdmin)
                 {
                     _logger.LogWarning("User {UserId} attempted to delete shipping configuration for store {StoreId} without admin privileges", deletedBy, storeId);
                     throw new UnauthorizedAccessException("Only administrators can delete shipping configurations");
@@ -396,6 +416,19 @@ namespace Bazario.Core.Services.Store
 
             try
             {
+                // Validate input
+                if (storeId == Guid.Empty)
+                {
+                    _logger.LogWarning("IsSameDayDeliveryAvailableAsync called with empty store ID");
+                    return false;
+                }
+
+                if (string.IsNullOrWhiteSpace(city))
+                {
+                    _logger.LogWarning("IsSameDayDeliveryAvailableAsync called with empty city for store: {StoreId}", storeId);
+                    return false;
+                }
+
                 var configuration = await _configurationRepository.GetByStoreIdAsync(storeId, cancellationToken);
                 if (configuration == null || !configuration.OffersSameDayDelivery)
                 {
@@ -454,6 +487,19 @@ namespace Bazario.Core.Services.Store
 
             try
             {
+                // Validate input
+                if (storeId == Guid.Empty)
+                {
+                    _logger.LogWarning("GetDeliveryFeeAsync called with empty store ID");
+                    return 0;
+                }
+
+                if (string.IsNullOrWhiteSpace(city))
+                {
+                    _logger.LogWarning("GetDeliveryFeeAsync called with empty city for store: {StoreId}", storeId);
+                    return 0;
+                }
+
                 var configuration = await _configurationRepository.GetByStoreIdAsync(storeId, cancellationToken);
                 if (configuration == null)
                 {
