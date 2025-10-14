@@ -12,6 +12,7 @@ using Bazario.Core.Enums.Order;
 using Bazario.Core.Helpers.Store;
 using Bazario.Core.ServiceContracts.Store;
 using Microsoft.Extensions.Logging;
+using TimeZoneConverter;
 
 namespace Bazario.Core.Services.Store
 {
@@ -478,21 +479,24 @@ namespace Bazario.Core.Services.Store
 
                 // Check cutoff time
                 // TODO: FUTURE ENHANCEMENT - Implement per-store timezone support (see detailed plan below)
-                // Current implementation assumes all stores operate in Egypt Standard Time (UTC+2).
+                // Current implementation assumes all stores operate in Egypt timezone (Africa/Cairo).
                 //
                 // For multi-region support in the future:
                 // 1. Add TimeZoneId column (string, 100 chars) to Store table with default "Africa/Cairo"
                 // 2. Create EF Core migration: Add-Migration AddStoreTimeZone
                 // 3. Update Store entity with: [StringLength(100)] public string TimeZoneId { get; set; } = "Africa/Cairo";
-                // 4. Replace hardcoded "Egypt Standard Time" below with: store.TimeZoneId
+                // 4. Replace hardcoded "Africa/Cairo" below with: store.TimeZoneId
                 // 5. Add timezone validation in StoreShippingConfigurationHelper
                 // 6. Update API documentation to specify timezone handling
                 //
-                // Current behavior: All cutoff times are interpreted as Egypt Standard Time (UTC+2)
+                // Current behavior: All cutoff times are interpreted as Egypt timezone (UTC+2)
+                // Uses IANA timezone ID "Africa/Cairo" which works on both Windows and Linux via TimeZoneConverter
                 if (configuration.SameDayCutoffHour.HasValue)
                 {
-                    // Convert UTC time to Egypt Standard Time for accurate cutoff comparison
-                    var egyptTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Egypt Standard Time");
+                    // Convert UTC time to Egypt timezone for accurate cutoff comparison
+                    // TZConvert.GetTimeZoneInfo automatically handles Windows/Linux differences
+                    // "Africa/Cairo" → "Egypt Standard Time" on Windows, "Africa/Cairo" on Linux
+                    var egyptTimeZone = TZConvert.GetTimeZoneInfo("Africa/Cairo");
                     var currentEgyptTime = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, egyptTimeZone);
 
                     if (currentEgyptTime.Hour > configuration.SameDayCutoffHour.Value)
@@ -552,14 +556,16 @@ namespace Bazario.Core.Services.Store
                         if (isSupported && cityEntity.Governorate.SupportsSameDayDelivery)
                         {
                             // Check cutoff time (Egypt timezone)
-                            // Uses same timezone logic as IsSameDayDeliveryAvailableAsync - see detailed TODO there
+                            // Uses same cross-platform timezone logic as IsSameDayDeliveryAvailableAsync
+                            // See detailed TODO documentation in IsSameDayDeliveryAvailableAsync method
                             if (!configuration.SameDayCutoffHour.HasValue)
                             {
                                 return configuration.SameDayDeliveryFee;
                             }
 
-                            // Convert UTC time to Egypt Standard Time for accurate cutoff comparison
-                            var egyptTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Egypt Standard Time");
+                            // Convert UTC time to Egypt timezone for accurate cutoff comparison
+                            // Uses IANA timezone ID "Africa/Cairo" (cross-platform)
+                            var egyptTimeZone = TZConvert.GetTimeZoneInfo("Africa/Cairo");
                             var currentEgyptTime = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, egyptTimeZone);
 
                             if (currentEgyptTime.Hour <= configuration.SameDayCutoffHour.Value)

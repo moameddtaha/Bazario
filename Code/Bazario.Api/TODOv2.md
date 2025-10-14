@@ -320,11 +320,18 @@ This document outlines the comprehensive security and performance enhancements f
   - Implement background job processing
 
 ### 2.12 Store Timezone Support
+- [x] **Cross-Platform Timezone Infrastructure** ✅ COMPLETED
+  - Installed TimeZoneConverter NuGet package (v7.0.0)
+  - Replaced Windows-specific timezone IDs with IANA timezone IDs
+  - Updated StoreShippingConfigurationService to use TZConvert.GetTimeZoneInfo()
+  - Uses "Africa/Cairo" (IANA) instead of "Egypt Standard Time" (Windows)
+  - Works on both Windows and Linux hosting environments
+  - No platform detection code needed
 - [ ] **Multi-Region Timezone Support**
   - Implement per-store timezone configuration
   - Add TimeZoneId column to Store table
   - Create timezone validation service
-  - Update cutoff time logic to use store-specific timezones
+  - Update cutoff time logic to use store-specific timezones (replace hardcoded "Africa/Cairo")
   - Add API documentation for timezone handling
 - [ ] **Create Database Migration**
   - File: `Bazario.Infrastructure/Migrations/AddStoreTimeZone.cs`
