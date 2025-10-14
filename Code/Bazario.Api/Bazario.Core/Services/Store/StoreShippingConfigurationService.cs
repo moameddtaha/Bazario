@@ -56,6 +56,50 @@ namespace Bazario.Core.Services.Store
                 SupportsSameDayDelivery = sg.Governorate.SupportsSameDayDelivery
             })];
 
+        /// <summary>
+        /// Validates the shipping configuration request for business rules
+        /// </summary>
+        private void ValidateConfigurationBusinessRules(StoreShippingConfigurationRequest request)
+        {
+            // Validate no conflicting governorates (can't be both supported AND excluded)
+            if (request.SupportedGovernorateIds != null && request.ExcludedGovernorateIds != null)
+            {
+                var conflicts = request.SupportedGovernorateIds.Intersect(request.ExcludedGovernorateIds).ToList();
+                if (conflicts.Count > 0)
+                {
+                    var conflictIds = string.Join(", ", conflicts);
+                    throw new ArgumentException($"Governorates cannot be both supported and excluded. Conflicting IDs: {conflictIds}");
+                }
+            }
+
+            // Validate same-day delivery requires cutoff hour
+            if (request.OffersSameDayDelivery && !request.SameDayCutoffHour.HasValue)
+            {
+                throw new ArgumentException("Same-day delivery requires a cutoff hour to be specified");
+            }
+
+            // Validate same-day delivery requires at least some supported governorates
+            if (request.OffersSameDayDelivery &&
+                (request.SupportedGovernorateIds == null || request.SupportedGovernorateIds.Count == 0))
+            {
+                throw new ArgumentException("Same-day delivery requires at least one supported governorate");
+            }
+
+            // Validate pricing logic - same-day should be >= standard (warning via log)
+            if (request.OffersSameDayDelivery &&
+                request.SameDayDeliveryFee < request.StandardDeliveryFee)
+            {
+                _logger.LogWarning("Same-day delivery fee ({SameDayFee}) is less than standard delivery fee ({StandardFee}). This is unusual pricing.",
+                    request.SameDayDeliveryFee, request.StandardDeliveryFee);
+            }
+
+            // Validate at least one delivery option is offered
+            if (!request.OffersSameDayDelivery && !request.OffersStandardDelivery)
+            {
+                throw new ArgumentException("At least one delivery option (same-day or standard) must be offered");
+            }
+        }
+
         public async Task<StoreShippingConfigurationResponse> GetConfigurationAsync(Guid storeId, CancellationToken cancellationToken = default)
         {
             _logger.LogDebug("Getting shipping configuration for store: {StoreId}", storeId);
@@ -141,6 +185,9 @@ namespace Bazario.Core.Services.Store
                 {
                     throw new ArgumentException("User ID cannot be empty", nameof(userId));
                 }
+
+                // Validate business rules
+                ValidateConfigurationBusinessRules(request);
 
                 // Validate store exists
                 var store = await _storeRepository.GetStoreByIdAsync(request.StoreId, cancellationToken);
@@ -263,6 +310,9 @@ namespace Bazario.Core.Services.Store
                 {
                     throw new ArgumentException("User ID cannot be empty", nameof(userId));
                 }
+
+                // Validate business rules
+                ValidateConfigurationBusinessRules(request);
 
                 // Check authorization - user must be store owner or admin
                 var canManage = await _authorizationService.CanUserManageStoreAsync(userId, request.StoreId, cancellationToken);
