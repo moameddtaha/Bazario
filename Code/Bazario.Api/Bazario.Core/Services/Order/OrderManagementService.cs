@@ -2,34 +2,35 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.DTO.Order;
-using Bazario.Core.ServiceContracts.Order;
-using Microsoft.Extensions.Logging;
-using Bazario.Core.Domain.RepositoryContracts.Order;
 using Bazario.Core.Enums.Order;
 using Bazario.Core.Extensions.Order;
 using Bazario.Core.Helpers.Catalog.Product;
+using Bazario.Core.ServiceContracts.Order;
+using Microsoft.Extensions.Logging;
 
 namespace Bazario.Core.Services.Order
 {
     /// <summary>
     /// Service implementation for order management operations (CRUD)
     /// Handles order creation, updates, cancellation, and deletion
+    /// Uses Unit of Work pattern for transaction management and data consistency
     /// </summary>
     public class OrderManagementService : IOrderManagementService
     {
-        private readonly IOrderRepository _orderRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly IOrderValidationService _validationService;
         private readonly IProductValidationHelper _validationHelper;
         private readonly ILogger<OrderManagementService> _logger;
 
         public OrderManagementService(
-            IOrderRepository orderRepository,
+            IUnitOfWork unitOfWork,
             IOrderValidationService validationService,
             IProductValidationHelper validationHelper,
             ILogger<OrderManagementService> logger)
         {
-            _orderRepository = orderRepository ?? throw new ArgumentNullException(nameof(orderRepository));
+            _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
             _validationHelper = validationHelper ?? throw new ArgumentNullException(nameof(validationHelper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -109,7 +110,8 @@ namespace Bazario.Core.Services.Order
                 }
 
                 // Add order to database
-                var createdOrder = await _orderRepository.AddOrderAsync(order, cancellationToken);
+                var createdOrder = await _unitOfWork.Orders.AddOrderAsync(order, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
 
                 _logger.LogInformation("Successfully created order: {OrderId} for customer: {CustomerId}",
                     createdOrder.OrderId, createdOrder.CustomerId);
@@ -142,7 +144,7 @@ namespace Bazario.Core.Services.Order
                 }
 
                 // Get existing order
-                var existingOrder = await _orderRepository.GetOrderByIdAsync(orderUpdateRequest.OrderId, cancellationToken);
+                var existingOrder = await _unitOfWork.Orders.GetOrderByIdAsync(orderUpdateRequest.OrderId, cancellationToken);
                 if (existingOrder == null)
                 {
                     throw new InvalidOperationException($"Order with ID {orderUpdateRequest.OrderId} not found");
@@ -168,7 +170,8 @@ namespace Bazario.Core.Services.Order
                     existingOrder.Subtotal = orderUpdateRequest.Subtotal.Value;
 
                 // Save changes
-                var updatedOrder = await _orderRepository.UpdateOrderAsync(existingOrder, cancellationToken);
+                var updatedOrder = await _unitOfWork.Orders.UpdateOrderAsync(existingOrder, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
 
                 _logger.LogInformation("Successfully updated order: {OrderId}", updatedOrder.OrderId);
 
@@ -188,7 +191,7 @@ namespace Bazario.Core.Services.Order
             try
             {
                 // Get existing order
-                var existingOrder = await _orderRepository.GetOrderByIdAsync(orderId, cancellationToken);
+                var existingOrder = await _unitOfWork.Orders.GetOrderByIdAsync(orderId, cancellationToken);
                 if (existingOrder == null)
                 {
                     throw new InvalidOperationException($"Order with ID {orderId} not found");
@@ -205,7 +208,8 @@ namespace Bazario.Core.Services.Order
                 existingOrder.Status = newStatus.ToString();
 
                 // Save changes
-                var updatedOrder = await _orderRepository.UpdateOrderAsync(existingOrder, cancellationToken);
+                var updatedOrder = await _unitOfWork.Orders.UpdateOrderAsync(existingOrder, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
 
                 _logger.LogInformation("Successfully updated order status: {OrderId} to {NewStatus}", orderId, newStatus);
 
@@ -275,7 +279,7 @@ namespace Bazario.Core.Services.Order
                 }
 
                 // Check if order exists before deletion
-                var existingOrder = await _orderRepository.GetOrderByIdAsync(orderId, cancellationToken);
+                var existingOrder = await _unitOfWork.Orders.GetOrderByIdAsync(orderId, cancellationToken);
                 if (existingOrder == null)
                 {
                     _logger.LogWarning("Order {OrderId} not found for deletion", orderId);
@@ -287,10 +291,11 @@ namespace Bazario.Core.Services.Order
                 _logger.LogCritical("PERFORMING HARD DELETE - This action is IRREVERSIBLE. OrderId: {OrderId}, DeletedBy: {DeletedBy}, Reason: {Reason}", 
                     orderId, deletedBy, reason);
 
-                var result = await _orderRepository.DeleteOrderByIdAsync(orderId, cancellationToken);
+                var result = await _unitOfWork.Orders.DeleteOrderByIdAsync(orderId, cancellationToken);
 
                 if (result)
                 {
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
                     _logger.LogInformation("Successfully deleted order: {OrderId} by admin user: {DeletedBy}", orderId, deletedBy);
                 }
                 else
