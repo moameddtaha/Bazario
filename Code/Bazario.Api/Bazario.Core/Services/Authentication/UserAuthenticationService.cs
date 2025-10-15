@@ -125,15 +125,18 @@ namespace Bazario.Core.Services.Authentication
             // Update role-specific user data
             if (roles.Contains("Customer"))
             {
-                await _deps.CustomerRepository.UpdateCustomerAsync(user);
+                await _deps.UnitOfWork.Customers.UpdateCustomerAsync(user);
+                await _deps.UnitOfWork.SaveChangesAsync();
             }
             else if (roles.Contains("Seller"))
             {
-                await _deps.SellerRepository.UpdateSellerAsync(user);
+                await _deps.UnitOfWork.Sellers.UpdateSellerAsync(user);
+                await _deps.UnitOfWork.SaveChangesAsync();
             }
             else if (roles.Contains("Admin"))
             {
-                await _deps.AdminRepository.UpdateAdminAsync(user);
+                await _deps.UnitOfWork.Admins.UpdateAdminAsync(user);
+                await _deps.UnitOfWork.SaveChangesAsync();
             }
         }
         

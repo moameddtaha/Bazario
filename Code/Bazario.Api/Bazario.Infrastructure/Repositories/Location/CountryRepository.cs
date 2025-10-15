@@ -64,7 +64,7 @@ namespace Bazario.Infrastructure.Repositories.Location
                 .ToListAsync(cancellationToken);
         }
 
-        public async Task<Country> AddAsync(Country country, CancellationToken cancellationToken = default)
+        public Task<Country> AddAsync(Country country, CancellationToken cancellationToken = default)
         {
             _logger.LogInformation("Adding new country: {CountryName} ({CountryCode})", country.Name, country.Code);
 
@@ -72,10 +72,9 @@ namespace Bazario.Infrastructure.Repositories.Location
             country.UpdatedAt = DateTime.UtcNow;
 
             _context.Countries.Add(country);
-            await _context.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation("Successfully added country: {CountryId}", country.CountryId);
-            return country;
+            return Task.FromResult(country);
         }
 
         public async Task<Country> UpdateAsync(Country country, CancellationToken cancellationToken = default)
@@ -97,7 +96,6 @@ namespace Bazario.Infrastructure.Repositories.Location
 
             // Do NOT update: CountryId, Code, CreatedAt
 
-            await _context.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation("Successfully updated country: {CountryId}", country.CountryId);
             return existingCountry;
@@ -117,7 +115,6 @@ namespace Bazario.Infrastructure.Repositories.Location
             country.IsActive = false;
             country.UpdatedAt = DateTime.UtcNow;
 
-            await _context.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation("Successfully deactivated country: {CountryId}", countryId);
             return true;

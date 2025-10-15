@@ -72,7 +72,6 @@ namespace Bazario.Infrastructure.Repositories.Location
             support.UpdatedAt = DateTime.UtcNow;
 
             await _context.StoreGovernorateSupports.AddAsync(support, cancellationToken);
-            await _context.SaveChangesAsync(cancellationToken);
 
             return support;
         }
@@ -89,7 +88,6 @@ namespace Bazario.Infrastructure.Repositories.Location
             }
 
             await _context.StoreGovernorateSupports.AddRangeAsync(supports, cancellationToken);
-            await _context.SaveChangesAsync(cancellationToken);
         }
 
         public async Task<StoreGovernorateSupport> UpdateAsync(StoreGovernorateSupport support, CancellationToken cancellationToken = default)
@@ -108,7 +106,6 @@ namespace Bazario.Infrastructure.Repositories.Location
 
             // Do NOT update: Id, StoreId, GovernorateId, CreatedAt
 
-            await _context.SaveChangesAsync(cancellationToken);
             return existingSupport;
         }
 
@@ -119,7 +116,6 @@ namespace Bazario.Infrastructure.Repositories.Location
             if (support != null)
             {
                 _context.StoreGovernorateSupports.Remove(support);
-                await _context.SaveChangesAsync(cancellationToken);
             }
         }
 
@@ -132,7 +128,6 @@ namespace Bazario.Infrastructure.Repositories.Location
             if (supports.Any())
             {
                 _context.StoreGovernorateSupports.RemoveRange(supports);
-                await _context.SaveChangesAsync(cancellationToken);
             }
         }
 

@@ -26,10 +26,10 @@ namespace Bazario.Infrastructure.Repositories.Store
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public async Task<StoreEntity> AddStoreAsync(StoreEntity store, CancellationToken cancellationToken = default)
+        public Task<StoreEntity> AddStoreAsync(StoreEntity store, CancellationToken cancellationToken = default)
         {
             _logger.LogInformation("Starting to add new store: {StoreName}", store?.Name);
-            
+
             try
             {
                 // Validate input
@@ -39,17 +39,16 @@ namespace Bazario.Infrastructure.Repositories.Store
                     throw new ArgumentNullException(nameof(store));
                 }
 
-                _logger.LogDebug("Adding store to database context. StoreId: {StoreId}, Name: {StoreName}, SellerId: {SellerId}", 
+                _logger.LogDebug("Adding store to database context. StoreId: {StoreId}, Name: {StoreName}, SellerId: {SellerId}",
                     store.StoreId, store.Name, store.SellerId);
 
                 // Add store to context
                 _context.Stores.Add(store);
-                await _context.SaveChangesAsync(cancellationToken);
 
-                _logger.LogInformation("Successfully added store. StoreId: {StoreId}, Name: {StoreName}", 
+                _logger.LogInformation("Successfully added store. StoreId: {StoreId}, Name: {StoreName}",
                     store.StoreId, store.Name);
 
-                return store;
+                return Task.FromResult(store);
             }
             catch (ArgumentException ex)
             {
@@ -103,7 +102,6 @@ namespace Bazario.Infrastructure.Repositories.Store
                 existingStore.Logo = store.Logo;
                 existingStore.IsActive = store.IsActive;
                 
-                await _context.SaveChangesAsync(cancellationToken);
 
                 _logger.LogInformation("Successfully updated store. StoreId: {StoreId}, Name: {Name}, Category: {Category}, IsActive: {IsActive}", 
                     store.StoreId, store.Name, store.Category, store.IsActive);
@@ -157,7 +155,6 @@ namespace Bazario.Infrastructure.Repositories.Store
 
                 // Hard delete the store (permanent removal)
                 _context.Stores.Remove(store);
-                await _context.SaveChangesAsync(cancellationToken);
 
                 _logger.LogInformation("Successfully hard deleted store. StoreId: {StoreId}, Name: {StoreName}", storeId, store.Name);
 
@@ -218,7 +215,6 @@ namespace Bazario.Infrastructure.Repositories.Store
 
                 // Update the store
                 _context.Stores.Update(store);
-                await _context.SaveChangesAsync(cancellationToken);
 
                 _logger.LogInformation("Successfully soft deleted store. StoreId: {StoreId}, Name: {StoreName}, DeletedBy: {DeletedBy}", 
                     storeId, store.Name, deletedBy);
@@ -274,7 +270,6 @@ namespace Bazario.Infrastructure.Repositories.Store
 
                 // Update the store
                 _context.Stores.Update(store);
-                await _context.SaveChangesAsync(cancellationToken);
 
                 _logger.LogInformation("Successfully restored store. StoreId: {StoreId}, Name: {StoreName}", storeId, store.Name);
 

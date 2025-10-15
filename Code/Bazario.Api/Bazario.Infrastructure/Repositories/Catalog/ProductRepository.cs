@@ -25,7 +25,7 @@ namespace Bazario.Infrastructure.Repositories.Catalog
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public async Task<Product> AddProductAsync(Product product, CancellationToken cancellationToken = default)
+        public Task<Product> AddProductAsync(Product product, CancellationToken cancellationToken = default)
         {
             _logger.LogInformation("Starting to add new product: {ProductName}", product?.Name);
             
@@ -43,12 +43,11 @@ namespace Bazario.Infrastructure.Repositories.Catalog
 
                 // Add product to context
                 _context.Products.Add(product);
-                await _context.SaveChangesAsync(cancellationToken);
 
-                _logger.LogInformation("Successfully added product. ProductId: {ProductId}, Name: {ProductName}", 
+                _logger.LogInformation("Successfully added product. ProductId: {ProductId}, Name: {ProductName}",
                     product.ProductId, product.Name);
 
-                return product;
+                return Task.FromResult(product);
             }
             catch (ArgumentException ex)
             {
@@ -125,7 +124,6 @@ namespace Bazario.Infrastructure.Repositories.Catalog
                     existingProduct.Category = product.Category;
                 }
                 
-                await _context.SaveChangesAsync(cancellationToken);
 
                 _logger.LogInformation("Successfully updated product. ProductId: {ProductId}, Name: {ProductName}", 
                     existingProduct.ProductId, existingProduct.Name);
@@ -386,7 +384,6 @@ namespace Bazario.Infrastructure.Repositories.Catalog
 
                 var oldQuantity = product.StockQuantity;
                 product.StockQuantity = newQuantity;
-                await _context.SaveChangesAsync(cancellationToken);
 
                 _logger.LogInformation("Successfully updated stock quantity for product: {ProductId}, {OldQuantity} -> {NewQuantity}", 
                     productId, oldQuantity, newQuantity);
@@ -464,7 +461,6 @@ namespace Bazario.Infrastructure.Repositories.Catalog
                 product.DeletedBy = deletedBy;
                 product.DeletedReason = reason;
 
-                await _context.SaveChangesAsync(cancellationToken);
 
                 _logger.LogInformation("Successfully soft deleted product: {ProductId}, Name: {ProductName}", 
                     productId, product.Name);
@@ -513,7 +509,6 @@ namespace Bazario.Infrastructure.Repositories.Catalog
                 product.DeletedBy = null;
                 product.DeletedReason = null;
 
-                await _context.SaveChangesAsync(cancellationToken);
 
                 _logger.LogInformation("Successfully restored product: {ProductId}, Name: {ProductName}", 
                     productId, product.Name);
@@ -592,7 +587,6 @@ namespace Bazario.Infrastructure.Repositories.Catalog
 
                 // Perform hard delete (permanent removal from database)
                 _context.Products.Remove(product);
-                await _context.SaveChangesAsync(cancellationToken);
 
                 _logger.LogCritical("HARD DELETE COMPLETED. Product permanently removed from database. ProductId: {ProductId}, Name: {ProductName}", 
                     productId, product.Name);

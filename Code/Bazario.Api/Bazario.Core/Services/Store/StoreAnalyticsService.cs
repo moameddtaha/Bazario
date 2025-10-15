@@ -4,10 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.Entities;
-using Bazario.Core.Domain.RepositoryContracts.Catalog;
-using Bazario.Core.Domain.RepositoryContracts.Order;
-using Bazario.Core.Domain.RepositoryContracts.Review;
-using Bazario.Core.Domain.RepositoryContracts.Store;
+using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Enums.Store;
 using Bazario.Core.Models.Shared;
 using Bazario.Core.Models.Store;
@@ -22,26 +19,14 @@ namespace Bazario.Core.Services.Store
     /// </summary>
     public class StoreAnalyticsService : IStoreAnalyticsService
     {
-        private readonly IStoreRepository _storeRepository;
-        private readonly IOrderRepository _orderRepository;
-        private readonly IOrderItemRepository _orderItemRepository;
-        private readonly IProductRepository _productRepository;
-        private readonly IReviewRepository _reviewRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<StoreAnalyticsService> _logger;
 
         public StoreAnalyticsService(
-            IStoreRepository storeRepository,
-            IOrderRepository orderRepository,
-            IOrderItemRepository orderItemRepository,
-            IProductRepository productRepository,
-            IReviewRepository reviewRepository,
+            IUnitOfWork unitOfWork,
             ILogger<StoreAnalyticsService> logger)
         {
-            _storeRepository = storeRepository ?? throw new ArgumentNullException(nameof(storeRepository));
-            _orderRepository = orderRepository ?? throw new ArgumentNullException(nameof(orderRepository));
-            _orderItemRepository = orderItemRepository ?? throw new ArgumentNullException(nameof(orderItemRepository));
-            _productRepository = productRepository ?? throw new ArgumentNullException(nameof(productRepository));
-            _reviewRepository = reviewRepository ?? throw new ArgumentNullException(nameof(reviewRepository));
+            _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -52,7 +37,7 @@ namespace Bazario.Core.Services.Store
             try
             {
                 // Validate store exists
-                var store = await _storeRepository.GetStoreByIdAsync(storeId, cancellationToken);
+                var store = await _unitOfWork.Stores.GetStoreByIdAsync(storeId, cancellationToken);
                 if (store == null)
                 {
                     throw new InvalidOperationException($"Store with ID {storeId} not found");
@@ -62,13 +47,13 @@ namespace Bazario.Core.Services.Store
                 dateRange ??= new DateRange();
 
                 // Get aggregated data efficiently from database
-                var orderStats = await _orderRepository.GetStoreOrderStatsAsync(storeId, dateRange.StartDate, dateRange.EndDate, cancellationToken);
-                var reviewStats = await _reviewRepository.GetStoreReviewStatsAsync(storeId, cancellationToken);
-                var topProducts = await _productRepository.GetTopPerformingProductsAsync(storeId, 10, cancellationToken);
+                var orderStats = await _unitOfWork.Orders.GetStoreOrderStatsAsync(storeId, dateRange.StartDate, dateRange.EndDate, cancellationToken);
+                var reviewStats = await _unitOfWork.Reviews.GetStoreReviewStatsAsync(storeId, cancellationToken);
+                var topProducts = await _unitOfWork.Products.GetTopPerformingProductsAsync(storeId, 10, cancellationToken);
 
                 // Get product counts efficiently (no need to load all products)
-                var totalProductCount = await _productRepository.GetProductCountByStoreIdAsync(storeId, includeDeleted: true, cancellationToken);
-                var activeProductCount = await _productRepository.GetProductCountByStoreIdAsync(storeId, includeDeleted: false, cancellationToken);
+                var totalProductCount = await _unitOfWork.Products.GetProductCountByStoreIdAsync(storeId, includeDeleted: true, cancellationToken);
+                var activeProductCount = await _unitOfWork.Products.GetProductCountByStoreIdAsync(storeId, includeDeleted: false, cancellationToken);
 
                 // Convert monthly order data to monthly store data
                 var monthlyData = orderStats.MonthlyData.Select(m => new MonthlyStoreData
@@ -116,7 +101,7 @@ namespace Bazario.Core.Services.Store
 
             try
             {
-                var store = await _storeRepository.GetStoreByIdAsync(storeId, cancellationToken);
+                var store = await _unitOfWork.Stores.GetStoreByIdAsync(storeId, cancellationToken);
                 if (store == null)
                 {
                     throw new InvalidOperationException($"Store with ID {storeId} not found");
@@ -125,9 +110,9 @@ namespace Bazario.Core.Services.Store
                 // Get performance data efficiently from database
                 // Use last 12 months for performance metrics (more reasonable than all-time data)
                 var oneYearAgo = DateTime.UtcNow.AddYears(-1);
-                var orderStats = await _orderRepository.GetStoreOrderStatsAsync(storeId, oneYearAgo, DateTime.UtcNow, cancellationToken);
-                var reviewStats = await _reviewRepository.GetStoreReviewStatsAsync(storeId, cancellationToken);
-                var productCount = await _storeRepository.GetProductCountByStoreIdAsync(storeId, cancellationToken);
+                var orderStats = await _unitOfWork.Orders.GetStoreOrderStatsAsync(storeId, oneYearAgo, DateTime.UtcNow, cancellationToken);
+                var reviewStats = await _unitOfWork.Reviews.GetStoreReviewStatsAsync(storeId, cancellationToken);
+                var productCount = await _unitOfWork.Stores.GetProductCountByStoreIdAsync(storeId, cancellationToken);
 
                 // Log warning if CreatedAt is null (data integrity issue)
                 if (store.CreatedAt == null)
@@ -171,16 +156,16 @@ namespace Bazario.Core.Services.Store
             try
             {
                 // Start with base queryable
-                var query = _storeRepository.GetStoresQueryable();
+                var query = _unitOfWork.Stores.GetStoresQueryable();
 
                 // Apply soft deletion filters (consistent with SearchStoresAsync)
                 if (searchCriteria.OnlyDeleted)
                 {
-                    query = _storeRepository.GetStoresQueryableIgnoreFilters().Where(s => s.IsDeleted);
+                    query = _unitOfWork.Stores.GetStoresQueryableIgnoreFilters().Where(s => s.IsDeleted);
                 }
                 else if (searchCriteria.IncludeDeleted)
                 {
-                    query = _storeRepository.GetStoresQueryableIgnoreFilters();
+                    query = _unitOfWork.Stores.GetStoresQueryableIgnoreFilters();
                 }
                 // Default: only active stores (global HasQueryFilter applies)
 
@@ -211,7 +196,7 @@ namespace Bazario.Core.Services.Store
                 }
 
                 // Get total count for pagination
-                var totalCount = await _storeRepository.GetStoresCountAsync(query, cancellationToken);
+                var totalCount = await _unitOfWork.Stores.GetStoresCountAsync(query, cancellationToken);
 
                 // Convert performance criteria to string for repository method
                 var performanceCriteriaString = performanceCriteria switch
@@ -227,7 +212,7 @@ namespace Bazario.Core.Services.Store
                 // Get top performing stores with performance metrics calculated and sorted at database level
                 // Use last 12 months for performance metrics (configurable)
                 var performancePeriodStart = DateTime.UtcNow.AddMonths(-12);
-                var storePerformances = await _storeRepository.GetTopPerformingStoresAsync(
+                var storePerformances = await _unitOfWork.Stores.GetTopPerformingStoresAsync(
                     query, 
                     searchCriteria.PageNumber, 
                     searchCriteria.PageSize, 

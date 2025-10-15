@@ -3,8 +3,8 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using Bazario.Core.Domain.RepositoryContracts.Store;
-using Bazario.Core.Domain.RepositoryContracts.UserManagement;
+using Bazario.Core.Domain.RepositoryContracts;
+
 using Bazario.Core.DTO.Store;
 using Bazario.Core.Enums.Catalog;
 using Bazario.Core.Models.Store;
@@ -19,8 +19,8 @@ namespace Bazario.Core.Services.Store
     /// </summary>
     public class StoreValidationService : IStoreValidationService
     {
-        private readonly IStoreRepository _storeRepository;
-        private readonly ISellerRepository _sellerRepository;
+        private readonly IUnitOfWork _unitOfWork;
+        
         private readonly ILogger<StoreValidationService> _logger;
 
         // Validation constants
@@ -34,12 +34,12 @@ namespace Bazario.Core.Services.Store
         private static readonly string[] ReservedStoreNames = { "admin", "support", "system", "api", "store", "shop", "bazario" };
 
         public StoreValidationService(
-            IStoreRepository storeRepository,
-            ISellerRepository sellerRepository,
+            IUnitOfWork unitOfWork,
+            
             ILogger<StoreValidationService> logger)
         {
-            _storeRepository = storeRepository ?? throw new ArgumentNullException(nameof(storeRepository));
-            _sellerRepository = sellerRepository ?? throw new ArgumentNullException(nameof(sellerRepository));
+            _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
+            
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -123,7 +123,7 @@ namespace Bazario.Core.Services.Store
                 _logger.LogDebug("Checking seller eligibility and existing stores");
 
                 // Verify seller exists
-                var seller = await _sellerRepository.GetSellerByIdAsync(sellerId, cancellationToken);
+                var seller = await _unitOfWork.Sellers.GetSellerByIdAsync(sellerId, cancellationToken);
                 result.SellerEligible = seller != null;
 
                 if (!result.SellerEligible)
@@ -134,7 +134,7 @@ namespace Bazario.Core.Services.Store
                 }
 
                 // Get seller's stores to check count
-                var sellerStores = await _storeRepository.GetStoresBySellerIdAsync(sellerId, cancellationToken);
+                var sellerStores = await _unitOfWork.Stores.GetStoresBySellerIdAsync(sellerId, cancellationToken);
                 result.SellerStoreCount = sellerStores.Count;
                 _logger.LogDebug("Seller {SellerId} currently has {StoreCount} stores (max: {MaxStores})",
                     sellerId, result.SellerStoreCount, result.MaxAllowedStores);
@@ -148,7 +148,7 @@ namespace Bazario.Core.Services.Store
                 // STEP 3: Check platform-wide store name uniqueness (this covers seller-specific check too)
                 _logger.LogDebug("Checking platform-wide store name uniqueness");
 
-                var nameExistsGlobally = await _storeRepository.IsStoreNameTakenAsync(storeName, excludeStoreId: null, cancellationToken);
+                var nameExistsGlobally = await _unitOfWork.Stores.IsStoreNameTakenAsync(storeName, excludeStoreId: null, cancellationToken);
                 result.NameAvailable = !nameExistsGlobally;
 
                 if (nameExistsGlobally)
@@ -209,7 +209,7 @@ namespace Bazario.Core.Services.Store
                 // STEP 2: Check if store exists and belongs to seller
                 _logger.LogDebug("Checking store ownership");
 
-                var store = await _storeRepository.GetStoreByIdAsync(updateRequest.StoreId, cancellationToken);
+                var store = await _unitOfWork.Stores.GetStoreByIdAsync(updateRequest.StoreId, cancellationToken);
 
                 if (store == null)
                 {
@@ -260,7 +260,7 @@ namespace Bazario.Core.Services.Store
                         if (nameIsChanging)
                         {
                             // Check platform-wide uniqueness (excluding current store)
-                            var nameExists = await _storeRepository.IsStoreNameTakenAsync(trimmedName, updateRequest.StoreId, cancellationToken);
+                            var nameExists = await _unitOfWork.Stores.IsStoreNameTakenAsync(trimmedName, updateRequest.StoreId, cancellationToken);
 
                             if (nameExists)
                             {
@@ -351,7 +351,7 @@ namespace Bazario.Core.Services.Store
                 // STEP 2: Check if store exists and belongs to seller
                 _logger.LogDebug("Checking store ownership for soft deletion");
 
-                var store = await _storeRepository.GetStoreByIdAsync(storeId, cancellationToken);
+                var store = await _unitOfWork.Stores.GetStoreByIdAsync(storeId, cancellationToken);
 
                 if (store == null)
                 {
@@ -378,7 +378,7 @@ namespace Bazario.Core.Services.Store
                 // STEP 4: Check if store has active products
                 _logger.LogDebug("Checking if store has active products for soft deletion");
 
-                var productCount = await _storeRepository.GetProductCountByStoreIdAsync(storeId, cancellationToken);
+                var productCount = await _unitOfWork.Stores.GetProductCountByStoreIdAsync(storeId, cancellationToken);
 
                 if (productCount > 0)
                 {

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Bazario.Core.Domain.RepositoryContracts.Store;
+using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.DTO;
 using Bazario.Core.DTO.Store;
 using Bazario.Core.Extensions.Store;
@@ -20,14 +20,14 @@ namespace Bazario.Core.Services.Store
     /// </summary>
     public class StoreQueryService : IStoreQueryService
     {
-        private readonly IStoreRepository _storeRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<StoreQueryService> _logger;
 
         public StoreQueryService(
-            IStoreRepository storeRepository,
+            IUnitOfWork unitOfWork,
             ILogger<StoreQueryService> logger)
         {
-            _storeRepository = storeRepository ?? throw new ArgumentNullException(nameof(storeRepository));
+            _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -37,7 +37,7 @@ namespace Bazario.Core.Services.Store
 
             try
             {
-                var store = await _storeRepository.GetStoreByIdAsync(storeId, cancellationToken);
+                var store = await _unitOfWork.Stores.GetStoreByIdAsync(storeId, cancellationToken);
                 
                 if (store == null)
                 {
@@ -61,7 +61,7 @@ namespace Bazario.Core.Services.Store
 
             try
             {
-                var stores = await _storeRepository.GetStoresBySellerIdAsync(sellerId, cancellationToken);
+                var stores = await _unitOfWork.Stores.GetStoresBySellerIdAsync(sellerId, cancellationToken);
                 var storeResponses = stores.Select(s => s.ToStoreResponse()).ToList();
 
                 _logger.LogDebug("Successfully retrieved {StoreCount} stores for seller: {SellerId}", storeResponses.Count, sellerId);
@@ -90,18 +90,18 @@ namespace Bazario.Core.Services.Store
                 }
 
                 // Start with IQueryable - stays as SQL
-                var query = _storeRepository.GetStoresQueryable();
+                var query = _unitOfWork.Stores.GetStoresQueryable();
 
                 // Apply soft deletion filters (these become SQL WHERE clauses)
                 if (searchCriteria.OnlyDeleted)
                 {
                     // Need to ignore the global filter to get deleted stores
-                    query = _storeRepository.GetStoresQueryableIgnoreFilters().Where(s => s.IsDeleted);
+                    query = _unitOfWork.Stores.GetStoresQueryableIgnoreFilters().Where(s => s.IsDeleted);
                 }
                 else if (searchCriteria.IncludeDeleted)
                 {
                     // Need to ignore the global filter to include both active and deleted stores
-                    query = _storeRepository.GetStoresQueryableIgnoreFilters();
+                    query = _unitOfWork.Stores.GetStoresQueryableIgnoreFilters();
                 }
                 // If neither OnlyDeleted nor IncludeDeleted, the global HasQueryFilter 
                 // automatically applies !s.IsDeleted, so no additional filter needed
@@ -138,10 +138,10 @@ namespace Bazario.Core.Services.Store
                 };
 
                 // Get total count with SQL COUNT
-                var totalCount = await _storeRepository.GetStoresCountAsync(query, cancellationToken);
+                var totalCount = await _unitOfWork.Stores.GetStoresCountAsync(query, cancellationToken);
 
                 // Apply pagination and execute query (this becomes SQL OFFSET/FETCH)
-                var stores = await _storeRepository.GetStoresPagedAsync(query, searchCriteria.PageNumber, searchCriteria.PageSize, cancellationToken);
+                var stores = await _unitOfWork.Stores.GetStoresPagedAsync(query, searchCriteria.PageNumber, searchCriteria.PageSize, cancellationToken);
 
                 var storeResponses = stores.Select(s => s.ToStoreResponse()).ToList();
 
@@ -179,19 +179,19 @@ namespace Bazario.Core.Services.Store
                 }
 
                 // Use IQueryable for efficient SQL
-                var query = _storeRepository.GetStoresQueryable()
+                var query = _unitOfWork.Stores.GetStoresQueryable()
                     .Where(s => s.Category == searchCriteria.Category);
 
                 // Apply soft deletion filters (consistent with SearchStoresAsync)
                 if (searchCriteria.OnlyDeleted)
                 {
-                    query = _storeRepository.GetStoresQueryableIgnoreFilters()
+                    query = _unitOfWork.Stores.GetStoresQueryableIgnoreFilters()
                         .Where(s => s.Category == searchCriteria.Category)
                         .Where(s => s.IsDeleted);
                 }
                 else if (searchCriteria.IncludeDeleted)
                 {
-                    query = _storeRepository.GetStoresQueryableIgnoreFilters()
+                    query = _unitOfWork.Stores.GetStoresQueryableIgnoreFilters()
                         .Where(s => s.Category == searchCriteria.Category);
                 }
 
@@ -208,10 +208,10 @@ namespace Bazario.Core.Services.Store
                 };
 
                 // Get total count with SQL COUNT
-                var totalCount = await _storeRepository.GetStoresCountAsync(query, cancellationToken);
+                var totalCount = await _unitOfWork.Stores.GetStoresCountAsync(query, cancellationToken);
 
                 // Apply pagination and execute query
-                var stores = await _storeRepository.GetStoresPagedAsync(query, searchCriteria.PageNumber, searchCriteria.PageSize, cancellationToken);
+                var stores = await _unitOfWork.Stores.GetStoresPagedAsync(query, searchCriteria.PageNumber, searchCriteria.PageSize, cancellationToken);
 
                 var storeResponses = stores.Select(s => s.ToStoreResponse()).ToList();
 

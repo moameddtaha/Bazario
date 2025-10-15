@@ -27,10 +27,10 @@ namespace Bazario.Infrastructure.Repositories.Order
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public async Task<OrderEntity> AddOrderAsync(OrderEntity order, CancellationToken cancellationToken = default)
+        public Task<OrderEntity> AddOrderAsync(OrderEntity order, CancellationToken cancellationToken = default)
         {
             _logger.LogInformation("Starting to add new order for customer: {CustomerId}", order?.CustomerId);
-            
+
             try
             {
                 // Validate input
@@ -40,17 +40,16 @@ namespace Bazario.Infrastructure.Repositories.Order
                     throw new ArgumentNullException(nameof(order));
                 }
 
-                _logger.LogDebug("Adding order to database context. OrderId: {OrderId}, Total: {OrderTotal}, Status: {OrderStatus}", 
+                _logger.LogDebug("Adding order to database context. OrderId: {OrderId}, Total: {OrderTotal}, Status: {OrderStatus}",
                     order.OrderId, order.TotalAmount, order.Status);
 
                 // Add order to context
                 _context.Orders.Add(order);
-                await _context.SaveChangesAsync(cancellationToken);
 
-                _logger.LogInformation("Successfully added order. OrderId: {OrderId}, Total: {OrderTotal}", 
+                _logger.LogInformation("Successfully added order. OrderId: {OrderId}, Total: {OrderTotal}",
                     order.OrderId, order.TotalAmount);
 
-                return order;
+                return Task.FromResult(order);
             }
             catch (ArgumentException ex)
             {
@@ -136,7 +135,6 @@ namespace Bazario.Infrastructure.Repositories.Order
                     existingOrder.AppliedDiscountTypes = order.AppliedDiscountTypes;
                 }
                 
-                await _context.SaveChangesAsync(cancellationToken);
 
                 _logger.LogInformation("Successfully updated order. OrderId: {OrderId}, Status: {Status}, Subtotal: {Subtotal}, DiscountAmount: {DiscountAmount}, ShippingCost: {ShippingCost}, TotalAmount: {TotalAmount}", 
                     order.OrderId, order.Status, order.Subtotal, order.DiscountAmount, order.ShippingCost, order.TotalAmount);
@@ -187,7 +185,6 @@ namespace Bazario.Infrastructure.Repositories.Order
 
                 // Delete the order
                 _context.Orders.Remove(order);
-                await _context.SaveChangesAsync(cancellationToken);
 
                 _logger.LogInformation("Successfully deleted order. OrderId: {OrderId}", orderId);
 

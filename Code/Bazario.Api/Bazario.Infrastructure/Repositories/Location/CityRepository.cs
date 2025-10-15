@@ -95,7 +95,6 @@ namespace Bazario.Infrastructure.Repositories.Location
             city.UpdatedAt = DateTime.UtcNow;
 
             await _context.Cities.AddAsync(city, cancellationToken);
-            await _context.SaveChangesAsync(cancellationToken);
 
             return city;
         }
@@ -119,7 +118,6 @@ namespace Bazario.Infrastructure.Repositories.Location
 
             // Do NOT update: CityId, GovernorateId, CreatedAt
 
-            await _context.SaveChangesAsync(cancellationToken);
             return existingCity;
         }
 
@@ -133,7 +131,6 @@ namespace Bazario.Infrastructure.Repositories.Location
             city.IsActive = false;
             city.UpdatedAt = DateTime.UtcNow;
 
-            await _context.SaveChangesAsync(cancellationToken);
             return true;
         }
 

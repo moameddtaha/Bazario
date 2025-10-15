@@ -5,8 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.Entities.Location;
 using Bazario.Core.Domain.Entities.Store;
-using Bazario.Core.Domain.RepositoryContracts.Location;
-using Bazario.Core.Domain.RepositoryContracts.Store;
+using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.DTO.Store;
 using Bazario.Core.Enums.Order;
 using Bazario.Core.Helpers.Store;
@@ -18,31 +17,23 @@ namespace Bazario.Core.Services.Store
 {
     /// <summary>
     /// Service implementation for store shipping configuration operations
+    /// Uses Unit of Work pattern for transaction management and data consistency
     /// </summary>
     public class StoreShippingConfigurationService : IStoreShippingConfigurationService
     {
-        private readonly IStoreShippingConfigurationRepository _configurationRepository;
-        private readonly IStoreRepository _storeRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly IStoreAuthorizationService _authorizationService;
-        private readonly IStoreGovernorateSupportRepository _governorateSupportRepository;
-        private readonly ICityRepository _cityRepository;
         private readonly IStoreShippingConfigurationHelper _helper;
         private readonly ILogger<StoreShippingConfigurationService> _logger;
 
         public StoreShippingConfigurationService(
-            IStoreShippingConfigurationRepository configurationRepository,
-            IStoreRepository storeRepository,
+            IUnitOfWork unitOfWork,
             IStoreAuthorizationService authorizationService,
-            IStoreGovernorateSupportRepository governorateSupportRepository,
-            ICityRepository cityRepository,
             IStoreShippingConfigurationHelper helper,
             ILogger<StoreShippingConfigurationService> logger)
         {
-            _configurationRepository = configurationRepository ?? throw new ArgumentNullException(nameof(configurationRepository));
-            _storeRepository = storeRepository ?? throw new ArgumentNullException(nameof(storeRepository));
+            _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _authorizationService = authorizationService ?? throw new ArgumentNullException(nameof(authorizationService));
-            _governorateSupportRepository = governorateSupportRepository ?? throw new ArgumentNullException(nameof(governorateSupportRepository));
-            _cityRepository = cityRepository ?? throw new ArgumentNullException(nameof(cityRepository));
             _helper = helper ?? throw new ArgumentNullException(nameof(helper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
@@ -59,7 +50,7 @@ namespace Bazario.Core.Services.Store
                     throw new ArgumentException("Store ID cannot be empty", nameof(storeId));
                 }
 
-                var configuration = await _configurationRepository.GetByStoreIdAsync(storeId, cancellationToken);
+                var configuration = await _unitOfWork.StoreShippingConfigurations.GetByStoreIdAsync(storeId, cancellationToken);
                 
                 if (configuration == null)
                 {
@@ -75,9 +66,9 @@ namespace Bazario.Core.Services.Store
                 }
 
                 // Parallelize independent database queries for better performance
-                var storeTask = _storeRepository.GetStoreByIdAsync(storeId, cancellationToken);
-                var supportedGovernoratesTask = _governorateSupportRepository.GetSupportedGovernorates(storeId, cancellationToken);
-                var excludedGovernoratesTask = _governorateSupportRepository.GetExcludedGovernorates(storeId, cancellationToken);
+                var storeTask = _unitOfWork.Stores.GetStoreByIdAsync(storeId, cancellationToken);
+                var supportedGovernoratesTask = _unitOfWork.StoreGovernorateSupports.GetSupportedGovernorates(storeId, cancellationToken);
+                var excludedGovernoratesTask = _unitOfWork.StoreGovernorateSupports.GetExcludedGovernorates(storeId, cancellationToken);
 
                 await Task.WhenAll(storeTask, supportedGovernoratesTask, excludedGovernoratesTask);
 
@@ -143,7 +134,7 @@ namespace Bazario.Core.Services.Store
                 }
 
                 // Validate store exists
-                var store = await _storeRepository.GetStoreByIdAsync(request.StoreId, cancellationToken);
+                var store = await _unitOfWork.Stores.GetStoreByIdAsync(request.StoreId, cancellationToken);
                 if (store == null)
                 {
                     throw new InvalidOperationException($"Store with ID {request.StoreId} not found");
@@ -153,85 +144,98 @@ namespace Bazario.Core.Services.Store
                 _helper.ValidateConfigurationBusinessRules(request);
 
                 // Check if configuration already exists
-                var existingConfig = await _configurationRepository.GetByStoreIdAsync(request.StoreId, cancellationToken);
+                var existingConfig = await _unitOfWork.StoreShippingConfigurations.GetByStoreIdAsync(request.StoreId, cancellationToken);
                 if (existingConfig != null)
                 {
                     throw new InvalidOperationException($"Shipping configuration already exists for store {request.StoreId}");
                 }
 
-                // Create new configuration
-                // TODO: Consider wrapping these operations in a database transaction for data consistency.
-                // If governorate record creation fails, configuration will be left in incomplete state.
-                // Implement Unit of Work pattern or use explicit transaction scope.
-                var configuration = new StoreShippingConfiguration
-                {
-                    StoreId = request.StoreId,
-                    DefaultShippingZone = request.DefaultShippingZone.ToString(),
-                    OffersSameDayDelivery = request.OffersSameDayDelivery,
-                    OffersStandardDelivery = request.OffersStandardDelivery,
-                    SameDayCutoffHour = request.SameDayCutoffHour,
-                    ShippingNotes = request.ShippingNotes,
-                    SameDayDeliveryFee = request.SameDayDeliveryFee,
-                    StandardDeliveryFee = request.StandardDeliveryFee,
-                    NationalDeliveryFee = request.NationalDeliveryFee
-                };
+                // Use Unit of Work transaction to ensure atomic operation
+                // Configuration and governorates are created together or not at all
+                await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
-                var createdConfiguration = await _configurationRepository.CreateAsync(configuration, cancellationToken);
-
-                // Create junction table records for governorates
-                if (request.SupportedGovernorateIds != null && request.SupportedGovernorateIds.Any())
+                try
                 {
-                    var supportedRecords = request.SupportedGovernorateIds.Select(govId => new StoreGovernorateSupport
+                    // Create new configuration
+                    var configuration = new StoreShippingConfiguration
                     {
                         StoreId = request.StoreId,
-                        GovernorateId = govId,
-                        IsSupported = true
-                    }).ToList();
+                        DefaultShippingZone = request.DefaultShippingZone.ToString(),
+                        OffersSameDayDelivery = request.OffersSameDayDelivery,
+                        OffersStandardDelivery = request.OffersStandardDelivery,
+                        SameDayCutoffHour = request.SameDayCutoffHour,
+                        ShippingNotes = request.ShippingNotes,
+                        SameDayDeliveryFee = request.SameDayDeliveryFee,
+                        StandardDeliveryFee = request.StandardDeliveryFee,
+                        NationalDeliveryFee = request.NationalDeliveryFee
+                    };
 
-                    await _governorateSupportRepository.AddRangeAsync(supportedRecords, cancellationToken);
-                }
+                    var createdConfiguration = await _unitOfWork.StoreShippingConfigurations.CreateAsync(configuration, cancellationToken);
 
-                if (request.ExcludedGovernorateIds != null && request.ExcludedGovernorateIds.Any())
-                {
-                    var excludedRecords = request.ExcludedGovernorateIds.Select(govId => new StoreGovernorateSupport
+                    // Create junction table records for governorates
+                    if (request.SupportedGovernorateIds != null && request.SupportedGovernorateIds.Any())
                     {
-                        StoreId = request.StoreId,
-                        GovernorateId = govId,
-                        IsSupported = false
-                    }).ToList();
+                        var supportedRecords = request.SupportedGovernorateIds.Select(govId => new StoreGovernorateSupport
+                        {
+                            StoreId = request.StoreId,
+                            GovernorateId = govId,
+                            IsSupported = true
+                        }).ToList();
 
-                    await _governorateSupportRepository.AddRangeAsync(excludedRecords, cancellationToken);
+                        await _unitOfWork.StoreGovernorateSupports.AddRangeAsync(supportedRecords, cancellationToken);
+                    }
+
+                    if (request.ExcludedGovernorateIds != null && request.ExcludedGovernorateIds.Any())
+                    {
+                        var excludedRecords = request.ExcludedGovernorateIds.Select(govId => new StoreGovernorateSupport
+                        {
+                            StoreId = request.StoreId,
+                            GovernorateId = govId,
+                            IsSupported = false
+                        }).ToList();
+
+                        await _unitOfWork.StoreGovernorateSupports.AddRangeAsync(excludedRecords, cancellationToken);
+                    }
+
+                    // Commit transaction - all changes are saved atomically
+                    await _unitOfWork.CommitTransactionAsync(cancellationToken);
+
+                    _logger.LogInformation("Successfully created shipping configuration for store: {StoreId}", request.StoreId);
+
+                    // Get governorate data for response - parallelize for better performance
+                    var supportedGovernoratesTask = _unitOfWork.StoreGovernorateSupports.GetSupportedGovernorates(request.StoreId, cancellationToken);
+                    var excludedGovernoratesTask = _unitOfWork.StoreGovernorateSupports.GetExcludedGovernorates(request.StoreId, cancellationToken);
+
+                    await Task.WhenAll(supportedGovernoratesTask, excludedGovernoratesTask);
+
+                    var supportedGovernorates = await supportedGovernoratesTask;
+                    var excludedGovernorates = await excludedGovernoratesTask;
+
+                    return new StoreShippingConfigurationResponse
+                    {
+                        StoreId = createdConfiguration.StoreId,
+                        StoreName = store?.Name ?? "Unknown Store",
+                        DefaultShippingZone = Enum.TryParse<ShippingZone>(createdConfiguration.DefaultShippingZone, out var createdZone) ? createdZone : ShippingZone.Local,
+                        OffersSameDayDelivery = createdConfiguration.OffersSameDayDelivery,
+                        OffersStandardDelivery = createdConfiguration.OffersStandardDelivery,
+                        SameDayCutoffHour = createdConfiguration.SameDayCutoffHour,
+                        ShippingNotes = createdConfiguration.ShippingNotes,
+                        SameDayDeliveryFee = createdConfiguration.SameDayDeliveryFee,
+                        StandardDeliveryFee = createdConfiguration.StandardDeliveryFee,
+                        NationalDeliveryFee = createdConfiguration.NationalDeliveryFee,
+                        SupportedGovernorates = _helper.MapGovernorateShippingInfo(supportedGovernorates),
+                        ExcludedGovernorates = _helper.MapGovernorateShippingInfo(excludedGovernorates),
+                        CreatedAt = createdConfiguration.CreatedAt,
+                        UpdatedAt = createdConfiguration.UpdatedAt,
+                        IsActive = createdConfiguration.IsActive
+                    };
                 }
-
-                _logger.LogInformation("Successfully created shipping configuration for store: {StoreId}", request.StoreId);
-
-                // Get governorate data for response - parallelize for better performance
-                var supportedGovernoratesTask = _governorateSupportRepository.GetSupportedGovernorates(request.StoreId, cancellationToken);
-                var excludedGovernoratesTask = _governorateSupportRepository.GetExcludedGovernorates(request.StoreId, cancellationToken);
-
-                await Task.WhenAll(supportedGovernoratesTask, excludedGovernoratesTask);
-
-                var supportedGovernorates = await supportedGovernoratesTask;
-                var excludedGovernorates = await excludedGovernoratesTask;
-
-                return new StoreShippingConfigurationResponse
+                catch
                 {
-                    StoreId = createdConfiguration.StoreId,
-                    StoreName = store?.Name ?? "Unknown Store",
-                    DefaultShippingZone = Enum.TryParse<ShippingZone>(createdConfiguration.DefaultShippingZone, out var createdZone) ? createdZone : ShippingZone.Local,
-                    OffersSameDayDelivery = createdConfiguration.OffersSameDayDelivery,
-                    OffersStandardDelivery = createdConfiguration.OffersStandardDelivery,
-                    SameDayCutoffHour = createdConfiguration.SameDayCutoffHour,
-                    ShippingNotes = createdConfiguration.ShippingNotes,
-                    SameDayDeliveryFee = createdConfiguration.SameDayDeliveryFee,
-                    StandardDeliveryFee = createdConfiguration.StandardDeliveryFee,
-                    NationalDeliveryFee = createdConfiguration.NationalDeliveryFee,
-                    SupportedGovernorates = _helper.MapGovernorateShippingInfo(supportedGovernorates),
-                    ExcludedGovernorates = _helper.MapGovernorateShippingInfo(excludedGovernorates),
-                    CreatedAt = createdConfiguration.CreatedAt,
-                    UpdatedAt = createdConfiguration.UpdatedAt,
-                    IsActive = createdConfiguration.IsActive
-                };
+                    // Rollback transaction on any error - ensures data consistency
+                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                    throw;
+                }
             }
             catch (Exception ex)
             {
@@ -272,7 +276,7 @@ namespace Bazario.Core.Services.Store
                 }
 
                 // Get existing configuration
-                var existingConfiguration = await _configurationRepository.GetByStoreIdAsync(request.StoreId, cancellationToken);
+                var existingConfiguration = await _unitOfWork.StoreShippingConfigurations.GetByStoreIdAsync(request.StoreId, cancellationToken);
                 if (existingConfiguration == null)
                 {
                     throw new InvalidOperationException($"No shipping configuration found for store {request.StoreId}");
@@ -281,74 +285,90 @@ namespace Bazario.Core.Services.Store
                 // Validate business rules (after authorization check)
                 _helper.ValidateConfigurationBusinessRules(request);
 
-                // Update configuration
-                existingConfiguration.DefaultShippingZone = request.DefaultShippingZone.ToString();
-                existingConfiguration.OffersSameDayDelivery = request.OffersSameDayDelivery;
-                existingConfiguration.OffersStandardDelivery = request.OffersStandardDelivery;
-                existingConfiguration.SameDayCutoffHour = request.SameDayCutoffHour;
-                existingConfiguration.ShippingNotes = request.ShippingNotes;
-                existingConfiguration.SameDayDeliveryFee = request.SameDayDeliveryFee;
-                existingConfiguration.StandardDeliveryFee = request.StandardDeliveryFee;
-                existingConfiguration.NationalDeliveryFee = request.NationalDeliveryFee;
+                // Use Unit of Work transaction to ensure atomic operation
+                // Configuration and governorates are updated together or not at all
+                await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
-                var updatedConfiguration = await _configurationRepository.UpdateAsync(existingConfiguration, cancellationToken);
-
-                // Update junction table records for governorates using replace strategy
-                var newGovernorateRecords = new List<StoreGovernorateSupport>();
-
-                if (request.SupportedGovernorateIds != null && request.SupportedGovernorateIds.Any())
+                try
                 {
-                    newGovernorateRecords.AddRange(request.SupportedGovernorateIds.Select(govId => new StoreGovernorateSupport
+                    // Update configuration
+                    existingConfiguration.DefaultShippingZone = request.DefaultShippingZone.ToString();
+                    existingConfiguration.OffersSameDayDelivery = request.OffersSameDayDelivery;
+                    existingConfiguration.OffersStandardDelivery = request.OffersStandardDelivery;
+                    existingConfiguration.SameDayCutoffHour = request.SameDayCutoffHour;
+                    existingConfiguration.ShippingNotes = request.ShippingNotes;
+                    existingConfiguration.SameDayDeliveryFee = request.SameDayDeliveryFee;
+                    existingConfiguration.StandardDeliveryFee = request.StandardDeliveryFee;
+                    existingConfiguration.NationalDeliveryFee = request.NationalDeliveryFee;
+
+                    var updatedConfiguration = await _unitOfWork.StoreShippingConfigurations.UpdateAsync(existingConfiguration, cancellationToken);
+
+                    // Update junction table records for governorates using replace strategy
+                    var newGovernorateRecords = new List<StoreGovernorateSupport>();
+
+                    if (request.SupportedGovernorateIds != null && request.SupportedGovernorateIds.Any())
                     {
-                        StoreId = request.StoreId,
-                        GovernorateId = govId,
-                        IsSupported = true
-                    }));
-                }
+                        newGovernorateRecords.AddRange(request.SupportedGovernorateIds.Select(govId => new StoreGovernorateSupport
+                        {
+                            StoreId = request.StoreId,
+                            GovernorateId = govId,
+                            IsSupported = true
+                        }));
+                    }
 
-                if (request.ExcludedGovernorateIds != null && request.ExcludedGovernorateIds.Any())
-                {
-                    newGovernorateRecords.AddRange(request.ExcludedGovernorateIds.Select(govId => new StoreGovernorateSupport
+                    if (request.ExcludedGovernorateIds != null && request.ExcludedGovernorateIds.Any())
                     {
-                        StoreId = request.StoreId,
-                        GovernorateId = govId,
-                        IsSupported = false
-                    }));
+                        newGovernorateRecords.AddRange(request.ExcludedGovernorateIds.Select(govId => new StoreGovernorateSupport
+                        {
+                            StoreId = request.StoreId,
+                            GovernorateId = govId,
+                            IsSupported = false
+                        }));
+                    }
+
+                    await _unitOfWork.StoreGovernorateSupports.ReplaceStoreGovernorates(request.StoreId, newGovernorateRecords, cancellationToken);
+
+                    // Commit transaction - all changes are saved atomically
+                    await _unitOfWork.CommitTransactionAsync(cancellationToken);
+
+                    // Get updated governorate data and store for response - parallelize for better performance
+                    var storeTask = _unitOfWork.Stores.GetStoreByIdAsync(request.StoreId, cancellationToken);
+                    var supportedGovernoratesTask = _unitOfWork.StoreGovernorateSupports.GetSupportedGovernorates(request.StoreId, cancellationToken);
+                    var excludedGovernoratesTask = _unitOfWork.StoreGovernorateSupports.GetExcludedGovernorates(request.StoreId, cancellationToken);
+
+                    await Task.WhenAll(storeTask, supportedGovernoratesTask, excludedGovernoratesTask);
+
+                    var store = await storeTask;
+                    var supportedGovernorates = await supportedGovernoratesTask;
+                    var excludedGovernorates = await excludedGovernoratesTask;
+
+                    _logger.LogInformation("Successfully updated shipping configuration for store: {StoreId}", request.StoreId);
+
+                    return new StoreShippingConfigurationResponse
+                    {
+                        StoreId = updatedConfiguration.StoreId,
+                        StoreName = store?.Name ?? "Unknown Store",
+                        DefaultShippingZone = Enum.TryParse<ShippingZone>(updatedConfiguration.DefaultShippingZone, out var updatedZone) ? updatedZone : ShippingZone.Local,
+                        OffersSameDayDelivery = updatedConfiguration.OffersSameDayDelivery,
+                        OffersStandardDelivery = updatedConfiguration.OffersStandardDelivery,
+                        SameDayCutoffHour = updatedConfiguration.SameDayCutoffHour,
+                        ShippingNotes = updatedConfiguration.ShippingNotes,
+                        SameDayDeliveryFee = updatedConfiguration.SameDayDeliveryFee,
+                        StandardDeliveryFee = updatedConfiguration.StandardDeliveryFee,
+                        NationalDeliveryFee = updatedConfiguration.NationalDeliveryFee,
+                        SupportedGovernorates = _helper.MapGovernorateShippingInfo(supportedGovernorates),
+                        ExcludedGovernorates = _helper.MapGovernorateShippingInfo(excludedGovernorates),
+                        CreatedAt = updatedConfiguration.CreatedAt,
+                        UpdatedAt = updatedConfiguration.UpdatedAt,
+                        IsActive = updatedConfiguration.IsActive
+                    };
                 }
-
-                await _governorateSupportRepository.ReplaceStoreGovernorates(request.StoreId, newGovernorateRecords, cancellationToken);
-
-                // Get updated governorate data and store for response - parallelize for better performance
-                var storeTask = _storeRepository.GetStoreByIdAsync(request.StoreId, cancellationToken);
-                var supportedGovernoratesTask = _governorateSupportRepository.GetSupportedGovernorates(request.StoreId, cancellationToken);
-                var excludedGovernoratesTask = _governorateSupportRepository.GetExcludedGovernorates(request.StoreId, cancellationToken);
-
-                await Task.WhenAll(storeTask, supportedGovernoratesTask, excludedGovernoratesTask);
-
-                var store = await storeTask;
-                var supportedGovernorates = await supportedGovernoratesTask;
-                var excludedGovernorates = await excludedGovernoratesTask;
-
-                _logger.LogInformation("Successfully updated shipping configuration for store: {StoreId}", request.StoreId);
-
-                return new StoreShippingConfigurationResponse
+                catch
                 {
-                    StoreId = updatedConfiguration.StoreId,
-                    StoreName = store?.Name ?? "Unknown Store",
-                    DefaultShippingZone = Enum.TryParse<ShippingZone>(updatedConfiguration.DefaultShippingZone, out var updatedZone) ? updatedZone : ShippingZone.Local,
-                    OffersSameDayDelivery = updatedConfiguration.OffersSameDayDelivery,
-                    OffersStandardDelivery = updatedConfiguration.OffersStandardDelivery,
-                    SameDayCutoffHour = updatedConfiguration.SameDayCutoffHour,
-                    ShippingNotes = updatedConfiguration.ShippingNotes,
-                    SameDayDeliveryFee = updatedConfiguration.SameDayDeliveryFee,
-                    StandardDeliveryFee = updatedConfiguration.StandardDeliveryFee,
-                    NationalDeliveryFee = updatedConfiguration.NationalDeliveryFee,
-                    SupportedGovernorates = _helper.MapGovernorateShippingInfo(supportedGovernorates),
-                    ExcludedGovernorates = _helper.MapGovernorateShippingInfo(excludedGovernorates),
-                    CreatedAt = updatedConfiguration.CreatedAt,
-                    UpdatedAt = updatedConfiguration.UpdatedAt,
-                    IsActive = updatedConfiguration.IsActive
-                };
+                    // Rollback transaction on any error - ensures data consistency
+                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                    throw;
+                }
             }
             catch (Exception ex)
             {
@@ -387,7 +407,7 @@ namespace Bazario.Core.Services.Store
                     throw new UnauthorizedAccessException("Only administrators can delete shipping configurations");
                 }
 
-                var configuration = await _configurationRepository.GetByStoreIdAsync(storeId, cancellationToken);
+                var configuration = await _unitOfWork.StoreShippingConfigurations.GetByStoreIdAsync(storeId, cancellationToken);
                 if (configuration == null)
                 {
                     _logger.LogWarning("No shipping configuration found for store: {StoreId}", storeId);
@@ -397,7 +417,7 @@ namespace Bazario.Core.Services.Store
                 _logger.LogCritical("PERFORMING HARD DELETE - This action is IRREVERSIBLE. StoreId: {StoreId}, DeletedBy: {DeletedBy}, Reason: {Reason}",
                     storeId, deletedBy, reason);
 
-                var result = await _configurationRepository.DeleteAsync(configuration.ConfigurationId, cancellationToken);
+                var result = await _unitOfWork.StoreShippingConfigurations.DeleteAsync(configuration.ConfigurationId, cancellationToken);
                 
                 if (result)
                 {
@@ -446,14 +466,14 @@ namespace Bazario.Core.Services.Store
                     return false;
                 }
 
-                var configuration = await _configurationRepository.GetByStoreIdAsync(storeId, cancellationToken);
+                var configuration = await _unitOfWork.StoreShippingConfigurations.GetByStoreIdAsync(storeId, cancellationToken);
                 if (configuration == null || !configuration.OffersSameDayDelivery)
                 {
                     return false;
                 }
 
                 // Resolve city to governorate using database lookup
-                var cities = await _cityRepository.SearchByNameAsync(city, cancellationToken);
+                var cities = await _unitOfWork.Cities.SearchByNameAsync(city, cancellationToken);
                 var cityEntity = cities.FirstOrDefault(c => c.Name.Equals(city, StringComparison.OrdinalIgnoreCase));
 
                 if (cityEntity == null)
@@ -463,7 +483,7 @@ namespace Bazario.Core.Services.Store
                 }
 
                 // Check if store supports this governorate
-                var isSupported = await _governorateSupportRepository.IsGovernorateSupportedAsync(storeId, cityEntity.GovernorateId, cancellationToken);
+                var isSupported = await _unitOfWork.StoreGovernorateSupports.IsGovernorateSupportedAsync(storeId, cityEntity.GovernorateId, cancellationToken);
                 if (!isSupported)
                 {
                     _logger.LogDebug("Store {StoreId} does not support governorate {GovernorateId} for city {City}", storeId, cityEntity.GovernorateId, city);
@@ -535,7 +555,7 @@ namespace Bazario.Core.Services.Store
                     return 0;
                 }
 
-                var configuration = await _configurationRepository.GetByStoreIdAsync(storeId, cancellationToken);
+                var configuration = await _unitOfWork.StoreShippingConfigurations.GetByStoreIdAsync(storeId, cancellationToken);
                 if (configuration == null)
                 {
                     return 0; // No configuration means no delivery fee
@@ -545,13 +565,13 @@ namespace Bazario.Core.Services.Store
                 if (configuration.OffersSameDayDelivery)
                 {
                     // Resolve city to governorate using database lookup
-                    var cities = await _cityRepository.SearchByNameAsync(city, cancellationToken);
+                    var cities = await _unitOfWork.Cities.SearchByNameAsync(city, cancellationToken);
                     var cityEntity = cities.FirstOrDefault(c => c.Name.Equals(city, StringComparison.OrdinalIgnoreCase));
 
                     if (cityEntity != null)
                     {
                         // Check if store supports this governorate
-                        var isSupported = await _governorateSupportRepository.IsGovernorateSupportedAsync(storeId, cityEntity.GovernorateId, cancellationToken);
+                        var isSupported = await _unitOfWork.StoreGovernorateSupports.IsGovernorateSupportedAsync(storeId, cityEntity.GovernorateId, cancellationToken);
 
                         if (isSupported && cityEntity.Governorate.SupportsSameDayDelivery)
                         {

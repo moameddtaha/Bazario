@@ -24,10 +24,10 @@ namespace Bazario.Infrastructure.Repositories.Review
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public async Task<ReviewEntity> AddReviewAsync(ReviewEntity review, CancellationToken cancellationToken = default)
+        public Task<ReviewEntity> AddReviewAsync(ReviewEntity review, CancellationToken cancellationToken = default)
         {
             _logger.LogInformation("Starting to add new review for product: {ProductId}", review?.ProductId);
-            
+
             try
             {
                 // Validate input
@@ -37,17 +37,16 @@ namespace Bazario.Infrastructure.Repositories.Review
                     throw new ArgumentNullException(nameof(review));
                 }
 
-                _logger.LogDebug("Adding review to database context. ReviewId: {ReviewId}, ProductId: {ProductId}, CustomerId: {CustomerId}, Rating: {Rating}", 
+                _logger.LogDebug("Adding review to database context. ReviewId: {ReviewId}, ProductId: {ProductId}, CustomerId: {CustomerId}, Rating: {Rating}",
                     review.ReviewId, review.ProductId, review.CustomerId, review.Rating);
 
                 // Add review to context
                 _context.Reviews.Add(review);
-                await _context.SaveChangesAsync(cancellationToken);
 
-                _logger.LogInformation("Successfully added review. ReviewId: {ReviewId}, ProductId: {ProductId}, Rating: {Rating}", 
+                _logger.LogInformation("Successfully added review. ReviewId: {ReviewId}, ProductId: {ProductId}, Rating: {Rating}",
                     review.ReviewId, review.ProductId, review.Rating);
 
-                return review;
+                return Task.FromResult(review);
             }
             catch (ArgumentException ex)
             {
@@ -104,7 +103,6 @@ namespace Bazario.Infrastructure.Repositories.Review
                     existingReview.Comment = review.Comment;
                 }
                 
-                await _context.SaveChangesAsync(cancellationToken);
 
                 _logger.LogInformation("Successfully updated review. ReviewId: {ReviewId}, Rating: {Rating}", 
                     review.ReviewId, review.Rating);
@@ -156,7 +154,6 @@ namespace Bazario.Infrastructure.Repositories.Review
 
                 // Delete the review
                 _context.Reviews.Remove(review);
-                await _context.SaveChangesAsync(cancellationToken);
 
                 _logger.LogInformation("Successfully deleted review. ReviewId: {ReviewId}, ProductId: {ProductId}", 
                     reviewId, review.ProductId);
@@ -484,7 +481,6 @@ namespace Bazario.Infrastructure.Repositories.Review
                     reviews.Count, productId);
 
                 _context.Reviews.RemoveRange(reviews);
-                await _context.SaveChangesAsync(cancellationToken);
 
                 _logger.LogInformation("Successfully deleted {ReviewCount} reviews for product. ProductId: {ProductId}", 
                     reviews.Count, productId);
@@ -527,7 +523,6 @@ namespace Bazario.Infrastructure.Repositories.Review
                     reviews.Count, customerId);
 
                 _context.Reviews.RemoveRange(reviews);
-                await _context.SaveChangesAsync(cancellationToken);
 
                 _logger.LogInformation("Successfully deleted {ReviewCount} reviews for customer. CustomerId: {CustomerId}", 
                     reviews.Count, customerId);

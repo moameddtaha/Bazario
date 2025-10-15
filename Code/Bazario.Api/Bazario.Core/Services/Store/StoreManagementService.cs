@@ -10,10 +10,7 @@ using Bazario.Core.Domain.IdentityEntities;
 using Microsoft.AspNetCore.Identity;
 using Bazario.Core.DTO.Store;
 using Bazario.Core.Helpers.Authentication;
-using Bazario.Core.Domain.RepositoryContracts.Catalog;
-using Bazario.Core.Domain.RepositoryContracts.Store;
-using Bazario.Core.Domain.RepositoryContracts.Order;
-using Bazario.Core.Domain.RepositoryContracts.UserManagement;
+using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Extensions.Store;
 
 namespace Bazario.Core.Services.Store
@@ -24,27 +21,18 @@ namespace Bazario.Core.Services.Store
     /// </summary>
     public class StoreManagementService : IStoreManagementService
     {
-        private readonly IStoreRepository _storeRepository;
-        private readonly ISellerRepository _sellerRepository;
-        private readonly IProductRepository _productRepository;
-        private readonly IOrderRepository _orderRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly IStoreValidationService _validationService;
         private readonly IStoreAuthorizationService _authorizationService;
         private readonly ILogger<StoreManagementService> _logger;
 
         public StoreManagementService(
-            IStoreRepository storeRepository,
-            ISellerRepository sellerRepository,
-            IProductRepository productRepository,
-            IOrderRepository orderRepository,
+            IUnitOfWork unitOfWork,
             IStoreValidationService validationService,
             IStoreAuthorizationService authorizationService,
             ILogger<StoreManagementService> logger)
         {
-            _storeRepository = storeRepository ?? throw new ArgumentNullException(nameof(storeRepository));
-            _sellerRepository = sellerRepository ?? throw new ArgumentNullException(nameof(sellerRepository));
-            _productRepository = productRepository ?? throw new ArgumentNullException(nameof(productRepository));
-            _orderRepository = orderRepository ?? throw new ArgumentNullException(nameof(orderRepository));
+            _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
             _authorizationService = authorizationService ?? throw new ArgumentNullException(nameof(authorizationService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -65,7 +53,7 @@ namespace Bazario.Core.Services.Store
                 }
 
                 // Validate seller exists
-                var seller = await _sellerRepository.GetSellerByIdAsync(storeAddRequest.SellerId, cancellationToken);
+                var seller = await _unitOfWork.Sellers.GetSellerByIdAsync(storeAddRequest.SellerId, cancellationToken);
                 if (seller == null)
                 {
                     _logger.LogWarning("Store creation failed: Seller not found. SellerId: {SellerId}", storeAddRequest.SellerId);
@@ -76,7 +64,7 @@ namespace Bazario.Core.Services.Store
                 var validationResult = await _validationService.ValidateStoreCreationAsync(storeAddRequest.SellerId, storeAddRequest.Name!, cancellationToken);
                 if (!validationResult.IsValid)
                 {
-                    _logger.LogWarning("Store creation validation failed for seller: {SellerId}. Errors: {Errors}", 
+                    _logger.LogWarning("Store creation validation failed for seller: {SellerId}. Errors: {Errors}",
                         storeAddRequest.SellerId, string.Join(", ", validationResult.ValidationErrors));
                     throw new InvalidOperationException($"Store creation validation failed: {string.Join(", ", validationResult.ValidationErrors)}");
                 }
@@ -88,9 +76,10 @@ namespace Bazario.Core.Services.Store
                 _logger.LogDebug("Creating store with ID: {StoreId}, Name: {StoreName}", store.StoreId, store.Name);
 
                 // Save to repository
-                var createdStore = await _storeRepository.AddStoreAsync(store, cancellationToken);
+                var createdStore = await _unitOfWork.Stores.AddStoreAsync(store, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                _logger.LogInformation("Successfully created store. StoreId: {StoreId}, Name: {StoreName}", 
+                _logger.LogInformation("Successfully created store. StoreId: {StoreId}, Name: {StoreName}",
                     createdStore.StoreId, createdStore.Name);
 
                 return createdStore.ToStoreResponse();
@@ -116,7 +105,7 @@ namespace Bazario.Core.Services.Store
                 }
 
                 // Get existing store
-                var existingStore = await _storeRepository.GetStoreByIdAsync(storeUpdateRequest.StoreId, cancellationToken);
+                var existingStore = await _unitOfWork.Stores.GetStoreByIdAsync(storeUpdateRequest.StoreId, cancellationToken);
                 if (existingStore == null)
                 {
                     _logger.LogWarning("Store update failed: Store not found. StoreId: {StoreId}", storeUpdateRequest.StoreId);
@@ -126,8 +115,8 @@ namespace Bazario.Core.Services.Store
                 // Check if name is changing and validate uniqueness for the seller
                 if (!string.Equals(existingStore.Name, storeUpdateRequest.Name, StringComparison.OrdinalIgnoreCase))
                 {
-                    var sellerStores = await _storeRepository.GetStoresBySellerIdAsync(existingStore.SellerId, cancellationToken);
-                    if (sellerStores.Any(s => s.StoreId != existingStore.StoreId && 
+                    var sellerStores = await _unitOfWork.Stores.GetStoresBySellerIdAsync(existingStore.SellerId, cancellationToken);
+                    if (sellerStores.Any(s => s.StoreId != existingStore.StoreId &&
                                             string.Equals(s.Name, storeUpdateRequest.Name, StringComparison.OrdinalIgnoreCase)))
                     {
                         _logger.LogWarning("Store update failed: Store name already exists for seller. Name: {StoreName}", storeUpdateRequest.Name);
@@ -189,9 +178,10 @@ namespace Bazario.Core.Services.Store
                     existingStore.StoreId, existingStore.Name, existingStore.IsActive);
 
                 // Save to repository
-                var updatedStore = await _storeRepository.UpdateStoreAsync(existingStore, cancellationToken);
+                var updatedStore = await _unitOfWork.Stores.UpdateStoreAsync(existingStore, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                _logger.LogInformation("Successfully updated store. StoreId: {StoreId}, Name: {StoreName}, IsActive: {IsActive}", 
+                _logger.LogInformation("Successfully updated store. StoreId: {StoreId}, Name: {StoreName}, IsActive: {IsActive}",
                     updatedStore.StoreId, updatedStore.Name, updatedStore.IsActive);
 
                 return updatedStore.ToStoreResponse();
@@ -222,7 +212,7 @@ namespace Bazario.Core.Services.Store
                 }
 
                 // Validate store exists
-                var store = await _storeRepository.GetStoreByIdAsync(storeId, cancellationToken);
+                var store = await _unitOfWork.Stores.GetStoreByIdAsync(storeId, cancellationToken);
                 if (store == null)
                 {
                     _logger.LogWarning("Store deletion failed: Store not found. StoreId: {StoreId}", storeId);
@@ -244,7 +234,8 @@ namespace Bazario.Core.Services.Store
                 _logger.LogDebug("Performing soft delete for store: {StoreId}", storeId);
 
                 // Perform soft delete
-                var result = await _storeRepository.SoftDeleteStoreAsync(storeId, deletedBy, reason, cancellationToken);
+                var result = await _unitOfWork.Stores.SoftDeleteStoreAsync(storeId, deletedBy, reason, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
 
                 if (result)
                 {
@@ -301,7 +292,7 @@ namespace Bazario.Core.Services.Store
                     storeId, deletedBy, reason);
 
                 // Check if store exists (including soft-deleted)
-                var store = await _storeRepository.GetStoreByIdIncludeDeletedAsync(storeId, cancellationToken);
+                var store = await _unitOfWork.Stores.GetStoreByIdIncludeDeletedAsync(storeId, cancellationToken);
                 if (store == null)
                 {
                     _logger.LogWarning("Hard delete failed: Store not found. StoreId: {StoreId}", storeId);
@@ -310,7 +301,7 @@ namespace Bazario.Core.Services.Store
 
                 // Check if store has any orders (hard delete NEVER allowed with orders)
                 // Orders are critical business records that must be preserved permanently
-                var storeOrderCount = await _orderRepository.GetOrderCountByStoreIdAsync(storeId, cancellationToken);
+                var storeOrderCount = await _unitOfWork.Orders.GetOrderCountByStoreIdAsync(storeId, cancellationToken);
                 if (storeOrderCount > 0)
                 {
                     _logger.LogError("Hard delete BLOCKED: Store has existing orders. StoreId: {StoreId}, OrderCount: {OrderCount}", 
@@ -318,66 +309,80 @@ namespace Bazario.Core.Services.Store
                     throw new InvalidOperationException($"Cannot hard delete store with {storeOrderCount} existing orders. Orders are permanent business records and cannot be deleted.");
                 }
 
-                // Check if store has products and delete them first (due to Restrict delete behavior)
-                var productCount = await _storeRepository.GetProductCountByStoreIdAsync(storeId, cancellationToken);
-                if (productCount > 0)
+                // Begin transaction for atomic hard delete (products + store)
+                await _unitOfWork.BeginTransactionAsync(cancellationToken);
+
+                try
                 {
-                    _logger.LogWarning("Store has {ProductCount} products that must be deleted first. StoreId: {StoreId}", 
-                        productCount, storeId);
-                    
-                    // Get all products for this store
-                    var products = await _productRepository.GetProductsByStoreIdAsync(storeId, cancellationToken);
-                    
-                    _logger.LogInformation("Hard deleting {ProductCount} products before store deletion. StoreId: {StoreId}", 
-                        products.Count, storeId);
-                    
-                    // Hard delete all products first
-                    foreach (var product in products)
+                    // Check if store has products and delete them first (due to Restrict delete behavior)
+                    var productCount = await _unitOfWork.Stores.GetProductCountByStoreIdAsync(storeId, cancellationToken);
+                    if (productCount > 0)
                     {
-                        try
+                        _logger.LogWarning("Store has {ProductCount} products that must be deleted first. StoreId: {StoreId}",
+                            productCount, storeId);
+
+                        // Get all products for this store
+                        var products = await _unitOfWork.Products.GetProductsByStoreIdAsync(storeId, cancellationToken);
+
+                        _logger.LogInformation("Hard deleting {ProductCount} products before store deletion. StoreId: {StoreId}",
+                            products.Count, storeId);
+
+                        // Hard delete all products first
+                        foreach (var product in products)
                         {
-                            var productDeleted = await _productRepository.HardDeleteProductAsync(product.ProductId, cancellationToken);
-                            if (productDeleted)
+                            try
                             {
-                                _logger.LogDebug("Successfully hard deleted product: {ProductId}, Name: {ProductName}", 
-                                    product.ProductId, product.Name);
+                                var productDeleted = await _unitOfWork.Products.HardDeleteProductAsync(product.ProductId, cancellationToken);
+                                if (productDeleted)
+                                {
+                                    _logger.LogDebug("Successfully hard deleted product: {ProductId}, Name: {ProductName}",
+                                        product.ProductId, product.Name);
+                                }
+                                else
+                                {
+                                    _logger.LogWarning("Failed to hard delete product: {ProductId}, Name: {ProductName}",
+                                        product.ProductId, product.Name);
+                                }
                             }
-                            else
+                            catch (Exception ex)
                             {
-                                _logger.LogWarning("Failed to hard delete product: {ProductId}, Name: {ProductName}", 
+                                _logger.LogError(ex, "Failed to hard delete product: {ProductId}, Name: {ProductName}",
                                     product.ProductId, product.Name);
+                                throw new InvalidOperationException($"Failed to delete product {product.ProductId} ({product.Name}) before store deletion: {ex.Message}", ex);
                             }
                         }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(ex, "Failed to hard delete product: {ProductId}, Name: {ProductName}", 
-                                product.ProductId, product.Name);
-                            throw new InvalidOperationException($"Failed to delete product {product.ProductId} ({product.Name}) before store deletion: {ex.Message}", ex);
-                        }
+
+                        _logger.LogInformation("Successfully hard deleted all {ProductCount} products. Proceeding with store deletion. StoreId: {StoreId}",
+                            products.Count, storeId);
                     }
-                    
-                    _logger.LogInformation("Successfully hard deleted all {ProductCount} products. Proceeding with store deletion. StoreId: {StoreId}", 
-                        products.Count, storeId);
+
+                    // Log store details before permanent deletion for audit
+                    _logger.LogCritical("Hard deleting store details - Name: {StoreName}, SellerId: {SellerId}, CreatedAt: {CreatedAt}, WasDeleted: {IsDeleted}",
+                        store.Name, store.SellerId, store.CreatedAt, store.IsDeleted);
+
+                    // Perform hard delete
+                    var result = await _unitOfWork.Stores.DeleteStoreByIdAsync(storeId, cancellationToken);
+
+                    if (result)
+                    {
+                        // Commit transaction
+                        await _unitOfWork.CommitTransactionAsync(cancellationToken);
+                        _logger.LogCritical("HARD DELETE COMPLETED. Store permanently removed. StoreId: {StoreId}, DeletedBy: {DeletedBy}",
+                            storeId, deletedBy);
+                    }
+                    else
+                    {
+                        _logger.LogError("Hard delete returned false. StoreId: {StoreId}", storeId);
+                        await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                    }
+
+                    return result;
                 }
-
-                // Log store details before permanent deletion for audit
-                _logger.LogCritical("Hard deleting store details - Name: {StoreName}, SellerId: {SellerId}, CreatedAt: {CreatedAt}, WasDeleted: {IsDeleted}", 
-                    store.Name, store.SellerId, store.CreatedAt, store.IsDeleted);
-
-                // Perform hard delete
-                var result = await _storeRepository.DeleteStoreByIdAsync(storeId, cancellationToken);
-
-                if (result)
+                catch
                 {
-                    _logger.LogCritical("HARD DELETE COMPLETED. Store permanently removed. StoreId: {StoreId}, DeletedBy: {DeletedBy}", 
-                        storeId, deletedBy);
+                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                    throw;
                 }
-                else
-                {
-                    _logger.LogError("Hard delete returned false. StoreId: {StoreId}", storeId);
-                }
-
-                return result;
             }
             catch (Exception ex)
             {
@@ -404,7 +409,7 @@ namespace Bazario.Core.Services.Store
                 }
 
                 // Check if store exists (including soft-deleted)
-                var store = await _storeRepository.GetStoreByIdIncludeDeletedAsync(storeId, cancellationToken);
+                var store = await _unitOfWork.Stores.GetStoreByIdIncludeDeletedAsync(storeId, cancellationToken);
                 if (store == null)
                 {
                     _logger.LogWarning("Store restoration failed: Store not found. StoreId: {StoreId}", storeId);
@@ -428,14 +433,15 @@ namespace Bazario.Core.Services.Store
                 _logger.LogDebug("Restoring store. StoreId: {StoreId}, Name: {StoreName}", storeId, store.Name);
 
                 // Restore the store
-                var result = await _storeRepository.RestoreStoreAsync(storeId, cancellationToken);
+                var result = await _unitOfWork.Stores.RestoreStoreAsync(storeId, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
 
                 if (result)
                 {
                     _logger.LogInformation("Successfully restored store. StoreId: {StoreId}, RestoredBy: {RestoredBy}", storeId, restoredBy);
-                    
+
                     // Get the restored store
-                    var restoredStore = await _storeRepository.GetStoreByIdAsync(storeId, cancellationToken);
+                    var restoredStore = await _unitOfWork.Stores.GetStoreByIdAsync(storeId, cancellationToken);
                     return restoredStore!.ToStoreResponse();
                 }
                 else
@@ -470,7 +476,7 @@ namespace Bazario.Core.Services.Store
                 }
 
                 // Get existing store
-                var store = await _storeRepository.GetStoreByIdAsync(storeId, cancellationToken);
+                var store = await _unitOfWork.Stores.GetStoreByIdAsync(storeId, cancellationToken);
                 if (store == null)
                 {
                     _logger.LogWarning("Store status update failed: Store not found. StoreId: {StoreId}", storeId);
@@ -508,7 +514,8 @@ namespace Bazario.Core.Services.Store
                     storeId, isActive, userId, reason);
 
                 // Save to repository
-                var updatedStore = await _storeRepository.UpdateStoreAsync(store, cancellationToken);
+                var updatedStore = await _unitOfWork.Stores.UpdateStoreAsync(store, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
 
                 _logger.LogInformation("Successfully updated store status. StoreId: {StoreId}, NewStatus: {IsActive}, UpdatedBy: {UserId}, Reason: {Reason}",
                     storeId, isActive, userId, reason);

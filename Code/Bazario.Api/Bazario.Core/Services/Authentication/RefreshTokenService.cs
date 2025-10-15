@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 using Bazario.Core.Domain.Entities.Authentication;
-using Bazario.Core.Domain.RepositoryContracts.Authentication;
+using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.DTO.Authentication;
 using Bazario.Core.Helpers.Authentication;
 using Bazario.Core.Helpers.UserManagement;
@@ -14,10 +14,11 @@ namespace Bazario.Core.Services.Authentication
 {
     /// <summary>
     /// Database-based implementation of refresh token service
+    /// Uses Unit of Work pattern for transaction management
     /// </summary>
     public class RefreshTokenService : IRefreshTokenService
     {
-        private readonly IRefreshTokenRepository _refreshTokenRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IJwtService _jwtService;
         private readonly IRoleManagementHelper _roleManagementHelper;
@@ -26,14 +27,14 @@ namespace Bazario.Core.Services.Authentication
 
 
         public RefreshTokenService(
-            IRefreshTokenRepository refreshTokenRepository,
+            IUnitOfWork unitOfWork,
             UserManager<ApplicationUser> userManager,
             IJwtService jwtService,
             IRoleManagementHelper roleManagementHelper,
             ILogger<RefreshTokenService> logger,
             IConfiguration configuration)
         {
-            _refreshTokenRepository = refreshTokenRepository;
+            _unitOfWork = unitOfWork;
             _userManager = userManager;
             _jwtService = jwtService;
             _roleManagementHelper = roleManagementHelper;
@@ -53,7 +54,8 @@ namespace Bazario.Core.Services.Authentication
                     RefreshTokenExpiresAt = refreshTokenExpiresAt
                 };
 
-                await _refreshTokenRepository.CreateAsync(tokenModel);
+                await _unitOfWork.RefreshTokens.CreateAsync(tokenModel);
+                await _unitOfWork.SaveChangesAsync();
                 return true;
             }
             catch (Exception ex)
@@ -67,7 +69,7 @@ namespace Bazario.Core.Services.Authentication
         {
             try
             {
-                var tokenModel = await _refreshTokenRepository.GetByTokenAsync(refreshToken);
+                var tokenModel = await _unitOfWork.RefreshTokens.GetByTokenAsync(refreshToken);
                 if (tokenModel == null)
                 {
                     return null;
@@ -184,7 +186,7 @@ namespace Bazario.Core.Services.Authentication
         {
             try
             {
-                var result = await _refreshTokenRepository.RevokeTokenAsync(refreshToken, revokedBy, reason);
+                var result = await _unitOfWork.RefreshTokens.RevokeTokenAsync(refreshToken, revokedBy, reason);
                 
                 if (!result)
                 {
@@ -204,7 +206,7 @@ namespace Bazario.Core.Services.Authentication
         {
             try
             {
-                var result = await _refreshTokenRepository.RevokeAllUserTokensAsync(userId, revokedBy, reason);
+                var result = await _unitOfWork.RefreshTokens.RevokeAllUserTokensAsync(userId, revokedBy, reason);
                 
                 if (!result)
                 {
@@ -225,7 +227,7 @@ namespace Bazario.Core.Services.Authentication
             try
             {
                 // Delete expired tokens from database
-                var deletedCount = await _refreshTokenRepository.DeleteExpiredAsync();
+                var deletedCount = await _unitOfWork.RefreshTokens.DeleteExpiredAsync();
                 
                 if (deletedCount > 0)
                 {

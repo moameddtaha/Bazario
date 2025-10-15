@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.IdentityEntities;
-using Bazario.Core.Domain.RepositoryContracts.Store;
+using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Helpers.Authentication;
 using Bazario.Core.ServiceContracts.Store;
 using Microsoft.AspNetCore.Identity;
@@ -16,18 +16,18 @@ namespace Bazario.Core.Services.Store
     /// </summary>
     public class StoreAuthorizationService : IStoreAuthorizationService
     {
-        private readonly IStoreRepository _storeRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly IRoleManagementHelper _roleManagementHelper;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly ILogger<StoreAuthorizationService> _logger;
 
         public StoreAuthorizationService(
-            IStoreRepository storeRepository,
+            IUnitOfWork unitOfWork,
             IRoleManagementHelper roleManagementHelper,
             UserManager<ApplicationUser> userManager,
             ILogger<StoreAuthorizationService> logger)
         {
-            _storeRepository = storeRepository ?? throw new ArgumentNullException(nameof(storeRepository));
+            _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _roleManagementHelper = roleManagementHelper ?? throw new ArgumentNullException(nameof(roleManagementHelper));
             _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -74,7 +74,7 @@ namespace Bazario.Core.Services.Store
                 }
 
                 // Check if user owns the store
-                var store = await _storeRepository.GetStoreByIdAsync(storeId, cancellationToken);
+                var store = await _unitOfWork.Stores.GetStoreByIdAsync(storeId, cancellationToken);
                 if (store == null)
                 {
                     _logger.LogWarning("Store not found for ownership check: {StoreId}", storeId);

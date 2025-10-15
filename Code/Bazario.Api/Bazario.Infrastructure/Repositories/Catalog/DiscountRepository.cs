@@ -23,18 +23,16 @@ namespace Bazario.Infrastructure.Repositories.Catalog
             _dbSet = _context.Set<Discount>();
         }
 
-        public async Task<Discount> AddDiscountAsync(Discount discount, CancellationToken cancellationToken = default)
+        public Task<Discount> AddDiscountAsync(Discount discount, CancellationToken cancellationToken = default)
         {
             _dbSet.Add(discount);
-            await _context.SaveChangesAsync(cancellationToken);
-            return discount;
+            return Task.FromResult(discount);
         }
 
-        public async Task<Discount> UpdateDiscountAsync(Discount discount, CancellationToken cancellationToken = default)
+        public Task<Discount> UpdateDiscountAsync(Discount discount, CancellationToken cancellationToken = default)
         {
             _dbSet.Update(discount);
-            await _context.SaveChangesAsync(cancellationToken);
-            return discount;
+            return Task.FromResult(discount);
         }
 
         public async Task<bool> SoftDeleteDiscountAsync(Guid discountId, CancellationToken cancellationToken = default)
@@ -44,7 +42,6 @@ namespace Bazario.Infrastructure.Repositories.Catalog
 
             discount.IsActive = false;
             discount.UpdatedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync(cancellationToken);
             return true;
         }
 
@@ -133,7 +130,6 @@ namespace Bazario.Infrastructure.Repositories.Catalog
 
             discount.IsUsed = true;
             discount.UpdatedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync(cancellationToken);
             return true;
         }
 

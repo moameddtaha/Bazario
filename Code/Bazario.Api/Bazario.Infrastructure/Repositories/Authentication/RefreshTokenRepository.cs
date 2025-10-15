@@ -74,7 +74,7 @@ namespace Bazario.Infrastructure.Repositories.Authentication
             }
         }
 
-        public async Task<RefreshToken> CreateAsync(RefreshToken refreshToken, CancellationToken cancellationToken = default)
+        public Task<RefreshToken> CreateAsync(RefreshToken refreshToken, CancellationToken cancellationToken = default)
         {
             if (refreshToken == null)
                 throw new ArgumentNullException(nameof(refreshToken));
@@ -91,17 +91,12 @@ namespace Bazario.Infrastructure.Repositories.Authentication
                 refreshToken.Id = Guid.NewGuid();
                 refreshToken.CreatedAt = DateTime.UtcNow;
                 refreshToken.IsRevoked = false;
-                
-                await _context.RefreshTokens.AddAsync(refreshToken, cancellationToken);
-                var result = await _context.SaveChangesAsync(cancellationToken);
-                
-                if (result <= 0)
-                {
-                    throw new InvalidOperationException("Failed to save refresh token to database");
-                }
+
+                _context.RefreshTokens.Add(refreshToken);
+
 
                 _logger.LogDebug("Created refresh token {TokenId} for user {UserId}", refreshToken.Id, refreshToken.UserId);
-                return refreshToken;
+                return Task.FromResult(refreshToken);
             }
             catch (DbUpdateConcurrencyException ex)
             {
@@ -147,8 +142,7 @@ namespace Bazario.Infrastructure.Repositories.Authentication
                 existingToken.RevokedBy = refreshToken.RevokedBy;
                 existingToken.RevocationReason = refreshToken.RevocationReason;
                 
-                var result = await _context.SaveChangesAsync(cancellationToken);
-                return result > 0;
+                return true;
             }
             catch (DbUpdateConcurrencyException ex)
             {
@@ -185,8 +179,7 @@ namespace Bazario.Infrastructure.Repositories.Authentication
                 }
                 
                 _context.RefreshTokens.Remove(token);
-                var result = await _context.SaveChangesAsync(cancellationToken);
-                return result > 0;
+                return true;
             }
             catch (DbUpdateConcurrencyException ex)
             {
@@ -294,7 +287,7 @@ namespace Bazario.Infrastructure.Repositories.Authentication
                     _logger.LogDebug("No active refresh tokens found for user {UserId} to revoke", userId);
                 }
                 
-                return result > 0;
+                return true;
             }
             catch (DbUpdateConcurrencyException ex)
             {

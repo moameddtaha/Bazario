@@ -97,7 +97,7 @@ namespace Bazario.Infrastructure.Repositories.Location
                 .ToListAsync(cancellationToken);
         }
 
-        public async Task<Governorate> AddAsync(Governorate governorate, CancellationToken cancellationToken = default)
+        public Task<Governorate> AddAsync(Governorate governorate, CancellationToken cancellationToken = default)
         {
             _logger.LogInformation("Adding new governorate: {GovernmentName} in country: {CountryId}", governorate.Name, governorate.CountryId);
 
@@ -105,10 +105,9 @@ namespace Bazario.Infrastructure.Repositories.Location
             governorate.UpdatedAt = DateTime.UtcNow;
 
             _context.Governorates.Add(governorate);
-            await _context.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation("Successfully added governorate: {GovernorateId}", governorate.GovernorateId);
-            return governorate;
+            return Task.FromResult(governorate);
         }
 
         public async Task<Governorate> UpdateAsync(Governorate governorate, CancellationToken cancellationToken = default)
@@ -131,7 +130,6 @@ namespace Bazario.Infrastructure.Repositories.Location
 
             // Do NOT update: GovernorateId, CountryId, CreatedAt
 
-            await _context.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation("Successfully updated governorate: {GovernorateId}", governorate.GovernorateId);
             return existingGovernorate;
@@ -151,7 +149,6 @@ namespace Bazario.Infrastructure.Repositories.Location
             governorate.IsActive = false;
             governorate.UpdatedAt = DateTime.UtcNow;
 
-            await _context.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation("Successfully deactivated governorate: {GovernorateId}", governorateId);
             return true;

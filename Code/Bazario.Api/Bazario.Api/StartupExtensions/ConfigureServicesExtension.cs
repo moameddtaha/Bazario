@@ -22,6 +22,7 @@ using Bazario.Core.Services.Auth;
 using Bazario.Core.Helpers.Order;
 using Bazario.Core.Helpers.Inventory;
 using Bazario.Core.Helpers.Store;
+using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Domain.RepositoryContracts.Authentication;
 using Bazario.Core.Domain.RepositoryContracts.Catalog;
 using Bazario.Core.Domain.RepositoryContracts.Store;
@@ -48,6 +49,7 @@ using Bazario.Infrastructure.Repositories.Review;
 using Bazario.Infrastructure.Repositories.Location;
 using Bazario.Infrastructure.Repositories.Order;
 using Bazario.Infrastructure.Repositories.Store;
+using Bazario.Infrastructure.Repositories;
 
 namespace Bazario.Api.StartupExtensions
 {
@@ -73,7 +75,10 @@ namespace Bazario.Api.StartupExtensions
                 .AddEntityFrameworkStores<ApplicationDbContext>()
                 .AddDefaultTokenProviders();
 
-            // Register Repositories
+            // Register Unit of Work (manages all repositories and transactions)
+            services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+            // Register Repositories (can still be used individually if needed)
             services.AddScoped<IAdminRepository, AdminRepository>();
             services.AddScoped<ICustomerRepository, CustomerRepository>();
             services.AddScoped<ISellerRepository, SellerRepository>();

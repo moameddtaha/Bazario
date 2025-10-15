@@ -40,7 +40,7 @@ namespace Bazario.Infrastructure.Repositories.Store
             }
         }
 
-        public async Task<StoreShippingConfiguration> CreateAsync(StoreShippingConfiguration configuration, CancellationToken cancellationToken = default)
+        public Task<StoreShippingConfiguration> CreateAsync(StoreShippingConfiguration configuration, CancellationToken cancellationToken = default)
         {
             _logger.LogDebug("Creating shipping configuration for store: {StoreId}", configuration.StoreId);
 
@@ -51,12 +51,11 @@ namespace Bazario.Infrastructure.Repositories.Store
                 configuration.UpdatedAt = DateTime.UtcNow;
 
                 _context.StoreShippingConfigurations.Add(configuration);
-                await _context.SaveChangesAsync(cancellationToken);
 
-                _logger.LogInformation("Successfully created shipping configuration: {ConfigurationId} for store: {StoreId}", 
+                _logger.LogInformation("Successfully created shipping configuration: {ConfigurationId} for store: {StoreId}",
                     configuration.ConfigurationId, configuration.StoreId);
 
-                return configuration;
+                return Task.FromResult(configuration);
             }
             catch (Exception ex)
             {
@@ -98,7 +97,6 @@ namespace Bazario.Infrastructure.Repositories.Store
                 // - StoreId (foreign key)
                 // - CreatedAt (audit field)
 
-                await _context.SaveChangesAsync(cancellationToken);
 
                 _logger.LogInformation("Successfully updated shipping configuration: {ConfigurationId} for store: {StoreId}", 
                     configuration.ConfigurationId, configuration.StoreId);
@@ -131,7 +129,6 @@ namespace Bazario.Infrastructure.Repositories.Store
                 configuration.IsActive = false;
                 configuration.UpdatedAt = DateTime.UtcNow;
 
-                await _context.SaveChangesAsync(cancellationToken);
 
                 _logger.LogInformation("Successfully deleted shipping configuration: {ConfigurationId}", configurationId);
                 return true;
