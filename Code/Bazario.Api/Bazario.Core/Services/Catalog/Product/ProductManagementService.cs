@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Bazario.Core.Domain.RepositoryContracts.Catalog;
 using Bazario.Core.Domain.RepositoryContracts.Store;
 using Bazario.Core.Domain.RepositoryContracts.Order;
+using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.DTO.Catalog.Product;
 using Bazario.Core.Extensions.Catalog;
 using Bazario.Core.Helpers.Catalog.Product;
@@ -15,25 +16,20 @@ namespace Bazario.Core.Services.Catalog.Product
     /// <summary>
     /// Service implementation for product management operations (CRUD)
     /// Handles product creation, updates, and deletion
+    /// Uses Unit of Work pattern for transaction management and data consistency
     /// </summary>
     public class ProductManagementService : IProductManagementService
     {
-        private readonly IProductRepository _productRepository;
-        private readonly IStoreRepository _storeRepository;
-        private readonly IOrderRepository _orderRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly IProductValidationHelper _validationHelper;
         private readonly ILogger<ProductManagementService> _logger;
 
         public ProductManagementService(
-            IProductRepository productRepository,
-            IStoreRepository storeRepository,
-            IOrderRepository orderRepository,
+            IUnitOfWork unitOfWork,
             IProductValidationHelper validationHelper,
             ILogger<ProductManagementService> logger)
         {
-            _productRepository = productRepository ?? throw new ArgumentNullException(nameof(productRepository));
-            _storeRepository = storeRepository ?? throw new ArgumentNullException(nameof(storeRepository));
-            _orderRepository = orderRepository ?? throw new ArgumentNullException(nameof(orderRepository));
+            _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _validationHelper = validationHelper ?? throw new ArgumentNullException(nameof(validationHelper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
@@ -52,7 +48,7 @@ namespace Bazario.Core.Services.Catalog.Product
                 }
 
                 // Validate store exists
-                var store = await _storeRepository.GetStoreByIdAsync(productAddRequest.StoreId, cancellationToken);
+                var store = await _unitOfWork.Stores.GetStoreByIdAsync(productAddRequest.StoreId, cancellationToken);
                 if (store == null)
                 {
                     _logger.LogWarning("Product creation failed: Store not found. StoreId: {StoreId}", productAddRequest.StoreId);
@@ -74,9 +70,10 @@ namespace Bazario.Core.Services.Catalog.Product
                     product.ProductId, product.Name, product.StoreId);
 
                 // Save to repository
-                var createdProduct = await _productRepository.AddProductAsync(product, cancellationToken);
+                var createdProduct = await _unitOfWork.Products.AddProductAsync(product, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                _logger.LogInformation("Successfully created product. ProductId: {ProductId}, Name: {ProductName}, StoreId: {StoreId}", 
+                _logger.LogInformation("Successfully created product. ProductId: {ProductId}, Name: {ProductName}, StoreId: {StoreId}",
                     createdProduct.ProductId, createdProduct.Name, createdProduct.StoreId);
 
                 return createdProduct.ToProductResponse();
@@ -102,7 +99,7 @@ namespace Bazario.Core.Services.Catalog.Product
                 }
 
                 // Get existing product
-                var existingProduct = await _productRepository.GetProductByIdAsync(productUpdateRequest.ProductId, cancellationToken);
+                var existingProduct = await _unitOfWork.Products.GetProductByIdAsync(productUpdateRequest.ProductId, cancellationToken);
                 if (existingProduct == null)
                 {
                     _logger.LogWarning("Product update failed: Product not found. ProductId: {ProductId}", productUpdateRequest.ProductId);
@@ -116,9 +113,10 @@ namespace Bazario.Core.Services.Catalog.Product
                     product.ProductId, product.Name);
 
                 // Save to repository (repository handles null checks)
-                var updatedProduct = await _productRepository.UpdateProductAsync(product, cancellationToken);
+                var updatedProduct = await _unitOfWork.Products.UpdateProductAsync(product, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                _logger.LogInformation("Successfully updated product. ProductId: {ProductId}, Name: {ProductName}", 
+                _logger.LogInformation("Successfully updated product. ProductId: {ProductId}, Name: {ProductName}",
                     updatedProduct.ProductId, updatedProduct.Name);
 
                 return updatedProduct.ToProductResponse();
@@ -149,7 +147,7 @@ namespace Bazario.Core.Services.Catalog.Product
                 }
 
                 // Validate product exists
-                var product = await _productRepository.GetProductByIdAsync(productId, cancellationToken);
+                var product = await _unitOfWork.Products.GetProductByIdAsync(productId, cancellationToken);
                 if (product == null)
                 {
                     _logger.LogWarning("Product deletion failed: Product not found. ProductId: {ProductId}", productId);
@@ -163,7 +161,8 @@ namespace Bazario.Core.Services.Catalog.Product
                 _logger.LogDebug("Performing soft delete for product: {ProductId}, Name: {ProductName}", productId, product.Name);
 
                 // Perform soft delete
-                var result = await _productRepository.SoftDeleteProductAsync(productId, deletedBy, reason, cancellationToken);
+                var result = await _unitOfWork.Products.SoftDeleteProductAsync(productId, deletedBy, reason, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
 
                 if (result)
                 {
@@ -227,7 +226,7 @@ namespace Bazario.Core.Services.Catalog.Product
                     productId, deletedBy, reason);
 
                 // Check if product exists (including soft-deleted)
-                var product = await _productRepository.GetProductByIdIncludeDeletedAsync(productId, cancellationToken);
+                var product = await _unitOfWork.Products.GetProductByIdIncludeDeletedAsync(productId, cancellationToken);
                 if (product == null)
                 {
                     _logger.LogWarning("Hard delete failed: Product not found. ProductId: {ProductId}", productId);
@@ -236,7 +235,7 @@ namespace Bazario.Core.Services.Catalog.Product
 
                 // Check if product has any orders (hard delete NEVER allowed with orders)
                 // Orders are critical business records that must be preserved permanently
-                var productOrderCount = await _orderRepository.GetOrderCountByProductIdAsync(productId, cancellationToken);
+                var productOrderCount = await _unitOfWork.Orders.GetOrderCountByProductIdAsync(productId, cancellationToken);
                 if (productOrderCount > 0)
                 {
                     _logger.LogError("Hard delete BLOCKED: Product has existing orders. ProductId: {ProductId}, OrderCount: {OrderCount}", 
@@ -249,7 +248,8 @@ namespace Bazario.Core.Services.Catalog.Product
                     product.Name, product.StoreId, product.CreatedAt, product.IsDeleted);
 
                 // Perform hard delete
-                var result = await _productRepository.HardDeleteProductAsync(productId, cancellationToken);
+                var result = await _unitOfWork.Products.HardDeleteProductAsync(productId, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
 
                 if (result)
                 {
@@ -288,7 +288,7 @@ namespace Bazario.Core.Services.Catalog.Product
                 }
 
                 // Check if product exists (including soft-deleted)
-                var product = await _productRepository.GetProductByIdIncludeDeletedAsync(productId, cancellationToken);
+                var product = await _unitOfWork.Products.GetProductByIdIncludeDeletedAsync(productId, cancellationToken);
                 if (product == null)
                 {
                     _logger.LogWarning("Product restoration failed: Product not found. ProductId: {ProductId}", productId);
@@ -304,14 +304,15 @@ namespace Bazario.Core.Services.Catalog.Product
                 _logger.LogDebug("Restoring product. ProductId: {ProductId}, Name: {ProductName}", productId, product.Name);
 
                 // Restore the product
-                var result = await _productRepository.RestoreProductAsync(productId, cancellationToken);
+                var result = await _unitOfWork.Products.RestoreProductAsync(productId, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
 
                 if (result)
                 {
                     _logger.LogInformation("Successfully restored product. ProductId: {ProductId}, RestoredBy: {RestoredBy}", productId, restoredBy);
                     
                     // Get the restored product
-                    var restoredProduct = await _productRepository.GetProductByIdAsync(productId, cancellationToken);
+                    var restoredProduct = await _unitOfWork.Products.GetProductByIdAsync(productId, cancellationToken);
                     return restoredProduct!.ToProductResponse();
                 }
                 else
