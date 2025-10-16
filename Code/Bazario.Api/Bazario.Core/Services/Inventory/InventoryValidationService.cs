@@ -9,30 +9,29 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 using Bazario.Core.Domain.RepositoryContracts.Catalog;
 using Bazario.Core.Domain.RepositoryContracts.Store;
+using Bazario.Core.Domain.RepositoryContracts;
 
 namespace Bazario.Core.Services.Inventory
 {
     /// <summary>
     /// Implementation of inventory validation and business rules
     /// Handles stock availability checks and inventory constraints
+    /// Uses Unit of Work pattern for transaction management and data consistency
     /// </summary>
     public class InventoryValidationService : IInventoryValidationService
     {
-        private readonly IProductRepository _productRepository;
-        private readonly IStoreRepository _storeRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<InventoryValidationService> _logger;
         private readonly IConfiguration _configuration;
         private readonly Dictionary<Guid, int> _productThresholds = new();
         private readonly Dictionary<Guid, int> _storeThresholds = new();
 
         public InventoryValidationService(
-            IProductRepository productRepository,
-            IStoreRepository storeRepository,
+            IUnitOfWork unitOfWork,
             ILogger<InventoryValidationService> logger,
             IConfiguration configuration)
         {
-            _productRepository = productRepository ?? throw new ArgumentNullException(nameof(productRepository));
-            _storeRepository = storeRepository ?? throw new ArgumentNullException(nameof(storeRepository));
+            _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         }
@@ -47,7 +46,7 @@ namespace Bazario.Core.Services.Inventory
 
             foreach (var item in stockCheckRequest)
             {
-                var product = await _productRepository.GetProductByIdAsync(item.ProductId, cancellationToken);
+                var product = await _unitOfWork.Products.GetProductByIdAsync(item.ProductId, cancellationToken);
                 
                 var result = new StockValidationResult
                 {
@@ -87,7 +86,7 @@ namespace Bazario.Core.Services.Inventory
                 return false;
             }
 
-            var product = await _productRepository.GetProductByIdAsync(productId, cancellationToken);
+            var product = await _unitOfWork.Products.GetProductByIdAsync(productId, cancellationToken);
             if (product == null)
             {
                 _logger.LogWarning("Product {ProductId} not found for validation", productId);
@@ -113,7 +112,7 @@ namespace Bazario.Core.Services.Inventory
 
             foreach (var item in reservationRequest.Items)
             {
-                var product = await _productRepository.GetProductByIdAsync(item.ProductId, cancellationToken);
+                var product = await _unitOfWork.Products.GetProductByIdAsync(item.ProductId, cancellationToken);
                 if (product == null || product.StockQuantity < item.Quantity || product.IsDeleted)
                 {
                     _logger.LogWarning("Reservation validation failed for product {ProductId}", item.ProductId);
@@ -132,7 +131,7 @@ namespace Bazario.Core.Services.Inventory
             _logger.LogInformation("Checking if product {ProductId} has sufficient stock for {Quantity} units", 
                 productId, requiredQuantity);
 
-            var product = await _productRepository.GetProductByIdAsync(productId, cancellationToken);
+            var product = await _unitOfWork.Products.GetProductByIdAsync(productId, cancellationToken);
             return product != null && product.StockQuantity >= requiredQuantity && !product.IsDeleted;
         }
 
@@ -156,7 +155,7 @@ namespace Bazario.Core.Services.Inventory
                     continue;
                 }
 
-                var product = await _productRepository.GetProductByIdAsync(item.ProductId, cancellationToken);
+                var product = await _unitOfWork.Products.GetProductByIdAsync(item.ProductId, cancellationToken);
                 if (product == null)
                 {
                     errors.Add(new BulkUpdateError
@@ -181,7 +180,7 @@ namespace Bazario.Core.Services.Inventory
                 _logger.LogInformation("Checking if low stock alert should be triggered for product {ProductId}", productId);
 
                 // Get product details
-                var product = await _productRepository.GetProductByIdAsync(productId, cancellationToken);
+                var product = await _unitOfWork.Products.GetProductByIdAsync(productId, cancellationToken);
                 if (product == null)
                 {
                     _logger.LogWarning("Product {ProductId} not found for low stock alert check", productId);
@@ -247,7 +246,7 @@ namespace Bazario.Core.Services.Inventory
                 }
 
                 // 3. Load store-specific threshold from database
-                var store = await _storeRepository.GetStoreByIdAsync(storeId, cancellationToken);
+                var store = await _unitOfWork.Stores.GetStoreByIdAsync(storeId, cancellationToken);
                 if (store != null)
                 {
                     // In a real implementation, this would check store.LowStockThreshold

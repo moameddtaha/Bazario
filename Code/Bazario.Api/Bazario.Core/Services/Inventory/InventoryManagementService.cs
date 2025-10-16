@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.RepositoryContracts.Catalog;
+using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Models.Inventory;
 using Bazario.Core.ServiceContracts.Inventory;
 using Microsoft.Extensions.Logging;
@@ -13,32 +14,33 @@ namespace Bazario.Core.Services.Inventory
     /// <summary>
     /// Implementation of inventory CRUD operations
     /// Handles stock updates, reservations, and basic inventory management
+    /// Uses Unit of Work pattern for transaction management and data consistency
     /// </summary>
     public class InventoryManagementService : IInventoryManagementService
     {
-        private readonly IProductRepository _productRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<InventoryManagementService> _logger;
 
         public InventoryManagementService(
-            IProductRepository productRepository,
+            IUnitOfWork unitOfWork,
             ILogger<InventoryManagementService> logger)
         {
-            _productRepository = productRepository ?? throw new ArgumentNullException(nameof(productRepository));
+            _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         public async Task<InventoryUpdateResult> UpdateStockAsync(
-            Guid productId, 
-            int newQuantity, 
-            StockUpdateType updateType, 
-            string reason, 
-            Guid updatedBy, 
+            Guid productId,
+            int newQuantity,
+            StockUpdateType updateType,
+            string reason,
+            Guid updatedBy,
             CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Updating stock for product {ProductId} to {NewQuantity}. Type: {UpdateType}, Reason: {Reason}", 
+            _logger.LogInformation("Updating stock for product {ProductId} to {NewQuantity}. Type: {UpdateType}, Reason: {Reason}",
                 productId, newQuantity, updateType, reason);
 
-            var product = await _productRepository.GetProductByIdAsync(productId, cancellationToken);
+            var product = await _unitOfWork.Products.GetProductByIdAsync(productId, cancellationToken);
             if (product == null)
             {
                 _logger.LogWarning("Product {ProductId} not found for stock update", productId);
@@ -62,9 +64,10 @@ namespace Bazario.Core.Services.Inventory
                 _ => product.StockQuantity
             };
 
-            await _productRepository.UpdateProductAsync(product, cancellationToken);
+            await _unitOfWork.Products.UpdateProductAsync(product, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            _logger.LogInformation("Successfully updated stock for product {ProductId} from {PreviousQuantity} to {NewQuantity}", 
+            _logger.LogInformation("Successfully updated stock for product {ProductId} from {PreviousQuantity} to {NewQuantity}",
                 productId, previousQuantity, product.StockQuantity);
 
             return new InventoryUpdateResult
@@ -91,7 +94,7 @@ namespace Bazario.Core.Services.Inventory
 
             foreach (var item in reservationRequest.Items)
             {
-                var product = await _productRepository.GetProductByIdAsync(item.ProductId, cancellationToken);
+                var product = await _unitOfWork.Products.GetProductByIdAsync(item.ProductId, cancellationToken);
                 if (product == null || product.StockQuantity < item.Quantity)
                 {
                     result.IsSuccessful = false;
@@ -210,13 +213,13 @@ namespace Bazario.Core.Services.Inventory
         }
 
         public async Task<bool> SetLowStockThresholdAsync(
-            Guid productId, 
-            int threshold, 
+            Guid productId,
+            int threshold,
             CancellationToken cancellationToken = default)
         {
             _logger.LogInformation("Setting low stock threshold for product {ProductId} to {Threshold}", productId, threshold);
 
-            var product = await _productRepository.GetProductByIdAsync(productId, cancellationToken);
+            var product = await _unitOfWork.Products.GetProductByIdAsync(productId, cancellationToken);
             if (product == null)
             {
                 _logger.LogWarning("Product {ProductId} not found for threshold update", productId);

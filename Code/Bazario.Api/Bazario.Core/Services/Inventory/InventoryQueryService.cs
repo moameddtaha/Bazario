@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.RepositoryContracts.Catalog;
+using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Models.Inventory;
 using Bazario.Core.Models.Shared;
 using Bazario.Core.ServiceContracts.Inventory;
@@ -14,17 +15,18 @@ namespace Bazario.Core.Services.Inventory
     /// <summary>
     /// Implementation of inventory read operations
     /// Handles querying inventory status, history, and reservations
+    /// Uses Unit of Work pattern for transaction management and data consistency
     /// </summary>
     public class InventoryQueryService : IInventoryQueryService
     {
-        private readonly IProductRepository _productRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<InventoryQueryService> _logger;
 
         public InventoryQueryService(
-            IProductRepository productRepository,
+            IUnitOfWork unitOfWork,
             ILogger<InventoryQueryService> logger)
         {
-            _productRepository = productRepository ?? throw new ArgumentNullException(nameof(productRepository));
+            _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -34,7 +36,7 @@ namespace Bazario.Core.Services.Inventory
         {
             _logger.LogInformation("Getting inventory status for product {ProductId}", productId);
 
-            var product = await _productRepository.GetProductByIdAsync(productId, cancellationToken);
+            var product = await _unitOfWork.Products.GetProductByIdAsync(productId, cancellationToken);
             if (product == null)
             {
                 _logger.LogWarning("Product {ProductId} not found", productId);
@@ -68,11 +70,11 @@ namespace Bazario.Core.Services.Inventory
             
             if (storeId.HasValue)
             {
-                products = await _productRepository.GetProductsByStoreIdAsync(storeId.Value, cancellationToken);
+                products = await _unitOfWork.Products.GetProductsByStoreIdAsync(storeId.Value, cancellationToken);
             }
             else
             {
-                products = await _productRepository.GetAllProductsAsync(cancellationToken);
+                products = await _unitOfWork.Products.GetAllProductsAsync(cancellationToken);
             }
 
             var lowStockProducts = products.Where(p => p.StockQuantity <= threshold && !p.IsDeleted).ToList();
