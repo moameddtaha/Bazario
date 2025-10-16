@@ -8,19 +8,24 @@ using Bazario.Core.ServiceContracts.Location;
 using Microsoft.Extensions.Logging;
 using Bazario.Core.Domain.Entities.Location;
 using Bazario.Core.Domain.RepositoryContracts.Location;
+using Bazario.Core.Domain.RepositoryContracts;
 
 namespace Bazario.Core.Services.Location
 {
+    /// <summary>
+    /// Service for managing country entities.
+    /// Uses Unit of Work pattern for transaction management and data consistency.
+    /// </summary>
     public class CountryManagementService : ICountryManagementService
     {
-        private readonly ICountryRepository _countryRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<CountryManagementService> _logger;
 
         public CountryManagementService(
-            ICountryRepository countryRepository,
+            IUnitOfWork unitOfWork,
             ILogger<CountryManagementService> logger)
         {
-            _countryRepository = countryRepository ?? throw new ArgumentNullException(nameof(countryRepository));
+            _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -29,12 +34,12 @@ namespace Bazario.Core.Services.Location
             _logger.LogInformation("Creating new country: {CountryName} ({Code})", request.Name, request.Code);
 
             // Validate uniqueness
-            if (await _countryRepository.ExistsByCodeAsync(request.Code, cancellationToken))
+            if (await _unitOfWork.Countries.ExistsByCodeAsync(request.Code, cancellationToken))
             {
                 throw new InvalidOperationException($"A country with code '{request.Code}' already exists");
             }
 
-            if (await _countryRepository.ExistsByNameAsync(request.Name, cancellationToken))
+            if (await _unitOfWork.Countries.ExistsByNameAsync(request.Name, cancellationToken))
             {
                 throw new InvalidOperationException($"A country with name '{request.Name}' already exists");
             }
@@ -49,7 +54,8 @@ namespace Bazario.Core.Services.Location
                 IsActive = true
             };
 
-            var createdCountry = await _countryRepository.AddAsync(country, cancellationToken);
+            var createdCountry = await _unitOfWork.Countries.AddAsync(country, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation("Successfully created country: {CountryId}", createdCountry.CountryId);
 
@@ -71,14 +77,14 @@ namespace Bazario.Core.Services.Location
         {
             _logger.LogInformation("Updating country: {CountryId}", request.CountryId);
 
-            var existingCountry = await _countryRepository.GetByIdAsync(request.CountryId, cancellationToken);
+            var existingCountry = await _unitOfWork.Countries.GetByIdAsync(request.CountryId, cancellationToken);
             if (existingCountry == null)
             {
                 throw new InvalidOperationException($"Country with ID {request.CountryId} not found");
             }
 
             // Check name uniqueness (excluding current country)
-            var countries = await _countryRepository.GetAllAsync(cancellationToken);
+            var countries = await _unitOfWork.Countries.GetAllAsync(cancellationToken);
             if (countries.Any(c => c.Name == request.Name && c.CountryId != request.CountryId))
             {
                 throw new InvalidOperationException($"A country with name '{request.Name}' already exists");
@@ -90,7 +96,8 @@ namespace Bazario.Core.Services.Location
             existingCountry.IsActive = request.IsActive;
             existingCountry.SupportsPostalCodes = request.SupportsPostalCodes;
 
-            var updatedCountry = await _countryRepository.UpdateAsync(existingCountry, cancellationToken);
+            var updatedCountry = await _unitOfWork.Countries.UpdateAsync(existingCountry, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation("Successfully updated country: {CountryId}", updatedCountry.CountryId);
 
@@ -110,7 +117,7 @@ namespace Bazario.Core.Services.Location
 
         public async Task<CountryResponse?> GetCountryByIdAsync(Guid countryId, CancellationToken cancellationToken = default)
         {
-            var country = await _countryRepository.GetByIdAsync(countryId, cancellationToken);
+            var country = await _unitOfWork.Countries.GetByIdAsync(countryId, cancellationToken);
             if (country == null)
                 return null;
 
@@ -130,7 +137,7 @@ namespace Bazario.Core.Services.Location
 
         public async Task<CountryResponse?> GetCountryByCodeAsync(string code, CancellationToken cancellationToken = default)
         {
-            var country = await _countryRepository.GetByCodeAsync(code, cancellationToken);
+            var country = await _unitOfWork.Countries.GetByCodeAsync(code, cancellationToken);
             if (country == null)
                 return null;
 
@@ -150,7 +157,7 @@ namespace Bazario.Core.Services.Location
 
         public async Task<List<CountryResponse>> GetAllCountriesAsync(CancellationToken cancellationToken = default)
         {
-            var countries = await _countryRepository.GetAllAsync(cancellationToken);
+            var countries = await _unitOfWork.Countries.GetAllAsync(cancellationToken);
 
             return countries.Select(c => new CountryResponse
             {
@@ -168,7 +175,7 @@ namespace Bazario.Core.Services.Location
 
         public async Task<List<CountryResponse>> GetActiveCountriesAsync(CancellationToken cancellationToken = default)
         {
-            var countries = await _countryRepository.GetActiveCountriesAsync(cancellationToken);
+            var countries = await _unitOfWork.Countries.GetActiveCountriesAsync(cancellationToken);
 
             return countries.Select(c => new CountryResponse
             {
@@ -188,7 +195,8 @@ namespace Bazario.Core.Services.Location
         {
             _logger.LogInformation("Deactivating country: {CountryId}", countryId);
 
-            var result = await _countryRepository.DeactivateAsync(countryId, cancellationToken);
+            var result = await _unitOfWork.Countries.DeactivateAsync(countryId, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             if (result)
             {
@@ -204,12 +212,12 @@ namespace Bazario.Core.Services.Location
 
         public async Task<bool> ExistsByCodeAsync(string code, CancellationToken cancellationToken = default)
         {
-            return await _countryRepository.ExistsByCodeAsync(code, cancellationToken);
+            return await _unitOfWork.Countries.ExistsByCodeAsync(code, cancellationToken);
         }
 
         public async Task<bool> ExistsByNameAsync(string name, CancellationToken cancellationToken = default)
         {
-            return await _countryRepository.ExistsByNameAsync(name, cancellationToken);
+            return await _unitOfWork.Countries.ExistsByNameAsync(name, cancellationToken);
         }
     }
 }

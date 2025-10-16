@@ -8,22 +8,24 @@ using Bazario.Core.ServiceContracts.Location;
 using Microsoft.Extensions.Logging;
 using Bazario.Core.Domain.Entities.Location;
 using Bazario.Core.Domain.RepositoryContracts.Location;
+using Bazario.Core.Domain.RepositoryContracts;
 
 namespace Bazario.Core.Services.Location
 {
+    /// <summary>
+    /// Service for managing city entities.
+    /// Uses Unit of Work pattern for transaction management and data consistency.
+    /// </summary>
     public class CityManagementService : ICityManagementService
     {
-        private readonly ICityRepository _cityRepository;
-        private readonly IGovernorateRepository _governorateRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<CityManagementService> _logger;
 
         public CityManagementService(
-            ICityRepository cityRepository,
-            IGovernorateRepository governorateRepository,
+            IUnitOfWork unitOfWork,
             ILogger<CityManagementService> logger)
         {
-            _cityRepository = cityRepository ?? throw new ArgumentNullException(nameof(cityRepository));
-            _governorateRepository = governorateRepository ?? throw new ArgumentNullException(nameof(governorateRepository));
+            _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -32,14 +34,14 @@ namespace Bazario.Core.Services.Location
             _logger.LogInformation("Creating new city: {CityName} for governorate {GovernorateId}", request.Name, request.GovernorateId);
 
             // Validate governorate exists
-            var governorate = await _governorateRepository.GetByIdAsync(request.GovernorateId, cancellationToken);
+            var governorate = await _unitOfWork.Governorates.GetByIdAsync(request.GovernorateId, cancellationToken);
             if (governorate == null)
             {
                 throw new InvalidOperationException($"Governorate with ID {request.GovernorateId} not found");
             }
 
             // Validate uniqueness within governorate
-            if (await _cityRepository.ExistsByNameAsync(request.Name, request.GovernorateId, cancellationToken))
+            if (await _unitOfWork.Cities.ExistsByNameAsync(request.Name, request.GovernorateId, cancellationToken))
             {
                 throw new InvalidOperationException($"A city with name '{request.Name}' already exists in {governorate.Name}");
             }
@@ -55,7 +57,8 @@ namespace Bazario.Core.Services.Location
                 IsActive = true
             };
 
-            var createdCity = await _cityRepository.AddAsync(city, cancellationToken);
+            var createdCity = await _unitOfWork.Cities.AddAsync(city, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation("Successfully created city: {CityId}", createdCity.CityId);
 
@@ -79,14 +82,14 @@ namespace Bazario.Core.Services.Location
         {
             _logger.LogInformation("Updating city: {CityId}", request.CityId);
 
-            var existingCity = await _cityRepository.GetByIdAsync(request.CityId, cancellationToken);
+            var existingCity = await _unitOfWork.Cities.GetByIdAsync(request.CityId, cancellationToken);
             if (existingCity == null)
             {
                 throw new InvalidOperationException($"City with ID {request.CityId} not found");
             }
 
             // Check name uniqueness within governorate (excluding current city)
-            var cities = await _cityRepository.GetByGovernorateIdAsync(existingCity.GovernorateId, cancellationToken);
+            var cities = await _unitOfWork.Cities.GetByGovernorateIdAsync(existingCity.GovernorateId, cancellationToken);
             if (cities.Any(c => c.Name == request.Name && c.CityId != request.CityId))
             {
                 throw new InvalidOperationException($"A city with name '{request.Name}' already exists in this governorate");
@@ -99,7 +102,8 @@ namespace Bazario.Core.Services.Location
             existingCity.IsActive = request.IsActive;
             existingCity.SupportsSameDayDelivery = request.SupportsSameDayDelivery;
 
-            var updatedCity = await _cityRepository.UpdateAsync(existingCity, cancellationToken);
+            var updatedCity = await _unitOfWork.Cities.UpdateAsync(existingCity, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation("Successfully updated city: {CityId}", updatedCity.CityId);
 
@@ -121,7 +125,7 @@ namespace Bazario.Core.Services.Location
 
         public async Task<CityResponse?> GetCityByIdAsync(Guid cityId, CancellationToken cancellationToken = default)
         {
-            var city = await _cityRepository.GetByIdAsync(cityId, cancellationToken);
+            var city = await _unitOfWork.Cities.GetByIdAsync(cityId, cancellationToken);
             if (city == null)
                 return null;
 
@@ -143,7 +147,7 @@ namespace Bazario.Core.Services.Location
 
         public async Task<List<CityResponse>> GetCitiesByGovernorateAsync(Guid governorateId, CancellationToken cancellationToken = default)
         {
-            var cities = await _cityRepository.GetByGovernorateIdAsync(governorateId, cancellationToken);
+            var cities = await _unitOfWork.Cities.GetByGovernorateIdAsync(governorateId, cancellationToken);
 
             return cities.Select(c => new CityResponse
             {
@@ -163,7 +167,7 @@ namespace Bazario.Core.Services.Location
 
         public async Task<List<CityResponse>> GetActiveCitiesByGovernorateAsync(Guid governorateId, CancellationToken cancellationToken = default)
         {
-            var cities = await _cityRepository.GetActiveByGovernorateIdAsync(governorateId, cancellationToken);
+            var cities = await _unitOfWork.Cities.GetActiveByGovernorateIdAsync(governorateId, cancellationToken);
 
             return cities.Select(c => new CityResponse
             {
@@ -183,7 +187,7 @@ namespace Bazario.Core.Services.Location
 
         public async Task<List<CityResponse>> GetAllCitiesAsync(CancellationToken cancellationToken = default)
         {
-            var cities = await _cityRepository.GetAllAsync(cancellationToken);
+            var cities = await _unitOfWork.Cities.GetAllAsync(cancellationToken);
 
             return cities.Select(c => new CityResponse
             {
@@ -203,7 +207,7 @@ namespace Bazario.Core.Services.Location
 
         public async Task<List<CityResponse>> SearchCitiesAsync(string searchTerm, CancellationToken cancellationToken = default)
         {
-            var cities = await _cityRepository.SearchByNameAsync(searchTerm, cancellationToken);
+            var cities = await _unitOfWork.Cities.SearchByNameAsync(searchTerm, cancellationToken);
 
             return cities.Select(c => new CityResponse
             {
@@ -223,7 +227,7 @@ namespace Bazario.Core.Services.Location
 
         public async Task<List<CityResponse>> GetSameDayDeliveryCitiesAsync(Guid governorateId, CancellationToken cancellationToken = default)
         {
-            var cities = await _cityRepository.GetSameDayDeliveryCitiesAsync(governorateId, cancellationToken);
+            var cities = await _unitOfWork.Cities.GetSameDayDeliveryCitiesAsync(governorateId, cancellationToken);
 
             return cities.Select(c => new CityResponse
             {
@@ -245,7 +249,8 @@ namespace Bazario.Core.Services.Location
         {
             _logger.LogInformation("Deactivating city: {CityId}", cityId);
 
-            var result = await _cityRepository.DeactivateAsync(cityId, cancellationToken);
+            var result = await _unitOfWork.Cities.DeactivateAsync(cityId, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             if (result)
             {
@@ -261,7 +266,7 @@ namespace Bazario.Core.Services.Location
 
         public async Task<bool> ExistsByNameAsync(string name, Guid governorateId, CancellationToken cancellationToken = default)
         {
-            return await _cityRepository.ExistsByNameAsync(name, governorateId, cancellationToken);
+            return await _unitOfWork.Cities.ExistsByNameAsync(name, governorateId, cancellationToken);
         }
     }
 }

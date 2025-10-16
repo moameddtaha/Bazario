@@ -8,22 +8,24 @@ using Bazario.Core.ServiceContracts.Location;
 using Microsoft.Extensions.Logging;
 using Bazario.Core.Domain.Entities.Location;
 using Bazario.Core.Domain.RepositoryContracts.Location;
+using Bazario.Core.Domain.RepositoryContracts;
 
 namespace Bazario.Core.Services.Location
 {
+    /// <summary>
+    /// Service for managing governorate entities.
+    /// Uses Unit of Work pattern for transaction management and data consistency.
+    /// </summary>
     public class GovernorateManagementService : IGovernorateManagementService
     {
-        private readonly IGovernorateRepository _governorateRepository;
-        private readonly ICountryRepository _countryRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<GovernorateManagementService> _logger;
 
         public GovernorateManagementService(
-            IGovernorateRepository governorateRepository,
-            ICountryRepository countryRepository,
+            IUnitOfWork unitOfWork,
             ILogger<GovernorateManagementService> logger)
         {
-            _governorateRepository = governorateRepository ?? throw new ArgumentNullException(nameof(governorateRepository));
-            _countryRepository = countryRepository ?? throw new ArgumentNullException(nameof(countryRepository));
+            _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -32,14 +34,14 @@ namespace Bazario.Core.Services.Location
             _logger.LogInformation("Creating new governorate: {GovernorateName} for country {CountryId}", request.Name, request.CountryId);
 
             // Validate country exists
-            var country = await _countryRepository.GetByIdAsync(request.CountryId, cancellationToken);
+            var country = await _unitOfWork.Countries.GetByIdAsync(request.CountryId, cancellationToken);
             if (country == null)
             {
                 throw new InvalidOperationException($"Country with ID {request.CountryId} not found");
             }
 
             // Validate uniqueness within country
-            if (await _governorateRepository.ExistsByNameInCountryAsync(request.Name, request.CountryId, cancellationToken))
+            if (await _unitOfWork.Governorates.ExistsByNameInCountryAsync(request.Name, request.CountryId, cancellationToken))
             {
                 throw new InvalidOperationException($"A governorate with name '{request.Name}' already exists in {country.Name}");
             }
@@ -55,7 +57,8 @@ namespace Bazario.Core.Services.Location
                 IsActive = true
             };
 
-            var createdGovernorate = await _governorateRepository.AddAsync(governorate, cancellationToken);
+            var createdGovernorate = await _unitOfWork.Governorates.AddAsync(governorate, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation("Successfully created governorate: {GovernorateId}", createdGovernorate.GovernorateId);
 
@@ -79,14 +82,14 @@ namespace Bazario.Core.Services.Location
         {
             _logger.LogInformation("Updating governorate: {GovernorateId}", request.GovernorateId);
 
-            var existingGovernorate = await _governorateRepository.GetByIdAsync(request.GovernorateId, cancellationToken);
+            var existingGovernorate = await _unitOfWork.Governorates.GetByIdAsync(request.GovernorateId, cancellationToken);
             if (existingGovernorate == null)
             {
                 throw new InvalidOperationException($"Governorate with ID {request.GovernorateId} not found");
             }
 
             // Check name uniqueness within country (excluding current governorate)
-            var governorates = await _governorateRepository.GetByCountryIdAsync(existingGovernorate.CountryId, cancellationToken);
+            var governorates = await _unitOfWork.Governorates.GetByCountryIdAsync(existingGovernorate.CountryId, cancellationToken);
             if (governorates.Any(g => g.Name == request.Name && g.GovernorateId != request.GovernorateId))
             {
                 throw new InvalidOperationException($"A governorate with name '{request.Name}' already exists in this country");
@@ -99,7 +102,8 @@ namespace Bazario.Core.Services.Location
             existingGovernorate.IsActive = request.IsActive;
             existingGovernorate.SupportsSameDayDelivery = request.SupportsSameDayDelivery;
 
-            var updatedGovernorate = await _governorateRepository.UpdateAsync(existingGovernorate, cancellationToken);
+            var updatedGovernorate = await _unitOfWork.Governorates.UpdateAsync(existingGovernorate, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation("Successfully updated governorate: {GovernorateId}", updatedGovernorate.GovernorateId);
 
@@ -121,7 +125,7 @@ namespace Bazario.Core.Services.Location
 
         public async Task<GovernorateResponse?> GetGovernorateByIdAsync(Guid governorateId, CancellationToken cancellationToken = default)
         {
-            var governorate = await _governorateRepository.GetByIdAsync(governorateId, cancellationToken);
+            var governorate = await _unitOfWork.Governorates.GetByIdAsync(governorateId, cancellationToken);
             if (governorate == null)
                 return null;
 
@@ -143,7 +147,7 @@ namespace Bazario.Core.Services.Location
 
         public async Task<List<GovernorateResponse>> GetGovernoratesByCountryAsync(Guid countryId, CancellationToken cancellationToken = default)
         {
-            var governorates = await _governorateRepository.GetByCountryIdAsync(countryId, cancellationToken);
+            var governorates = await _unitOfWork.Governorates.GetByCountryIdAsync(countryId, cancellationToken);
 
             return governorates.Select(g => new GovernorateResponse
             {
@@ -163,7 +167,7 @@ namespace Bazario.Core.Services.Location
 
         public async Task<List<GovernorateResponse>> GetActiveGovernoratesByCountryAsync(Guid countryId, CancellationToken cancellationToken = default)
         {
-            var governorates = await _governorateRepository.GetActiveByCountryIdAsync(countryId, cancellationToken);
+            var governorates = await _unitOfWork.Governorates.GetActiveByCountryIdAsync(countryId, cancellationToken);
 
             return governorates.Select(g => new GovernorateResponse
             {
@@ -183,7 +187,7 @@ namespace Bazario.Core.Services.Location
 
         public async Task<List<GovernorateResponse>> GetAllGovernoratesAsync(CancellationToken cancellationToken = default)
         {
-            var governorates = await _governorateRepository.GetAllAsync(cancellationToken);
+            var governorates = await _unitOfWork.Governorates.GetAllAsync(cancellationToken);
 
             return governorates.Select(g => new GovernorateResponse
             {
@@ -203,7 +207,7 @@ namespace Bazario.Core.Services.Location
 
         public async Task<List<GovernorateResponse>> GetSameDayDeliveryGovernoratesAsync(Guid countryId, CancellationToken cancellationToken = default)
         {
-            var governorates = await _governorateRepository.GetSameDayDeliveryGovernoratesAsync(countryId, cancellationToken);
+            var governorates = await _unitOfWork.Governorates.GetSameDayDeliveryGovernoratesAsync(countryId, cancellationToken);
 
             return governorates.Select(g => new GovernorateResponse
             {
@@ -225,7 +229,8 @@ namespace Bazario.Core.Services.Location
         {
             _logger.LogInformation("Deactivating governorate: {GovernorateId}", governorateId);
 
-            var result = await _governorateRepository.DeactivateAsync(governorateId, cancellationToken);
+            var result = await _unitOfWork.Governorates.DeactivateAsync(governorateId, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             if (result)
             {
@@ -241,7 +246,7 @@ namespace Bazario.Core.Services.Location
 
         public async Task<bool> ExistsByNameAsync(string name, Guid countryId, CancellationToken cancellationToken = default)
         {
-            return await _governorateRepository.ExistsByNameInCountryAsync(name, countryId, cancellationToken);
+            return await _unitOfWork.Governorates.ExistsByNameInCountryAsync(name, countryId, cancellationToken);
         }
     }
 }
