@@ -151,11 +151,11 @@ namespace Bazario.Api.StartupExtensions
                 var logger = sp.GetRequiredService<ILogger<EmailTemplateService>>();
                 var env = sp.GetRequiredService<IWebHostEnvironment>();
                 var emailSettings = sp.GetRequiredService<IOptions<EmailSettings>>();
-                
+
                 var templatesPath = !string.IsNullOrEmpty(emailSettings.Value.TemplatesPath)
                     ? Path.Combine(env.ContentRootPath, emailSettings.Value.TemplatesPath)
-                    : Path.Combine(env.ContentRootPath, "..", "Bazario.Email", "Templates");
-                
+                    : Path.Combine(env.ContentRootPath, "..", "Bazario.Core", "Templates");
+
                 return new EmailTemplateService(logger, templatesPath);
             });
             services.AddScoped<IEmailService, EmailService>();
