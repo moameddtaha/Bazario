@@ -172,6 +172,7 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<IProductValidationHelper, ProductValidationHelper>();
             services.AddScoped<IInventoryHelper, InventoryHelper>();
             services.AddScoped<IStoreShippingConfigurationHelper, StoreShippingConfigurationHelper>();
+            services.AddScoped<IStoreQueryHelper, StoreQueryHelper>();
 
             // Register Service Aggregators (Dependency Bundling)
             services.AddScoped<IUserAuthenticationDependencies, UserAuthenticationDependencies>();

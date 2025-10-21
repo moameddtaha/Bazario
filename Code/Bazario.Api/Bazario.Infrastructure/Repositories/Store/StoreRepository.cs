@@ -756,5 +756,27 @@ namespace Bazario.Infrastructure.Repositories.Store
                 throw new InvalidOperationException($"Failed to check store name availability: {ex.Message}", ex);
             }
         }
+
+        public IQueryable<StoreEntity> ApplySearchFilter(IQueryable<StoreEntity> query, string searchTerm)
+        {
+            if (string.IsNullOrWhiteSpace(searchTerm))
+            {
+                return query;
+            }
+
+            return query.Where(s =>
+                (s.Name != null && EF.Functions.Like(s.Name, $"%{searchTerm}%")) ||
+                (s.Description != null && EF.Functions.Like(s.Description, $"%{searchTerm}%")));
+        }
+
+        public IQueryable<StoreEntity> ApplyCategoryFilter(IQueryable<StoreEntity> query, string category)
+        {
+            if (string.IsNullOrWhiteSpace(category))
+            {
+                return query;
+            }
+
+            return query.Where(s => EF.Functions.Like(s.Category, category));
+        }
     }
 }

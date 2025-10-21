@@ -83,5 +83,21 @@ namespace Bazario.Core.Domain.RepositoryContracts.Store
         /// <param name="cancellationToken">Cancellation token</param>
         /// <returns>True if name is taken, false if available</returns>
         Task<bool> IsStoreNameTakenAsync(string storeName, Guid? excludeStoreId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Applies search filter to query with case-insensitive matching on Name and Description
+        /// </summary>
+        /// <param name="query">Base query to filter</param>
+        /// <param name="searchTerm">Search term to match against Name and Description</param>
+        /// <returns>Filtered query</returns>
+        IQueryable<StoreEntity> ApplySearchFilter(IQueryable<StoreEntity> query, string searchTerm);
+
+        /// <summary>
+        /// Applies category filter to query with case-insensitive matching
+        /// </summary>
+        /// <param name="query">Base query to filter</param>
+        /// <param name="category">Category to filter by</param>
+        /// <returns>Filtered query</returns>
+        IQueryable<StoreEntity> ApplyCategoryFilter(IQueryable<StoreEntity> query, string category);
     }
 }

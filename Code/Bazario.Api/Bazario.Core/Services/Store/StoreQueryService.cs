@@ -7,6 +7,7 @@ using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.DTO;
 using Bazario.Core.DTO.Store;
 using Bazario.Core.Extensions.Store;
+using Bazario.Core.Helpers.Store;
 using Bazario.Core.Models.Shared;
 using Bazario.Core.Models.Store;
 using Bazario.Core.ServiceContracts.Store;
@@ -21,13 +22,16 @@ namespace Bazario.Core.Services.Store
     public class StoreQueryService : IStoreQueryService
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IStoreQueryHelper _queryHelper;
         private readonly ILogger<StoreQueryService> _logger;
 
         public StoreQueryService(
             IUnitOfWork unitOfWork,
+            IStoreQueryHelper queryHelper,
             ILogger<StoreQueryService> logger)
         {
             _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
+            _queryHelper = queryHelper ?? throw new ArgumentNullException(nameof(queryHelper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -37,8 +41,13 @@ namespace Bazario.Core.Services.Store
 
             try
             {
+                if (storeId == Guid.Empty)
+                {
+                    throw new ArgumentException("Store ID cannot be empty", nameof(storeId));
+                }
+
                 var store = await _unitOfWork.Stores.GetStoreByIdAsync(storeId, cancellationToken);
-                
+
                 if (store == null)
                 {
                     _logger.LogDebug("Store not found. StoreId: {StoreId}", storeId);
@@ -61,6 +70,11 @@ namespace Bazario.Core.Services.Store
 
             try
             {
+                if (sellerId == Guid.Empty)
+                {
+                    throw new ArgumentException("Seller ID cannot be empty", nameof(sellerId));
+                }
+
                 var stores = await _unitOfWork.Stores.GetStoresBySellerIdAsync(sellerId, cancellationToken);
                 var storeResponses = stores.Select(s => s.ToStoreResponse()).ToList();
 
@@ -76,14 +90,14 @@ namespace Bazario.Core.Services.Store
 
         public async Task<PagedResponse<StoreResponse>> SearchStoresAsync(StoreSearchCriteria searchCriteria, CancellationToken cancellationToken = default)
         {
-            _logger.LogDebug("Searching stores with criteria: {SearchTerm}, Category: {Category}", 
+            _logger.LogDebug("Searching stores with criteria: {SearchTerm}, Category: {Category}",
                 searchCriteria.SearchTerm, searchCriteria.Category);
 
             try
             {
                 // Validate that at least one search criterion is provided
-                if (string.IsNullOrWhiteSpace(searchCriteria.SearchTerm) && 
-                    string.IsNullOrWhiteSpace(searchCriteria.Category) && 
+                if (string.IsNullOrWhiteSpace(searchCriteria.SearchTerm) &&
+                    string.IsNullOrWhiteSpace(searchCriteria.Category) &&
                     !searchCriteria.SellerId.HasValue)
                 {
                     throw new ArgumentException("At least one search criterion (SearchTerm, Category, or SellerId) must be provided", nameof(searchCriteria));
@@ -92,50 +106,33 @@ namespace Bazario.Core.Services.Store
                 // Start with IQueryable - stays as SQL
                 var query = _unitOfWork.Stores.GetStoresQueryable();
 
-                // Apply soft deletion filters (these become SQL WHERE clauses)
-                if (searchCriteria.OnlyDeleted)
-                {
-                    // Need to ignore the global filter to get deleted stores
-                    query = _unitOfWork.Stores.GetStoresQueryableIgnoreFilters().Where(s => s.IsDeleted);
-                }
-                else if (searchCriteria.IncludeDeleted)
-                {
-                    // Need to ignore the global filter to include both active and deleted stores
-                    query = _unitOfWork.Stores.GetStoresQueryableIgnoreFilters();
-                }
-                // If neither OnlyDeleted nor IncludeDeleted, the global HasQueryFilter 
-                // automatically applies !s.IsDeleted, so no additional filter needed
+                // Apply soft deletion filters using helper method
+                query = _queryHelper.ApplySoftDeletionFilters(query, searchCriteria);
 
-                // Apply filters (these become SQL WHERE clauses)
+                // Apply search filter using repository method (case-insensitive)
                 if (!string.IsNullOrWhiteSpace(searchCriteria.SearchTerm))
                 {
-                    query = query.Where(s => 
-                        s.Name != null && s.Name.Contains(searchCriteria.SearchTerm) ||
-                        s.Description != null && s.Description.Contains(searchCriteria.SearchTerm));
+                    query = _unitOfWork.Stores.ApplySearchFilter(query, searchCriteria.SearchTerm);
                 }
 
+                // Apply category filter using repository method (case-insensitive)
                 if (!string.IsNullOrWhiteSpace(searchCriteria.Category))
                 {
-                    query = query.Where(s => 
-                        string.Equals(s.Category, searchCriteria.Category, StringComparison.OrdinalIgnoreCase));
+                    query = _unitOfWork.Stores.ApplyCategoryFilter(query, searchCriteria.Category);
                 }
 
+                // Apply seller filter
                 if (searchCriteria.SellerId.HasValue)
                 {
+                    if (searchCriteria.SellerId.Value == Guid.Empty)
+                    {
+                        throw new ArgumentException("Seller ID cannot be empty", nameof(searchCriteria));
+                    }
                     query = query.Where(s => s.SellerId == searchCriteria.SellerId.Value);
                 }
 
-                // Apply sorting (this becomes SQL ORDER BY)
-                query = searchCriteria.SortBy?.ToLower() switch
-                {
-                    "name" => searchCriteria.SortDescending ? 
-                        query.OrderByDescending(s => s.Name) : 
-                        query.OrderBy(s => s.Name),
-                    "createdat" => searchCriteria.SortDescending ? 
-                        query.OrderByDescending(s => s.CreatedAt) : 
-                        query.OrderBy(s => s.CreatedAt),
-                    _ => query.OrderBy(s => s.Name)
-                };
+                // Apply sorting using helper method
+                query = _queryHelper.ApplySorting(query, searchCriteria);
 
                 // Get total count with SQL COUNT
                 var totalCount = await _unitOfWork.Stores.GetStoresCountAsync(query, cancellationToken);
@@ -153,7 +150,7 @@ namespace Bazario.Core.Services.Store
                     PageSize = searchCriteria.PageSize
                 };
 
-                _logger.LogDebug("Successfully searched stores. Found {TotalCount} stores, returning page {PageNumber} with {ItemCount} items", 
+                _logger.LogDebug("Successfully searched stores. Found {TotalCount} stores, returning page {PageNumber} with {ItemCount} items",
                     totalCount, searchCriteria.PageNumber, storeResponses.Count);
 
                 return result;
@@ -178,34 +175,17 @@ namespace Bazario.Core.Services.Store
                     throw new ArgumentException("Category is required for GetStoresByCategoryAsync", nameof(searchCriteria));
                 }
 
-                // Use IQueryable for efficient SQL
-                var query = _unitOfWork.Stores.GetStoresQueryable()
-                    .Where(s => s.Category == searchCriteria.Category);
+                // Start with IQueryable
+                var query = _unitOfWork.Stores.GetStoresQueryable();
 
-                // Apply soft deletion filters (consistent with SearchStoresAsync)
-                if (searchCriteria.OnlyDeleted)
-                {
-                    query = _unitOfWork.Stores.GetStoresQueryableIgnoreFilters()
-                        .Where(s => s.Category == searchCriteria.Category)
-                        .Where(s => s.IsDeleted);
-                }
-                else if (searchCriteria.IncludeDeleted)
-                {
-                    query = _unitOfWork.Stores.GetStoresQueryableIgnoreFilters()
-                        .Where(s => s.Category == searchCriteria.Category);
-                }
+                // Apply soft deletion filters using helper method
+                query = _queryHelper.ApplySoftDeletionFilters(query, searchCriteria);
 
-                // Apply sorting (consistent with SearchStoresAsync)
-                query = searchCriteria.SortBy?.ToLower() switch
-                {
-                    "name" => searchCriteria.SortDescending ? 
-                        query.OrderByDescending(s => s.Name) : 
-                        query.OrderBy(s => s.Name),
-                    "createdat" => searchCriteria.SortDescending ? 
-                        query.OrderByDescending(s => s.CreatedAt) : 
-                        query.OrderBy(s => s.CreatedAt),
-                    _ => query.OrderBy(s => s.Name)
-                };
+                // Apply category filter using repository method (case-insensitive)
+                query = _unitOfWork.Stores.ApplyCategoryFilter(query, searchCriteria.Category);
+
+                // Apply sorting using helper method
+                query = _queryHelper.ApplySorting(query, searchCriteria);
 
                 // Get total count with SQL COUNT
                 var totalCount = await _unitOfWork.Stores.GetStoresCountAsync(query, cancellationToken);
@@ -223,7 +203,7 @@ namespace Bazario.Core.Services.Store
                     PageSize = searchCriteria.PageSize
                 };
 
-                _logger.LogDebug("Successfully retrieved stores by category: {Category}. Found {TotalCount} stores", 
+                _logger.LogDebug("Successfully retrieved stores by category: {Category}. Found {TotalCount} stores",
                     searchCriteria.Category, totalCount);
 
                 return result;
