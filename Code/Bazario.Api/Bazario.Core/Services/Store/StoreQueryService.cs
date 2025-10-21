@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.RepositoryContracts;
-using Bazario.Core.DTO;
 using Bazario.Core.DTO.Store;
 using Bazario.Core.Extensions.Store;
 using Bazario.Core.Helpers.Store;
@@ -90,6 +89,8 @@ namespace Bazario.Core.Services.Store
 
         public async Task<PagedResponse<StoreResponse>> SearchStoresAsync(StoreSearchCriteria searchCriteria, CancellationToken cancellationToken = default)
         {
+            ArgumentNullException.ThrowIfNull(searchCriteria);
+
             _logger.LogDebug("Searching stores with criteria: {SearchTerm}, Category: {Category}",
                 searchCriteria.SearchTerm, searchCriteria.Category);
 
@@ -164,7 +165,9 @@ namespace Bazario.Core.Services.Store
 
         public async Task<PagedResponse<StoreResponse>> GetStoresByCategoryAsync(StoreSearchCriteria searchCriteria, CancellationToken cancellationToken = default)
         {
-            _logger.LogDebug("Getting stores by category: {Category}, Page: {PageNumber}, Size: {PageSize}", 
+            ArgumentNullException.ThrowIfNull(searchCriteria);
+
+            _logger.LogDebug("Getting stores by category: {Category}, Page: {PageNumber}, Size: {PageSize}",
                 searchCriteria.Category, searchCriteria.PageNumber, searchCriteria.PageSize);
 
             try
