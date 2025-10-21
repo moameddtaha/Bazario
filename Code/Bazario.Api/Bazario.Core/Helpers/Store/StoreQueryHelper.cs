@@ -1,5 +1,6 @@
 using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Models.Store;
+using StoreEntity = Bazario.Core.Domain.Entities.Store.Store;
 
 namespace Bazario.Core.Helpers.Store
 {
@@ -15,7 +16,7 @@ namespace Bazario.Core.Helpers.Store
             _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
         }
 
-        public IQueryable<Domain.Entities.Store.Store> ApplySoftDeletionFilters(IQueryable<Domain.Entities.Store.Store> query, StoreSearchCriteria searchCriteria)
+        public IQueryable<StoreEntity> ApplySoftDeletionFilters(IQueryable<StoreEntity> query, StoreSearchCriteria searchCriteria)
         {
             if (searchCriteria.OnlyDeleted)
             {
@@ -33,7 +34,7 @@ namespace Bazario.Core.Helpers.Store
             return query;
         }
 
-        public IQueryable<Domain.Entities.Store.Store> ApplySorting(IQueryable<Domain.Entities.Store.Store> query, StoreSearchCriteria searchCriteria)
+        public IQueryable<StoreEntity> ApplySorting(IQueryable<StoreEntity> query, StoreSearchCriteria searchCriteria)
         {
             return searchCriteria.SortBy?.ToLower() switch
             {
