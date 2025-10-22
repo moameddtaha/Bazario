@@ -62,7 +62,7 @@ namespace Bazario.Core.Services.Catalog.Product
 
             try
             {
-                var products = await _productRepository.GetProductsByStoreIdAsync(storeId, cancellationToken);
+                var products = await _productRepository.GetProductsByStoreIdAsync(storeId, includeDeleted: false, cancellationToken);
                 
                 _logger.LogDebug("Successfully retrieved {Count} products for store: {StoreId}", 
                     products.Count, storeId);

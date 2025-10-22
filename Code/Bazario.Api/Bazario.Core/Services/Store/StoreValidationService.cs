@@ -378,7 +378,7 @@ namespace Bazario.Core.Services.Store
                 // STEP 4: Check if store has active products
                 _logger.LogDebug("Checking if store has active products for soft deletion");
 
-                var productCount = await _unitOfWork.Stores.GetProductCountByStoreIdAsync(storeId, cancellationToken);
+                var productCount = await _unitOfWork.Products.GetProductCountByStoreIdAsync(storeId, includeDeleted: false, cancellationToken);
 
                 if (productCount > 0)
                 {

@@ -186,10 +186,10 @@ namespace Bazario.Infrastructure.Repositories.Catalog
         }
 
 
-        public async Task<List<Product>> GetProductsByStoreIdAsync(Guid storeId, CancellationToken cancellationToken = default)
+        public async Task<List<Product>> GetProductsByStoreIdAsync(Guid storeId, bool includeDeleted = false, CancellationToken cancellationToken = default)
         {
-            _logger.LogDebug("Retrieving products for store: {StoreId}", storeId);
-            
+            _logger.LogDebug("Retrieving products for store: {StoreId}, IncludeDeleted: {IncludeDeleted}", storeId, includeDeleted);
+
             try
             {
                 // Validate input
@@ -199,14 +199,22 @@ namespace Bazario.Infrastructure.Repositories.Catalog
                     return new List<Product>(); // Invalid ID, return empty list
                 }
 
-                var products = await _context.Products
+                var query = _context.Products
                     .Include(p => p.Store)
                     .Include(p => p.Reviews)
                     .Include(p => p.OrderItems)
-                    .Where(p => p.StoreId == storeId)
-                    .ToListAsync(cancellationToken);
+                    .Where(p => p.StoreId == storeId);
 
-                _logger.LogInformation("Retrieved {ProductCount} products for store {StoreId}", products.Count, storeId);
+                // Include soft-deleted products if requested
+                if (includeDeleted)
+                {
+                    query = query.IgnoreQueryFilters();
+                }
+
+                var products = await query.ToListAsync(cancellationToken);
+
+                _logger.LogInformation("Retrieved {ProductCount} products for store {StoreId}, IncludeDeleted: {IncludeDeleted}",
+                    products.Count, storeId, includeDeleted);
 
                 return products;
             }

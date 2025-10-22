@@ -43,8 +43,6 @@ namespace Bazario.Core.Domain.RepositoryContracts.Store
 
         Task<List<StoreEntity>> GetFilteredStoresAsync(Expression<Func<StoreEntity, bool>> predicate, CancellationToken cancellationToken = default);
 
-        Task<int> GetProductCountByStoreIdAsync(Guid storeId, CancellationToken cancellationToken = default);
-
         /// <summary>
         /// Gets a queryable for stores to enable efficient filtering and pagination
         /// </summary>

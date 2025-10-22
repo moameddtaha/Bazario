@@ -70,7 +70,7 @@ namespace Bazario.Core.Services.Inventory
             
             if (storeId.HasValue)
             {
-                products = await _unitOfWork.Products.GetProductsByStoreIdAsync(storeId.Value, cancellationToken);
+                products = await _unitOfWork.Products.GetProductsByStoreIdAsync(storeId.Value, includeDeleted: false, cancellationToken);
             }
             else
             {

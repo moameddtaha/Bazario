@@ -463,35 +463,6 @@ namespace Bazario.Infrastructure.Repositories.Store
         }
 
 
-        public async Task<int> GetProductCountByStoreIdAsync(Guid storeId, CancellationToken cancellationToken = default)
-        {
-            _logger.LogDebug("Starting to count products for store: {StoreId}", storeId);
-            
-            try
-            {
-                // Validate input
-                if (storeId == Guid.Empty)
-                {
-                    _logger.LogWarning("Attempted to count products with empty store ID");
-                    return 0; // Invalid ID, return 0
-                }
-
-                _logger.LogDebug("Counting products for store. StoreId: {StoreId}", storeId);
-
-                var count = await _context.Products
-                    .CountAsync(p => p.StoreId == storeId, cancellationToken);
-
-                _logger.LogDebug("Successfully counted products for store {StoreId}: {ProductCount}", storeId, count);
-
-                return count;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to count products for store: {StoreId}", storeId);
-                throw new InvalidOperationException($"Failed to count products for store {storeId}: {ex.Message}", ex);
-            }
-        }
-
         public async Task<List<StoreEntity>> GetActiveStoresAsync(CancellationToken cancellationToken = default)
         {
             _logger.LogDebug("Starting to retrieve active stores");

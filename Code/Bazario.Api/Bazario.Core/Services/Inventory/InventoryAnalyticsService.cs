@@ -39,7 +39,7 @@ namespace Bazario.Core.Services.Inventory
         {
             _logger.LogInformation("Generating inventory report for store {StoreId}", reportRequest.StoreId);
 
-            var products = await _unitOfWork.Products.GetProductsByStoreIdAsync(reportRequest.StoreId!.Value, cancellationToken);
+            var products = await _unitOfWork.Products.GetProductsByStoreIdAsync(reportRequest.StoreId!.Value, includeDeleted: false, cancellationToken);
             var activeProducts = products.Where(p => !p.IsDeleted).ToList();
 
             var reportItems = activeProducts.Select(p => new InventoryReportItem
@@ -87,7 +87,7 @@ namespace Bazario.Core.Services.Inventory
 
                 // Get products for the store
                 var products = storeId.HasValue
-                    ? await _unitOfWork.Products.GetProductsByStoreIdAsync(storeId.Value, cancellationToken)
+                    ? await _unitOfWork.Products.GetProductsByStoreIdAsync(storeId.Value, includeDeleted: false, cancellationToken)
                     : await _unitOfWork.Products.GetAllProductsAsync(cancellationToken);
 
                 var activeProducts = products.Where(p => !p.IsDeleted).ToList();
@@ -128,12 +128,12 @@ namespace Bazario.Core.Services.Inventory
         }
 
         public async Task<StockValuationReport> GetStockValuationAsync(
-            Guid storeId, 
+            Guid storeId,
             CancellationToken cancellationToken = default)
         {
             _logger.LogInformation("Getting stock valuation for store {StoreId}", storeId);
 
-            var products = await _unitOfWork.Products.GetProductsByStoreIdAsync(storeId, cancellationToken);
+            var products = await _unitOfWork.Products.GetProductsByStoreIdAsync(storeId, includeDeleted: false, cancellationToken);
             var activeProducts = products.Where(p => !p.IsDeleted).ToList();
 
             var valuations = activeProducts.Select(p => new ProductValuation
@@ -165,9 +165,9 @@ namespace Bazario.Core.Services.Inventory
         }
 
         public async Task<InventoryPerformanceMetrics> GetInventoryPerformanceMetricsAsync(
-            Guid storeId, 
-            DateTime startDate, 
-            DateTime endDate, 
+            Guid storeId,
+            DateTime startDate,
+            DateTime endDate,
             CancellationToken cancellationToken = default)
         {
             _logger.LogInformation("Calculating inventory performance metrics for store {StoreId}", storeId);
@@ -175,7 +175,7 @@ namespace Bazario.Core.Services.Inventory
             try
             {
                 // Get products for the store
-                var products = await _unitOfWork.Products.GetProductsByStoreIdAsync(storeId, cancellationToken);
+                var products = await _unitOfWork.Products.GetProductsByStoreIdAsync(storeId, includeDeleted: false, cancellationToken);
                 var activeProducts = products.Where(p => !p.IsDeleted).ToList();
 
                 // Calculate various performance metrics
@@ -229,8 +229,8 @@ namespace Bazario.Core.Services.Inventory
         }
 
         public async Task<List<StockForecast>> ForecastStockNeedsAsync(
-            Guid storeId, 
-            int forecastDays = 30, 
+            Guid storeId,
+            int forecastDays = 30,
             CancellationToken cancellationToken = default)
         {
             _logger.LogInformation("Forecasting stock needs for store {StoreId} for {Days} days", storeId, forecastDays);
@@ -238,7 +238,7 @@ namespace Bazario.Core.Services.Inventory
             try
             {
                 // Get products for the store
-                var products = await _unitOfWork.Products.GetProductsByStoreIdAsync(storeId, cancellationToken);
+                var products = await _unitOfWork.Products.GetProductsByStoreIdAsync(storeId, includeDeleted: false, cancellationToken);
                 var activeProducts = products.Where(p => !p.IsDeleted).ToList();
 
                 var forecasts = new List<StockForecast>();
@@ -301,8 +301,8 @@ namespace Bazario.Core.Services.Inventory
         }
 
         public async Task<List<DeadStockItem>> GetDeadStockAnalysisAsync(
-            Guid storeId, 
-            int daysSinceLastSale = 90, 
+            Guid storeId,
+            int daysSinceLastSale = 90,
             CancellationToken cancellationToken = default)
         {
             _logger.LogInformation("Analyzing dead stock for store {StoreId}", storeId);
@@ -310,7 +310,7 @@ namespace Bazario.Core.Services.Inventory
             try
             {
                 // Get products for the store
-                var products = await _unitOfWork.Products.GetProductsByStoreIdAsync(storeId, cancellationToken);
+                var products = await _unitOfWork.Products.GetProductsByStoreIdAsync(storeId, includeDeleted: false, cancellationToken);
                 var activeProducts = products.Where(p => !p.IsDeleted).ToList();
 
                 var deadStockItems = new List<DeadStockItem>();

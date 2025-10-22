@@ -112,7 +112,7 @@ namespace Bazario.Core.Services.Store
                 var oneYearAgo = DateTime.UtcNow.AddYears(-1);
                 var orderStats = await _unitOfWork.Orders.GetStoreOrderStatsAsync(storeId, oneYearAgo, DateTime.UtcNow, cancellationToken);
                 var reviewStats = await _unitOfWork.Reviews.GetStoreReviewStatsAsync(storeId, cancellationToken);
-                var productCount = await _unitOfWork.Stores.GetProductCountByStoreIdAsync(storeId, cancellationToken);
+                var productCount = await _unitOfWork.Products.GetProductCountByStoreIdAsync(storeId, includeDeleted: false, cancellationToken);
 
                 // Log warning if CreatedAt is null (data integrity issue)
                 if (store.CreatedAt == null)

@@ -38,19 +38,14 @@ namespace Bazario.Core.Services.Store
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-
         public async Task<StoreResponse> CreateStoreAsync(StoreAddRequest storeAddRequest, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Starting store creation for seller: {SellerId}", storeAddRequest?.SellerId);
-
             try
             {
                 // Validate input
-                if (storeAddRequest == null)
-                {
-                    _logger.LogWarning("Store creation attempted with null request");
-                    throw new ArgumentNullException(nameof(storeAddRequest));
-                }
+                ArgumentNullException.ThrowIfNull(storeAddRequest);
+
+                _logger.LogInformation("Starting store creation for seller: {SellerId}", storeAddRequest.SellerId);
 
                 // Validate seller exists
                 var seller = await _unitOfWork.Sellers.GetSellerByIdAsync(storeAddRequest.SellerId, cancellationToken);
@@ -60,8 +55,15 @@ namespace Bazario.Core.Services.Store
                     throw new InvalidOperationException($"Seller with ID {storeAddRequest.SellerId} not found");
                 }
 
+                // Validate store name is provided
+                if (string.IsNullOrWhiteSpace(storeAddRequest.Name))
+                {
+                    _logger.LogWarning("Store creation failed: Store name is required. SellerId: {SellerId}", storeAddRequest.SellerId);
+                    throw new ArgumentException("Store name is required", nameof(storeAddRequest));
+                }
+
                 // Validate store creation eligibility
-                var validationResult = await _validationService.ValidateStoreCreationAsync(storeAddRequest.SellerId, storeAddRequest.Name!, cancellationToken);
+                var validationResult = await _validationService.ValidateStoreCreationAsync(storeAddRequest.SellerId, storeAddRequest.Name, cancellationToken);
                 if (!validationResult.IsValid)
                 {
                     _logger.LogWarning("Store creation validation failed for seller: {SellerId}. Errors: {Errors}",
@@ -93,16 +95,12 @@ namespace Bazario.Core.Services.Store
 
         public async Task<StoreResponse> UpdateStoreAsync(StoreUpdateRequest storeUpdateRequest, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Starting store update for store: {StoreId}", storeUpdateRequest?.StoreId);
-
             try
             {
                 // Validate input
-                if (storeUpdateRequest == null)
-                {
-                    _logger.LogWarning("Store update attempted with null request");
-                    throw new ArgumentNullException(nameof(storeUpdateRequest));
-                }
+                ArgumentNullException.ThrowIfNull(storeUpdateRequest);
+
+                _logger.LogInformation("Starting store update for store: {StoreId}", storeUpdateRequest.StoreId);
 
                 // Get existing store
                 var existingStore = await _unitOfWork.Stores.GetStoreByIdAsync(storeUpdateRequest.StoreId, cancellationToken);
@@ -195,9 +193,6 @@ namespace Bazario.Core.Services.Store
 
         public async Task<bool> DeleteStoreAsync(Guid storeId, Guid deletedBy, string? reason = null, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Starting soft deletion for store: {StoreId}, DeletedBy: {DeletedBy}, Reason: {Reason}", 
-                storeId, deletedBy, reason);
-
             try
             {
                 // Validate inputs
@@ -210,6 +205,9 @@ namespace Bazario.Core.Services.Store
                 {
                     throw new ArgumentException("DeletedBy user ID cannot be empty", nameof(deletedBy));
                 }
+
+                _logger.LogInformation("Starting soft deletion for store: {StoreId}, DeletedBy: {DeletedBy}, Reason: {Reason}",
+                    storeId, deletedBy, reason);
 
                 // Validate store exists
                 var store = await _unitOfWork.Stores.GetStoreByIdAsync(storeId, cancellationToken);
@@ -257,9 +255,6 @@ namespace Bazario.Core.Services.Store
 
         public async Task<bool> HardDeleteStoreAsync(Guid storeId, Guid deletedBy, string reason, CancellationToken cancellationToken = default)
         {
-            _logger.LogWarning("HARD DELETE requested for store: {StoreId}, RequestedBy: {DeletedBy}, Reason: {Reason}", 
-                storeId, deletedBy, reason);
-
             try
             {
                 // Validate inputs
@@ -277,6 +272,9 @@ namespace Bazario.Core.Services.Store
                 {
                     throw new ArgumentException("Reason is required for hard deletion", nameof(reason));
                 }
+
+                _logger.LogWarning("HARD DELETE requested for store: {StoreId}, RequestedBy: {DeletedBy}, Reason: {Reason}",
+                    storeId, deletedBy, reason);
 
                 // Check if user is an admin (hard delete requires admin privileges)
                 var isAdmin = await _authorizationService.IsUserAdminAsync(deletedBy, cancellationToken);
@@ -315,14 +313,15 @@ namespace Bazario.Core.Services.Store
                 try
                 {
                     // Check if store has products and delete them first (due to Restrict delete behavior)
-                    var productCount = await _unitOfWork.Stores.GetProductCountByStoreIdAsync(storeId, cancellationToken);
+                    // Include soft-deleted products in the count for complete cleanup
+                    var productCount = await _unitOfWork.Products.GetProductCountByStoreIdAsync(storeId, includeDeleted: true, cancellationToken);
                     if (productCount > 0)
                     {
-                        _logger.LogWarning("Store has {ProductCount} products that must be deleted first. StoreId: {StoreId}",
+                        _logger.LogWarning("Store has {ProductCount} products (including soft-deleted) that must be deleted first. StoreId: {StoreId}",
                             productCount, storeId);
 
-                        // Get all products for this store
-                        var products = await _unitOfWork.Products.GetProductsByStoreIdAsync(storeId, cancellationToken);
+                        // Get all products for this store (including soft-deleted ones for complete cleanup)
+                        var products = await _unitOfWork.Products.GetProductsByStoreIdAsync(storeId, includeDeleted: true, cancellationToken);
 
                         _logger.LogInformation("Hard deleting {ProductCount} products before store deletion. StoreId: {StoreId}",
                             products.Count, storeId);
@@ -393,8 +392,6 @@ namespace Bazario.Core.Services.Store
 
         public async Task<StoreResponse> RestoreStoreAsync(Guid storeId, Guid restoredBy, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Starting store restoration. StoreId: {StoreId}, RestoredBy: {RestoredBy}", storeId, restoredBy);
-
             try
             {
                 // Validate inputs
@@ -407,6 +404,8 @@ namespace Bazario.Core.Services.Store
                 {
                     throw new ArgumentException("RestoredBy user ID cannot be empty", nameof(restoredBy));
                 }
+
+                _logger.LogInformation("Starting store restoration. StoreId: {StoreId}, RestoredBy: {RestoredBy}", storeId, restoredBy);
 
                 // Check if store exists (including soft-deleted)
                 var store = await _unitOfWork.Stores.GetStoreByIdIncludeDeletedAsync(storeId, cancellationToken);
@@ -459,9 +458,6 @@ namespace Bazario.Core.Services.Store
 
         public async Task<StoreResponse> UpdateStoreStatusAsync(Guid storeId, Guid userId, bool isActive, string? reason = null, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Updating store status for store: {StoreId}, User: {UserId}, NewStatus: {IsActive}, Reason: {Reason}",
-                storeId, userId, isActive, reason);
-
             try
             {
                 // Validate inputs
@@ -474,6 +470,9 @@ namespace Bazario.Core.Services.Store
                 {
                     throw new ArgumentException("User ID cannot be empty", nameof(userId));
                 }
+
+                _logger.LogInformation("Updating store status for store: {StoreId}, User: {UserId}, NewStatus: {IsActive}, Reason: {Reason}",
+                    storeId, userId, isActive, reason);
 
                 // Get existing store
                 var store = await _unitOfWork.Stores.GetStoreByIdAsync(storeId, cancellationToken);
