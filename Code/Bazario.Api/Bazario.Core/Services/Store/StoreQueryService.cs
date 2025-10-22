@@ -91,9 +91,6 @@ namespace Bazario.Core.Services.Store
         {
             ArgumentNullException.ThrowIfNull(searchCriteria);
 
-            _logger.LogDebug("Searching stores with criteria: {SearchTerm}, Category: {Category}",
-                searchCriteria.SearchTerm, searchCriteria.Category);
-
             try
             {
                 // Validate that at least one search criterion is provided
@@ -103,6 +100,9 @@ namespace Bazario.Core.Services.Store
                 {
                     throw new ArgumentException("At least one search criterion (SearchTerm, Category, or SellerId) must be provided", nameof(searchCriteria));
                 }
+
+                _logger.LogDebug("Searching stores with criteria: {SearchTerm}, Category: {Category}",
+                    searchCriteria.SearchTerm, searchCriteria.Category);
 
                 // Start with IQueryable - stays as SQL
                 var query = _unitOfWork.Stores.GetStoresQueryable();
@@ -167,9 +167,6 @@ namespace Bazario.Core.Services.Store
         {
             ArgumentNullException.ThrowIfNull(searchCriteria);
 
-            _logger.LogDebug("Getting stores by category: {Category}, Page: {PageNumber}, Size: {PageSize}",
-                searchCriteria.Category, searchCriteria.PageNumber, searchCriteria.PageSize);
-
             try
             {
                 // Validate that category is provided
@@ -177,6 +174,9 @@ namespace Bazario.Core.Services.Store
                 {
                     throw new ArgumentException("Category is required for GetStoresByCategoryAsync", nameof(searchCriteria));
                 }
+
+                _logger.LogDebug("Getting stores by category: {Category}, Page: {PageNumber}, Size: {PageSize}",
+                    searchCriteria.Category, searchCriteria.PageNumber, searchCriteria.PageSize);
 
                 // Start with IQueryable
                 var query = _unitOfWork.Stores.GetStoresQueryable();
