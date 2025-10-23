@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Bazario.Core.ServiceContracts.Order;
 using Bazario.Core.ServiceContracts.Store;
@@ -17,20 +16,17 @@ namespace Bazario.Core.Services.Order
     /// </summary>
     public class ShippingZoneService : IShippingZoneService
     {
-        private readonly IConfiguration _configuration;
         private readonly ILogger<ShippingZoneService> _logger;
         private readonly IStoreShippingConfigurationService _storeShippingConfigurationService;
         private readonly IStoreGovernorateSupportRepository _governorateSupportRepository;
         private readonly ICityRepository _cityRepository;
 
         public ShippingZoneService(
-            IConfiguration configuration,
             ILogger<ShippingZoneService> logger,
             IStoreShippingConfigurationService storeShippingConfigurationService,
             IStoreGovernorateSupportRepository governorateSupportRepository,
             ICityRepository cityRepository)
         {
-            _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _storeShippingConfigurationService = storeShippingConfigurationService ?? throw new ArgumentNullException(nameof(storeShippingConfigurationService));
             _governorateSupportRepository = governorateSupportRepository ?? throw new ArgumentNullException(nameof(governorateSupportRepository));
@@ -90,6 +86,14 @@ namespace Bazario.Core.Services.Order
         /// </summary>
         private async Task<bool> IsGovernorateSupported(Guid storeId, Guid governorateId, CancellationToken cancellationToken = default)
         {
+            // Defensive validation for private method
+            if (storeId == Guid.Empty || governorateId == Guid.Empty)
+            {
+                _logger.LogWarning("Invalid IDs provided to IsGovernorateSupported. StoreId: {StoreId}, GovernorateId: {GovernorateId}",
+                    storeId, governorateId);
+                return false;
+            }
+
             try
             {
                 return await _governorateSupportRepository.IsGovernorateSupportedAsync(storeId, governorateId, cancellationToken);
@@ -290,10 +294,15 @@ namespace Bazario.Core.Services.Order
                 
                 return isFallbackEligible;
             }
+            catch (ArgumentException)
+            {
+                // Re-throw validation exceptions
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error checking store same-day delivery eligibility for store: {StoreId}, city: {City}", storeId, city);
-                return false;
+                throw new InvalidOperationException($"Failed to check same-day delivery eligibility for store {storeId} to {city}: {ex.Message}", ex);
             }
         }
 
@@ -435,7 +444,13 @@ namespace Bazario.Core.Services.Order
         /// </summary>
         public async Task<decimal> GetStoreDeliveryFeeFallbackAsync(Guid storeId, string city, string country, CancellationToken cancellationToken = default)
         {
-            _logger.LogDebug("Using store-specific fallback delivery fee calculation for store: {StoreId}, city: {City}, country: {Country}", 
+            // Validate inputs
+            if (storeId == Guid.Empty)
+            {
+                throw new ArgumentException("Store ID cannot be empty", nameof(storeId));
+            }
+
+            _logger.LogDebug("Using store-specific fallback delivery fee calculation for store: {StoreId}, city: {City}, country: {Country}",
                 storeId, city, country);
 
             var zone = GetSimpleFallbackZone(city, country);
