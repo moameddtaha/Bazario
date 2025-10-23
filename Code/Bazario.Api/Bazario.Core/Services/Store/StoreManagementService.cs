@@ -12,6 +12,8 @@ using Bazario.Core.DTO.Store;
 using Bazario.Core.Helpers.Authentication;
 using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Extensions.Store;
+using Bazario.Core.ServiceContracts.Catalog.Product;
+using Bazario.Core.ServiceContracts.Order;
 
 namespace Bazario.Core.Services.Store
 {
@@ -24,17 +26,23 @@ namespace Bazario.Core.Services.Store
         private readonly IUnitOfWork _unitOfWork;
         private readonly IStoreValidationService _validationService;
         private readonly IStoreAuthorizationService _authorizationService;
+        private readonly IProductManagementService _productManagementService;
+        private readonly IOrderManagementService _orderManagementService;
         private readonly ILogger<StoreManagementService> _logger;
 
         public StoreManagementService(
             IUnitOfWork unitOfWork,
             IStoreValidationService validationService,
             IStoreAuthorizationService authorizationService,
+            IProductManagementService productManagementService,
+            IOrderManagementService orderManagementService,
             ILogger<StoreManagementService> logger)
         {
             _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
             _authorizationService = authorizationService ?? throw new ArgumentNullException(nameof(authorizationService));
+            _productManagementService = productManagementService ?? throw new ArgumentNullException(nameof(productManagementService));
+            _orderManagementService = orderManagementService ?? throw new ArgumentNullException(nameof(orderManagementService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -286,7 +294,7 @@ namespace Bazario.Core.Services.Store
 
                 _logger.LogWarning("Admin user {UserId} attempting hard delete of store {StoreId}", deletedBy, storeId);
 
-                _logger.LogCritical("PERFORMING HARD DELETE - This action is IRREVERSIBLE. StoreId: {StoreId}, DeletedBy: {DeletedBy}, Reason: {Reason}", 
+                _logger.LogCritical("PERFORMING HARD DELETE - This action is IRREVERSIBLE. StoreId: {StoreId}, DeletedBy: {DeletedBy}, Reason: {Reason}",
                     storeId, deletedBy, reason);
 
                 // Check if store exists (including soft-deleted)
@@ -297,27 +305,58 @@ namespace Bazario.Core.Services.Store
                     throw new InvalidOperationException($"Store with ID {storeId} not found");
                 }
 
-                // Check if store has any orders (hard delete NEVER allowed with orders)
-                // Orders are critical business records that must be preserved permanently
-                var storeOrderCount = await _unitOfWork.Orders.GetOrderCountByStoreIdAsync(storeId, cancellationToken);
-                if (storeOrderCount > 0)
-                {
-                    _logger.LogError("Hard delete BLOCKED: Store has existing orders. StoreId: {StoreId}, OrderCount: {OrderCount}", 
-                        storeId, storeOrderCount);
-                    throw new InvalidOperationException($"Cannot hard delete store with {storeOrderCount} existing orders. Orders are permanent business records and cannot be deleted.");
-                }
-
-                // Begin transaction for atomic hard delete (products + store)
+                // Begin transaction for atomic hard delete (orders + products + store)
                 await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
                 try
                 {
-                    // Check if store has products and delete them first (due to Restrict delete behavior)
+                    // STEP 1: Check if store has orders and delete them first
+                    var orders = await _unitOfWork.Orders.GetOrdersByStoreIdAsync(storeId, cancellationToken);
+                    if (orders.Count > 0)
+                    {
+                        _logger.LogWarning("Store has {OrderCount} orders that must be deleted first. StoreId: {StoreId}",
+                            orders.Count, storeId);
+
+                        _logger.LogInformation("Hard deleting {OrderCount} orders before product/store deletion. StoreId: {StoreId}",
+                            orders.Count, storeId);
+
+                        // Hard delete all orders first
+                        foreach (var order in orders)
+                        {
+                            try
+                            {
+                                var orderDeleted = await _orderManagementService.HardDeleteOrderAsync(
+                                    order.OrderId,
+                                    deletedBy,
+                                    $"Cascade delete due to store hard deletion: {reason}",
+                                    cancellationToken);
+
+                                if (orderDeleted)
+                                {
+                                    _logger.LogDebug("Successfully hard deleted order: {OrderId}", order.OrderId);
+                                }
+                                else
+                                {
+                                    _logger.LogWarning("Failed to hard delete order: {OrderId}", order.OrderId);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogError(ex, "Failed to hard delete order: {OrderId}", order.OrderId);
+                                throw new InvalidOperationException($"Failed to delete order {order.OrderId} before store deletion: {ex.Message}", ex);
+                            }
+                        }
+
+                        _logger.LogInformation("Successfully hard deleted all {OrderCount} orders. StoreId: {StoreId}",
+                            orders.Count, storeId);
+                    }
+
+                    // STEP 2: Check if store has products and delete them second (due to Restrict delete behavior)
                     // Include soft-deleted products in the count for complete cleanup
                     var productCount = await _unitOfWork.Products.GetProductCountByStoreIdAsync(storeId, includeDeleted: true, cancellationToken);
                     if (productCount > 0)
                     {
-                        _logger.LogWarning("Store has {ProductCount} products (including soft-deleted) that must be deleted first. StoreId: {StoreId}",
+                        _logger.LogWarning("Store has {ProductCount} products (including soft-deleted) that must be deleted. StoreId: {StoreId}",
                             productCount, storeId);
 
                         // Get all products for this store (including soft-deleted ones for complete cleanup)
@@ -326,12 +365,17 @@ namespace Bazario.Core.Services.Store
                         _logger.LogInformation("Hard deleting {ProductCount} products before store deletion. StoreId: {StoreId}",
                             products.Count, storeId);
 
-                        // Hard delete all products first
+                        // Hard delete all products using the service layer
                         foreach (var product in products)
                         {
                             try
                             {
-                                var productDeleted = await _unitOfWork.Products.HardDeleteProductAsync(product.ProductId, cancellationToken);
+                                var productDeleted = await _productManagementService.HardDeleteProductAsync(
+                                    product.ProductId,
+                                    deletedBy,
+                                    $"Cascade delete due to store hard deletion: {reason}",
+                                    cancellationToken);
+
                                 if (productDeleted)
                                 {
                                     _logger.LogDebug("Successfully hard deleted product: {ProductId}, Name: {ProductName}",

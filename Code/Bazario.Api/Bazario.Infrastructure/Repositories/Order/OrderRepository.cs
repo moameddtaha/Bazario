@@ -158,6 +158,160 @@ namespace Bazario.Infrastructure.Repositories.Order
             }
         }
 
+        public async Task<bool> SoftDeleteOrderAsync(Guid orderId, Guid deletedBy, string? reason = null, CancellationToken cancellationToken = default)
+        {
+            _logger.LogInformation("Starting soft delete for order: {OrderId}, DeletedBy: {DeletedBy}, Reason: {Reason}", orderId, deletedBy, reason);
+
+            try
+            {
+                // Validate input
+                if (orderId == Guid.Empty)
+                {
+                    _logger.LogWarning("Attempted to soft delete order with empty ID");
+                    return false;
+                }
+
+                if (deletedBy == Guid.Empty)
+                {
+                    _logger.LogWarning("Attempted to soft delete order without valid DeletedBy user ID");
+                    return false;
+                }
+
+                _logger.LogDebug("Checking if order exists for soft deletion. OrderId: {OrderId}", orderId);
+
+                // Find the order (should be active, not already deleted)
+                var order = await _context.Orders
+                    .IgnoreQueryFilters() // This allows finding deleted orders
+                    .FirstOrDefaultAsync(o => o.OrderId == orderId, cancellationToken);
+
+                if (order == null)
+                {
+                    _logger.LogWarning("Order not found for soft deletion. OrderId: {OrderId}", orderId);
+                    return false;
+                }
+
+                if (order.IsDeleted)
+                {
+                    _logger.LogWarning("Order is already soft deleted. OrderId: {OrderId}", orderId);
+                    return false;
+                }
+
+                _logger.LogDebug("Soft deleting order. OrderId: {OrderId}", orderId);
+
+                // Set soft delete properties
+                order.IsDeleted = true;
+                order.DeletedAt = DateTime.UtcNow;
+                order.DeletedBy = deletedBy;
+                order.DeletedReason = reason;
+
+                // Update the order
+                _context.Orders.Update(order);
+
+                _logger.LogInformation("Successfully soft deleted order. OrderId: {OrderId}, DeletedBy: {DeletedBy}",
+                    orderId, deletedBy);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error while soft deleting order: {OrderId}", orderId);
+                throw new InvalidOperationException($"Unexpected error while soft deleting order with ID {orderId}: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<bool> RestoreOrderAsync(Guid orderId, CancellationToken cancellationToken = default)
+        {
+            _logger.LogInformation("Starting restore for soft deleted order: {OrderId}", orderId);
+
+            try
+            {
+                // Validate input
+                if (orderId == Guid.Empty)
+                {
+                    _logger.LogWarning("Attempted to restore order with empty ID");
+                    return false;
+                }
+
+                _logger.LogDebug("Checking if soft deleted order exists for restore. OrderId: {OrderId}", orderId);
+
+                // Find the order including soft deleted ones
+                var order = await _context.Orders
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(o => o.OrderId == orderId, cancellationToken);
+
+                if (order == null)
+                {
+                    _logger.LogWarning("Order not found for restore. OrderId: {OrderId}", orderId);
+                    return false;
+                }
+
+                if (!order.IsDeleted)
+                {
+                    _logger.LogWarning("Order is not soft deleted, cannot restore. OrderId: {OrderId}", orderId);
+                    return false;
+                }
+
+                _logger.LogDebug("Restoring soft deleted order. OrderId: {OrderId}", orderId);
+
+                // Clear soft delete properties
+                order.IsDeleted = false;
+                order.DeletedAt = null;
+                order.DeletedBy = null;
+                order.DeletedReason = null;
+
+                // Update the order
+                _context.Orders.Update(order);
+
+                _logger.LogInformation("Successfully restored order. OrderId: {OrderId}", orderId);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error while restoring order: {OrderId}", orderId);
+                throw new InvalidOperationException($"Unexpected error while restoring order with ID {orderId}: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<OrderEntity?> GetOrderByIdIncludeDeletedAsync(Guid orderId, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                // Validate input
+                if (orderId == Guid.Empty)
+                {
+                    _logger.LogWarning("Attempted to retrieve order with empty ID");
+                    return null;
+                }
+
+                _logger.LogDebug("Retrieving order including soft deleted. OrderId: {OrderId}", orderId);
+
+                // Query with navigation properties, ignoring soft delete filter
+                var order = await _context.Orders
+                    .IgnoreQueryFilters()
+                    .Include(o => o.Customer)
+                    .Include(o => o.OrderItems)
+                    .FirstOrDefaultAsync(o => o.OrderId == orderId, cancellationToken);
+
+                if (order != null)
+                {
+                    _logger.LogDebug("Successfully retrieved order including deleted. OrderId: {OrderId}, IsDeleted: {IsDeleted}",
+                        orderId, order.IsDeleted);
+                }
+                else
+                {
+                    _logger.LogDebug("Order not found including deleted. OrderId: {OrderId}", orderId);
+                }
+
+                return order;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to retrieve order including deleted: {OrderId}", orderId);
+                throw new InvalidOperationException($"Failed to retrieve order with ID {orderId}: {ex.Message}", ex);
+            }
+        }
+
         public async Task<bool> DeleteOrderByIdAsync(Guid orderId, CancellationToken cancellationToken = default)
         {
             _logger.LogInformation("Starting to delete order: {OrderId}", orderId);
@@ -173,8 +327,11 @@ namespace Bazario.Infrastructure.Repositories.Order
 
                 _logger.LogDebug("Checking if order exists for deletion. OrderId: {OrderId}", orderId);
 
-                // Use FindAsync for simple PK lookup (no navigation properties needed for delete)
-                var order = await _context.Orders.FindAsync(new object[] { orderId }, cancellationToken);
+                // Use IgnoreQueryFilters to find both active and soft-deleted orders
+                var order = await _context.Orders
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(o => o.OrderId == orderId, cancellationToken);
+
                 if (order == null)
                 {
                     _logger.LogWarning("Order not found for deletion. OrderId: {OrderId}", orderId);
@@ -278,6 +435,36 @@ namespace Bazario.Infrastructure.Repositories.Order
             {
                 _logger.LogError(ex, "Failed to retrieve orders for customer: {CustomerId}", customerId);
                 throw new InvalidOperationException($"Failed to retrieve orders for customer {customerId}: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<List<OrderEntity>> GetOrdersByStoreIdAsync(Guid storeId, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                // Validate input
+                if (storeId == Guid.Empty)
+                {
+                    _logger.LogWarning("Attempted to retrieve orders with empty store ID");
+                    return new List<OrderEntity>(); // Invalid ID, return empty list
+                }
+
+                // Get orders by joining through OrderItems -> Product -> Store
+                var orders = await _context.Orders
+                    .Include(o => o.Customer)
+                    .Include(o => o.OrderItems)
+                        .ThenInclude(oi => oi.Product)
+                    .Where(o => o.OrderItems.Any(oi => oi.Product != null && oi.Product.StoreId == storeId))
+                    .ToListAsync(cancellationToken);
+
+                _logger.LogDebug("Retrieved {OrderCount} orders for store {StoreId}", orders.Count, storeId);
+
+                return orders;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to retrieve orders for store: {StoreId}", storeId);
+                throw new InvalidOperationException($"Failed to retrieve orders for store {storeId}: {ex.Message}", ex);
             }
         }
 

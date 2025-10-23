@@ -18,6 +18,24 @@ namespace Bazario.Core.Domain.RepositoryContracts.Order
 
         Task<OrderEntity> UpdateOrderAsync(OrderEntity order, CancellationToken cancellationToken = default);
 
+        /// <summary>
+        /// Soft deletes an order by setting IsDeleted = true
+        /// </summary>
+        Task<bool> SoftDeleteOrderAsync(Guid orderId, Guid deletedBy, string? reason = null, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Restores a soft-deleted order by setting IsDeleted = false
+        /// </summary>
+        Task<bool> RestoreOrderAsync(Guid orderId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets an order by ID including soft-deleted orders (ignores query filter)
+        /// </summary>
+        Task<OrderEntity?> GetOrderByIdIncludeDeletedAsync(Guid orderId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Hard deletes an order (permanently removes from database)
+        /// </summary>
         Task<bool> DeleteOrderByIdAsync(Guid orderId, CancellationToken cancellationToken = default);
 
         Task<OrderEntity?> GetOrderByIdAsync(Guid orderId, CancellationToken cancellationToken = default);
@@ -25,6 +43,8 @@ namespace Bazario.Core.Domain.RepositoryContracts.Order
         Task<List<OrderEntity>> GetAllOrdersAsync(CancellationToken cancellationToken = default);
 
         Task<List<OrderEntity>> GetOrdersByCustomerIdAsync(Guid customerId, CancellationToken cancellationToken = default);
+
+        Task<List<OrderEntity>> GetOrdersByStoreIdAsync(Guid storeId, CancellationToken cancellationToken = default);
 
         Task<List<OrderEntity>> GetOrdersByStatusAsync(OrderStatus status, CancellationToken cancellationToken = default);
 

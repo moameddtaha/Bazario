@@ -55,16 +55,39 @@ namespace Bazario.Core.ServiceContracts.Order
         Task<bool> CancelOrderAsync(Guid orderId, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Hard deletes an order (completely removes from database) - ADMIN ONLY
+        /// Soft deletes an order (sets IsDeleted = true)
         /// </summary>
-        /// <param name="orderId">Order ID to delete</param>
-        /// <param name="deletedBy">Admin user ID performing the deletion</param>
-        /// <param name="reason">Reason for deletion (required)</param>
+        /// <param name="orderId">Order ID to soft delete</param>
+        /// <param name="deletedBy">User ID performing the deletion</param>
+        /// <param name="reason">Reason for soft deletion (optional)</param>
         /// <param name="cancellationToken">Cancellation token</param>
-        /// <returns>True if successfully deleted</returns>
+        /// <returns>True if successfully soft deleted</returns>
+        /// <exception cref="ArgumentException">Thrown when required parameters are invalid</exception>
+        /// <exception cref="InvalidOperationException">Thrown when order is not found or already deleted</exception>
+        Task<bool> SoftDeleteOrderAsync(Guid orderId, Guid deletedBy, string? reason = null, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Hard deletes an order (permanently removes from database) - ADMIN ONLY - IRREVERSIBLE
+        /// </summary>
+        /// <param name="orderId">Order ID to hard delete</param>
+        /// <param name="deletedBy">Admin user ID performing the deletion</param>
+        /// <param name="reason">Reason for hard deletion (required)</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>True if successfully hard deleted</returns>
         /// <exception cref="ArgumentException">Thrown when required parameters are invalid</exception>
         /// <exception cref="UnauthorizedAccessException">Thrown when user is not an admin</exception>
-        /// <exception cref="OrderNotFoundException">Thrown when order is not found</exception>
-        Task<bool> DeleteOrderAsync(Guid orderId, Guid deletedBy, string? reason = null, CancellationToken cancellationToken = default);
+        /// <exception cref="InvalidOperationException">Thrown when order is not found</exception>
+        Task<bool> HardDeleteOrderAsync(Guid orderId, Guid deletedBy, string reason, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Restores a soft-deleted order (sets IsDeleted = false)
+        /// </summary>
+        /// <param name="orderId">Order ID to restore</param>
+        /// <param name="restoredBy">User ID performing the restoration</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>Restored order response</returns>
+        /// <exception cref="ArgumentException">Thrown when required parameters are invalid</exception>
+        /// <exception cref="InvalidOperationException">Thrown when order is not found or not deleted</exception>
+        Task<OrderResponse> RestoreOrderAsync(Guid orderId, Guid restoredBy, CancellationToken cancellationToken = default);
     }
 }

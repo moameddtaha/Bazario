@@ -249,7 +249,61 @@ namespace Bazario.Core.Services.Order
             }
         }
 
-        public async Task<bool> DeleteOrderAsync(Guid orderId, Guid deletedBy, string? reason = null, CancellationToken cancellationToken = default)
+        public async Task<bool> SoftDeleteOrderAsync(Guid orderId, Guid deletedBy, string? reason = null, CancellationToken cancellationToken = default)
+        {
+            _logger.LogInformation("Soft deleting order: {OrderId}, DeletedBy: {DeletedBy}, Reason: {Reason}", orderId, deletedBy, reason);
+
+            try
+            {
+                // Validate inputs
+                if (orderId == Guid.Empty)
+                {
+                    throw new ArgumentException("Order ID cannot be empty", nameof(orderId));
+                }
+
+                if (deletedBy == Guid.Empty)
+                {
+                    throw new ArgumentException("DeletedBy user ID cannot be empty", nameof(deletedBy));
+                }
+
+                // Check if order exists
+                var existingOrder = await _unitOfWork.Orders.GetOrderByIdAsync(orderId, cancellationToken);
+                if (existingOrder == null)
+                {
+                    _logger.LogWarning("Order {OrderId} not found for soft deletion", orderId);
+                    return false;
+                }
+
+                _logger.LogDebug("Soft deleting order {OrderId}", orderId);
+
+                // Perform soft delete
+                var result = await _unitOfWork.Orders.SoftDeleteOrderAsync(orderId, deletedBy, reason, cancellationToken);
+
+                if (result)
+                {
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+                    _logger.LogInformation("Successfully soft deleted order: {OrderId} by user: {DeletedBy}", orderId, deletedBy);
+                }
+                else
+                {
+                    _logger.LogWarning("Failed to soft delete order: {OrderId}", orderId);
+                }
+
+                return result;
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Validation error while soft deleting order: {OrderId}", orderId);
+                throw; // Re-throw argument exceptions as-is
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to soft delete order: {OrderId}", orderId);
+                throw;
+            }
+        }
+
+        public async Task<bool> HardDeleteOrderAsync(Guid orderId, Guid deletedBy, string reason, CancellationToken cancellationToken = default)
         {
             _logger.LogInformation("Admin user {DeletedBy} attempting to delete order: {OrderId}, Reason: {Reason}", deletedBy, orderId, reason);
 
@@ -318,6 +372,74 @@ namespace Bazario.Core.Services.Order
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to delete order: {OrderId}", orderId);
+                throw;
+            }
+        }
+
+        public async Task<OrderResponse> RestoreOrderAsync(Guid orderId, Guid restoredBy, CancellationToken cancellationToken = default)
+        {
+            _logger.LogInformation("Restoring soft deleted order: {OrderId}, RestoredBy: {RestoredBy}", orderId, restoredBy);
+
+            try
+            {
+                // Validate inputs
+                if (orderId == Guid.Empty)
+                {
+                    throw new ArgumentException("Order ID cannot be empty", nameof(orderId));
+                }
+
+                if (restoredBy == Guid.Empty)
+                {
+                    throw new ArgumentException("RestoredBy user ID cannot be empty", nameof(restoredBy));
+                }
+
+                // Check if soft-deleted order exists
+                var existingOrder = await _unitOfWork.Orders.GetOrderByIdIncludeDeletedAsync(orderId, cancellationToken);
+                if (existingOrder == null)
+                {
+                    throw new InvalidOperationException($"Order with ID {orderId} not found");
+                }
+
+                if (!existingOrder.IsDeleted)
+                {
+                    throw new InvalidOperationException($"Order {orderId} is not soft deleted, cannot restore");
+                }
+
+                _logger.LogDebug("Restoring order {OrderId}", orderId);
+
+                // Perform restore
+                var result = await _unitOfWork.Orders.RestoreOrderAsync(orderId, cancellationToken);
+
+                if (!result)
+                {
+                    throw new InvalidOperationException($"Failed to restore order {orderId}");
+                }
+
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                _logger.LogInformation("Successfully restored order: {OrderId} by user: {RestoredBy}", orderId, restoredBy);
+
+                // Get the restored order and return
+                var restoredOrder = await _unitOfWork.Orders.GetOrderByIdAsync(orderId, cancellationToken);
+                if (restoredOrder == null)
+                {
+                    throw new InvalidOperationException($"Failed to retrieve restored order {orderId}");
+                }
+
+                return restoredOrder.ToOrderResponse();
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Validation error while restoring order: {OrderId}", orderId);
+                throw; // Re-throw argument exceptions as-is
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning(ex, "Business logic error while restoring order: {OrderId}", orderId);
+                throw; // Re-throw business logic exceptions as-is
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to restore order: {OrderId}", orderId);
                 throw;
             }
         }

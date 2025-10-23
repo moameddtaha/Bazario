@@ -67,10 +67,22 @@ namespace Bazario.Core.Services.Order
             return await _managementService.CancelOrderAsync(orderId, cancellationToken);
         }
 
-        public async Task<bool> DeleteOrderAsync(Guid orderId, Guid deletedBy, string? reason = null, CancellationToken cancellationToken = default)
+        public async Task<bool> SoftDeleteOrderAsync(Guid orderId, Guid deletedBy, string? reason = null, CancellationToken cancellationToken = default)
         {
-            _logger.LogDebug("Delegating DeleteOrderAsync to OrderManagementService");
-            return await _managementService.DeleteOrderAsync(orderId, deletedBy, reason, cancellationToken);
+            _logger.LogDebug("Delegating SoftDeleteOrderAsync to OrderManagementService");
+            return await _managementService.SoftDeleteOrderAsync(orderId, deletedBy, reason, cancellationToken);
+        }
+
+        public async Task<bool> HardDeleteOrderAsync(Guid orderId, Guid deletedBy, string reason, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Delegating HardDeleteOrderAsync to OrderManagementService");
+            return await _managementService.HardDeleteOrderAsync(orderId, deletedBy, reason, cancellationToken);
+        }
+
+        public async Task<OrderResponse> RestoreOrderAsync(Guid orderId, Guid restoredBy, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Delegating RestoreOrderAsync to OrderManagementService");
+            return await _managementService.RestoreOrderAsync(orderId, restoredBy, cancellationToken);
         }
 
         // IOrderQueryService methods

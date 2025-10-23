@@ -19,11 +19,15 @@ namespace Bazario.Infrastructure.DbContext.Configurations.Order
 
             // String length constraints are defined in the entity using [StringLength(50)]
 
+            // Add soft delete filter
+            builder.HasQueryFilter(o => !o.IsDeleted);
+
             // Indexes for performance
             builder.HasIndex(e => e.CustomerId);
             builder.HasIndex(e => e.Status);
             builder.HasIndex(e => e.AppliedDiscountCodes);
             builder.HasIndex(e => e.Date);
+            builder.HasIndex(e => e.IsDeleted); // Index for soft delete queries
         }
     }
 }
