@@ -204,8 +204,7 @@ namespace Bazario.Infrastructure.Repositories.Order
                 order.DeletedBy = deletedBy;
                 order.DeletedReason = reason;
 
-                // Update the order
-                _context.Orders.Update(order);
+                // No need to call Update() - entity is already tracked by EF Core
 
                 _logger.LogInformation("Successfully soft deleted order. OrderId: {OrderId}, DeletedBy: {DeletedBy}",
                     orderId, deletedBy);
@@ -259,8 +258,7 @@ namespace Bazario.Infrastructure.Repositories.Order
                 order.DeletedBy = null;
                 order.DeletedReason = null;
 
-                // Update the order
-                _context.Orders.Update(order);
+                // No need to call Update() - entity is already tracked by EF Core
 
                 _logger.LogInformation("Successfully restored order. OrderId: {OrderId}", orderId);
 

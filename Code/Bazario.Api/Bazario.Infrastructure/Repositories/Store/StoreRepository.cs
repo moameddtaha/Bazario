@@ -213,8 +213,7 @@ namespace Bazario.Infrastructure.Repositories.Store
                 store.DeletedBy = deletedBy;
                 store.DeletedReason = reason;
 
-                // Update the store
-                _context.Stores.Update(store);
+                // No need to call Update() - entity is already tracked by EF Core
 
                 _logger.LogInformation("Successfully soft deleted store. StoreId: {StoreId}, Name: {StoreName}, DeletedBy: {DeletedBy}", 
                     storeId, store.Name, deletedBy);
@@ -268,8 +267,7 @@ namespace Bazario.Infrastructure.Repositories.Store
                 store.DeletedBy = null;
                 store.DeletedReason = null;
 
-                // Update the store
-                _context.Stores.Update(store);
+                // No need to call Update() - entity is already tracked by EF Core
 
                 _logger.LogInformation("Successfully restored store. StoreId: {StoreId}, Name: {StoreName}", storeId, store.Name);
 
