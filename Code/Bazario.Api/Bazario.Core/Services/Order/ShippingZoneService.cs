@@ -67,6 +67,12 @@ namespace Bazario.Core.Services.Order
                     return null;
                 }
 
+                if (city.Governorate == null)
+                {
+                    _logger.LogWarning("City {CityName} found but has no governorate associated", cityName);
+                    return null;
+                }
+
                 _logger.LogDebug("Resolved city {CityName} to governorate {GovernorateName} (ID: {GovernorateId})",
                     cityName, city.Governorate.Name, city.GovernorateId);
 
@@ -129,7 +135,7 @@ namespace Bazario.Core.Services.Order
                 return ShippingZone.NotSupported;
             }
 
-                if (string.IsNullOrWhiteSpace(city))
+            if (string.IsNullOrWhiteSpace(city))
             {
                 return ShippingZone.Local;
             }
@@ -156,10 +162,10 @@ namespace Bazario.Core.Services.Order
         private bool IsSimpleSameDayEligible(string city, string country)
         {
             if (string.IsNullOrWhiteSpace(country) || country.ToUpperInvariant() != "EG")
-                    return false;
+                return false;
 
-                if (string.IsNullOrWhiteSpace(city))
-                    return false;
+            if (string.IsNullOrWhiteSpace(city))
+                return false;
 
             var cityUpper = city.ToUpperInvariant();
             return cityUpper == "CAIRO";
@@ -206,6 +212,12 @@ namespace Bazario.Core.Services.Order
 
         public async Task<ShippingZone> DetermineStoreShippingZoneAsync(Guid storeId, string city, string country, CancellationToken cancellationToken = default)
         {
+            // Validate inputs
+            if (storeId == Guid.Empty)
+            {
+                throw new ArgumentException("Store ID cannot be empty", nameof(storeId));
+            }
+
             _logger.LogDebug("Determining store-specific shipping zone for store: {StoreId}, city: {City}, country: {Country}",
                 storeId, city, country);
 
@@ -253,6 +265,12 @@ namespace Bazario.Core.Services.Order
 
         public async Task<bool> IsEligibleForStoreSameDayDeliveryAsync(Guid storeId, string city, string country, CancellationToken cancellationToken = default)
         {
+            // Validate inputs
+            if (storeId == Guid.Empty)
+            {
+                throw new ArgumentException("Store ID cannot be empty", nameof(storeId));
+            }
+
             _logger.LogDebug("Checking store same-day delivery eligibility for store: {StoreId}, city: {City}", storeId, city);
 
             try
@@ -282,28 +300,52 @@ namespace Bazario.Core.Services.Order
 
         public async Task<decimal> GetStoreDeliveryFeeAsync(Guid storeId, string city, string country, CancellationToken cancellationToken = default)
         {
+            // Validate inputs
+            if (storeId == Guid.Empty)
+            {
+                throw new ArgumentException("Store ID cannot be empty", nameof(storeId));
+            }
+
             _logger.LogDebug("Getting store delivery fee for store: {StoreId}, city: {City}", storeId, city);
 
             try
             {
                 // First determine the shipping zone
                 var zone = await DetermineStoreShippingZoneAsync(storeId, city, country, cancellationToken);
-                
+
+                // If zone is not supported, return 0
+                if (zone == ShippingZone.NotSupported)
+                {
+                    _logger.LogDebug("Store {StoreId} does not support delivery to {City}", storeId, city);
+                    return 0;
+                }
+
                 // Get store-specific delivery fee based on zone
                 var storeFee = await GetStoreDeliveryFeeByZoneAsync(zone, storeId, cancellationToken);
-                
+
                 _logger.LogDebug("Store {StoreId} delivery fee for {City} (zone: {Zone}): {Fee}", storeId, city, zone, storeFee);
                 return storeFee;
+            }
+            catch (ArgumentException)
+            {
+                // Re-throw validation exceptions
+                throw;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting store delivery fee for store: {StoreId}, city: {City}", storeId, city);
-                return 0;
+                throw new InvalidOperationException($"Failed to get delivery fee for store {storeId} to {city}: {ex.Message}", ex);
             }
         }
 
         public async Task<List<ShippingZone>> GetAvailableDeliveryOptionsAsync(Guid storeId, string city, string country, CancellationToken cancellationToken = default)
         {
+            // Validate inputs
+            if (storeId == Guid.Empty)
+            {
+                throw new ArgumentException("Store ID cannot be empty", nameof(storeId));
+            }
+
             _logger.LogDebug("Getting available delivery options for store: {StoreId}, city: {City}", storeId, city);
 
             try
@@ -316,32 +358,36 @@ namespace Bazario.Core.Services.Order
                     availableOptions.Add(ShippingZone.SameDay);
                 }
 
-
-                // Always add standard delivery options based on simple fallback
+                // Get the appropriate zone based on location
                 var fallbackZone = GetSimpleFallbackZone(city, country);
-                
-                // Add fallback zone if not already in store-specific options
-                if (!availableOptions.Contains(fallbackZone))
+
+                // Add fallback zone if it's not NotSupported and not already in list
+                if (fallbackZone != ShippingZone.NotSupported && !availableOptions.Contains(fallbackZone))
                 {
                     availableOptions.Add(fallbackZone);
                 }
 
-                // Add standard delivery as fallback
-                if (!availableOptions.Contains(ShippingZone.Local))
+                // If no options available, return NotSupported
+                if (availableOptions.Count == 0)
                 {
-                    availableOptions.Add(ShippingZone.Local);
+                    availableOptions.Add(ShippingZone.NotSupported);
                 }
 
-                _logger.LogDebug("Available delivery options for store {StoreId}, city {City}: {Options}", 
+                _logger.LogDebug("Available delivery options for store {StoreId}, city {City}: {Options}",
                     storeId, city, string.Join(", ", availableOptions));
 
                 return availableOptions;
             }
+            catch (ArgumentException)
+            {
+                // Re-throw validation exceptions
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting available delivery options for store: {StoreId}, city: {City}", storeId, city);
-                
-                // Fall back to simple zone only
+
+                // Fall back to simple zone
                 var fallbackZone = GetSimpleFallbackZone(city, country);
                 return new List<ShippingZone> { fallbackZone };
             }
