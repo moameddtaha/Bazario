@@ -11,9 +11,6 @@ using Bazario.Core.Enums.Order;
 
 namespace Bazario.Core.Services.Order
 {
-    /// <summary>
-    /// Production-ready shipping zone service that calculates delivery zones based on real address data
-    /// </summary>
     public class ShippingZoneService : IShippingZoneService
     {
         private readonly ILogger<ShippingZoneService> _logger;
@@ -33,10 +30,7 @@ namespace Bazario.Core.Services.Order
             _cityRepository = cityRepository ?? throw new ArgumentNullException(nameof(cityRepository));
         }
 
-
-        /// <summary>
-        /// Production-ready method to resolve city name to governorate ID via database lookup
-        /// </summary>
+        // Production-ready method to resolve city name to governorate ID via database lookup
         private async Task<Guid?> ResolveGovernorateFromCityAsync(string cityName, string country, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(country) || country.ToUpperInvariant() != "EG")
@@ -81,9 +75,7 @@ namespace Bazario.Core.Services.Order
             }
         }
 
-        /// <summary>
-        /// Checks if a store supports shipping to a specific governorate
-        /// </summary>
+        // Checks if a store supports shipping to a specific governorate
         private async Task<bool> IsGovernorateSupported(Guid storeId, Guid governorateId, CancellationToken cancellationToken = default)
         {
             // Defensive validation for private method
@@ -404,44 +396,31 @@ namespace Bazario.Core.Services.Order
 
         #region Fallback Methods (No Store ID Required)
 
-        /// <summary>
-        /// Determines shipping zone using simple fallback logic when store ID is not available
-        /// </summary>
         public ShippingZone DetermineShippingZoneFallback(string city, string country)
         {
-            _logger.LogDebug("Using fallback shipping zone determination for city: {City}, country: {Country}", 
+            _logger.LogDebug("Using fallback shipping zone determination for city: {City}, country: {Country}",
                 city, country);
 
             return GetSimpleFallbackZone(city, country);
         }
 
-        /// <summary>
-        /// Checks if a city is eligible for same-day delivery using simple fallback logic
-        /// </summary>
         public bool IsEligibleForSameDayDeliveryFallback(string city, string country)
         {
-            _logger.LogDebug("Using fallback same-day delivery check for city: {City}, country: {Country}", 
+            _logger.LogDebug("Using fallback same-day delivery check for city: {City}, country: {Country}",
                 city, country);
 
             return IsSimpleSameDayEligible(city, country);
         }
 
-
-        /// <summary>
-        /// Gets delivery fee using simple fallback logic when store ID is not available
-        /// </summary>
         public decimal GetDeliveryFeeFallback(string city, string country)
         {
-            _logger.LogDebug("Using fallback delivery fee calculation for city: {City}, country: {Country}", 
+            _logger.LogDebug("Using fallback delivery fee calculation for city: {City}, country: {Country}",
                 city, country);
 
             var zone = GetSimpleFallbackZone(city, country);
             return GetSimpleDeliveryFee(zone);
         }
 
-        /// <summary>
-        /// Gets delivery fee using store-specific configuration when store ID is available
-        /// </summary>
         public async Task<decimal> GetStoreDeliveryFeeFallbackAsync(Guid storeId, string city, string country, CancellationToken cancellationToken = default)
         {
             // Validate inputs
@@ -457,12 +436,9 @@ namespace Bazario.Core.Services.Order
             return await GetStoreDeliveryFeeByZoneAsync(zone, storeId, cancellationToken);
         }
 
-        /// <summary>
-        /// Gets available delivery options using simple fallback logic when store ID is not available
-        /// </summary>
         public List<ShippingZone> GetAvailableDeliveryOptionsFallback(string city, string country)
         {
-            _logger.LogDebug("Using fallback delivery options for city: {City}, country: {Country}", 
+            _logger.LogDebug("Using fallback delivery options for city: {City}, country: {Country}",
                 city, country);
 
             var zone = GetSimpleFallbackZone(city, country);
