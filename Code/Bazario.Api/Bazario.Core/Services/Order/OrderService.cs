@@ -173,10 +173,10 @@ namespace Bazario.Core.Services.Order
             return await _paymentService.ProcessOrderPaymentAsync(orderId, paymentDetails, cancellationToken);
         }
 
-        public async Task<PaymentResult> RefundOrderPaymentAsync(Guid orderId, string reason, CancellationToken cancellationToken = default)
+        public async Task<PaymentResult> RefundOrderPaymentAsync(Guid orderId, decimal refundAmount, string reason, CancellationToken cancellationToken = default)
         {
             _logger.LogDebug("Delegating RefundOrderPaymentAsync to OrderPaymentService");
-            return await _paymentService.RefundOrderPaymentAsync(orderId, reason, cancellationToken);
+            return await _paymentService.RefundOrderPaymentAsync(orderId, refundAmount, reason, cancellationToken);
         }
 
         // IOrderAnalyticsService discount methods
