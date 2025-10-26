@@ -8,8 +8,7 @@ using Bazario.Core.ServiceContracts.Order;
 using Bazario.Core.Models.Order;
 using Bazario.Core.Helpers.Order;
 using Microsoft.Extensions.Logging;
-using Bazario.Core.Domain.RepositoryContracts.Catalog;
-using Bazario.Core.Domain.RepositoryContracts.Order;
+using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Enums.Order;
 using Bazario.Core.Enums.Inventory;
 
@@ -17,19 +16,16 @@ namespace Bazario.Core.Services.Order
 {
     public class OrderValidationService : IOrderValidationService
     {
-        private readonly IOrderRepository _orderRepository;
-        private readonly IProductRepository _productRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly OrderCalculator _orderCalculator;
         private readonly ILogger<OrderValidationService> _logger;
 
         public OrderValidationService(
-            IOrderRepository orderRepository,
-            IProductRepository productRepository,
+            IUnitOfWork unitOfWork,
             OrderCalculator orderCalculator,
             ILogger<OrderValidationService> logger)
         {
-            _orderRepository = orderRepository ?? throw new ArgumentNullException(nameof(orderRepository));
-            _productRepository = productRepository ?? throw new ArgumentNullException(nameof(productRepository));
+            _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _orderCalculator = orderCalculator ?? throw new ArgumentNullException(nameof(orderCalculator));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
@@ -46,7 +42,7 @@ namespace Bazario.Core.Services.Order
 
             try
             {
-                var order = await _orderRepository.GetOrderByIdAsync(orderId, cancellationToken);
+                var order = await _unitOfWork.Orders.GetOrderByIdAsync(orderId, cancellationToken);
                 if (order == null)
                 {
                     return false;
@@ -83,7 +79,7 @@ namespace Bazario.Core.Services.Order
 
             try
             {
-                var order = await _orderRepository.GetOrderByIdAsync(orderId, cancellationToken);
+                var order = await _unitOfWork.Orders.GetOrderByIdAsync(orderId, cancellationToken);
                 if (order == null)
                 {
                     return false;
@@ -339,7 +335,7 @@ namespace Bazario.Core.Services.Order
 
                 foreach (var item in orderItems)
                 {
-                    var product = await _productRepository.GetProductByIdAsync(item.ProductId, cancellationToken);
+                    var product = await _unitOfWork.Products.GetProductByIdAsync(item.ProductId, cancellationToken);
 
                     if (product == null)
                     {
