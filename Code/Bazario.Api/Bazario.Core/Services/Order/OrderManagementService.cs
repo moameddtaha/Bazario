@@ -38,14 +38,16 @@ namespace Bazario.Core.Services.Order
 
         public async Task<OrderResponse> CreateOrderAsync(OrderAddRequest orderAddRequest, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Creating new order for customer: {CustomerId}", orderAddRequest?.CustomerId);
+            // Validate inputs
+            if (orderAddRequest == null)
+            {
+                throw new ArgumentNullException(nameof(orderAddRequest));
+            }
+
+            _logger.LogInformation("Creating new order for customer: {CustomerId}", orderAddRequest.CustomerId);
 
             try
             {
-                if (orderAddRequest == null)
-                {
-                    throw new ArgumentNullException(nameof(orderAddRequest));
-                }
 
                 // ✅ VALIDATE STOCK AVAILABILITY BEFORE CREATING ORDER
                 var stockValidation = await _validationService.ValidateStockAvailabilityWithDetailsAsync(
@@ -127,15 +129,21 @@ namespace Bazario.Core.Services.Order
 
         public async Task<OrderResponse> UpdateOrderAsync(OrderUpdateRequest orderUpdateRequest, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Updating order: {OrderId}", orderUpdateRequest?.OrderId);
+            // Validate inputs
+            if (orderUpdateRequest == null)
+            {
+                throw new ArgumentNullException(nameof(orderUpdateRequest));
+            }
+
+            if (orderUpdateRequest.OrderId == Guid.Empty)
+            {
+                throw new ArgumentException("Order ID cannot be empty", nameof(orderUpdateRequest));
+            }
+
+            _logger.LogInformation("Updating order: {OrderId}", orderUpdateRequest.OrderId);
 
             try
             {
-                if (orderUpdateRequest == null)
-                {
-                    throw new ArgumentNullException(nameof(orderUpdateRequest));
-                }
-
                 // Check if order can be modified
                 var canModify = await _validationService.CanOrderBeModifiedAsync(orderUpdateRequest.OrderId, cancellationToken);
                 if (!canModify)
@@ -186,6 +194,12 @@ namespace Bazario.Core.Services.Order
 
         public async Task<OrderResponse> UpdateOrderStatusAsync(Guid orderId, OrderStatus newStatus, CancellationToken cancellationToken = default)
         {
+            // Validate inputs
+            if (orderId == Guid.Empty)
+            {
+                throw new ArgumentException("Order ID cannot be empty", nameof(orderId));
+            }
+
             _logger.LogInformation("Updating order status: {OrderId} to {NewStatus}", orderId, newStatus);
 
             try
@@ -224,6 +238,12 @@ namespace Bazario.Core.Services.Order
 
         public async Task<bool> CancelOrderAsync(Guid orderId, CancellationToken cancellationToken = default)
         {
+            // Validate inputs
+            if (orderId == Guid.Empty)
+            {
+                throw new ArgumentException("Order ID cannot be empty", nameof(orderId));
+            }
+
             _logger.LogInformation("Cancelling order: {OrderId}", orderId);
 
             try
