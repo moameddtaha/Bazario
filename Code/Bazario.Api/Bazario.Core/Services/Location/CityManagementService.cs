@@ -9,29 +9,58 @@ using Microsoft.Extensions.Logging;
 using Bazario.Core.Domain.Entities.Location;
 using Bazario.Core.Domain.RepositoryContracts.Location;
 using Bazario.Core.Domain.RepositoryContracts;
+using Bazario.Core.Helpers.Authorization;
 
 namespace Bazario.Core.Services.Location
 {
     /// <summary>
     /// Service for managing city entities.
     /// Uses Unit of Work pattern for transaction management and data consistency.
+    /// Requires admin privileges for write operations (Create, Update, Deactivate).
     /// </summary>
     public class CityManagementService : ICityManagementService
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IAdminAuthorizationHelper _adminAuthHelper;
         private readonly ILogger<CityManagementService> _logger;
 
         public CityManagementService(
             IUnitOfWork unitOfWork,
+            IAdminAuthorizationHelper adminAuthHelper,
             ILogger<CityManagementService> logger)
         {
             _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
+            _adminAuthHelper = adminAuthHelper ?? throw new ArgumentNullException(nameof(adminAuthHelper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public async Task<CityResponse> CreateCityAsync(CityAddRequest request, CancellationToken cancellationToken = default)
+        public async Task<CityResponse> CreateCityAsync(CityAddRequest request, Guid userId, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Creating new city: {CityName} for governorate {GovernorateId}", request.Name, request.GovernorateId);
+            // Validate inputs
+            if (request == null)
+            {
+                throw new ArgumentNullException(nameof(request));
+            }
+
+            if (userId == Guid.Empty)
+            {
+                throw new ArgumentException("User ID cannot be empty", nameof(userId));
+            }
+
+            if (request.GovernorateId == Guid.Empty)
+            {
+                throw new ArgumentException("Governorate ID cannot be empty", nameof(request));
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Name))
+            {
+                throw new ArgumentException("City name is required", nameof(request));
+            }
+
+            // Validate admin privileges
+            await _adminAuthHelper.ValidateAdminPrivilegesAsync(userId, cancellationToken);
+
+            _logger.LogInformation("User {UserId} creating new city: {CityName} for governorate {GovernorateId}", userId, request.Name, request.GovernorateId);
 
             // Validate governorate exists
             var governorate = await _unitOfWork.Governorates.GetByIdAsync(request.GovernorateId, cancellationToken);
@@ -78,9 +107,33 @@ namespace Bazario.Core.Services.Location
             };
         }
 
-        public async Task<CityResponse> UpdateCityAsync(CityUpdateRequest request, CancellationToken cancellationToken = default)
+        public async Task<CityResponse> UpdateCityAsync(CityUpdateRequest request, Guid userId, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Updating city: {CityId}", request.CityId);
+            // Validate inputs
+            if (request == null)
+            {
+                throw new ArgumentNullException(nameof(request));
+            }
+
+            if (userId == Guid.Empty)
+            {
+                throw new ArgumentException("User ID cannot be empty", nameof(userId));
+            }
+
+            if (request.CityId == Guid.Empty)
+            {
+                throw new ArgumentException("City ID cannot be empty", nameof(request));
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Name))
+            {
+                throw new ArgumentException("City name is required", nameof(request));
+            }
+
+            // Validate admin privileges
+            await _adminAuthHelper.ValidateAdminPrivilegesAsync(userId, cancellationToken);
+
+            _logger.LogInformation("User {UserId} updating city: {CityId}", userId, request.CityId);
 
             var existingCity = await _unitOfWork.Cities.GetByIdAsync(request.CityId, cancellationToken);
             if (existingCity == null)
@@ -245,9 +298,23 @@ namespace Bazario.Core.Services.Location
             }).ToList();
         }
 
-        public async Task<bool> DeactivateCityAsync(Guid cityId, CancellationToken cancellationToken = default)
+        public async Task<bool> DeactivateCityAsync(Guid cityId, Guid userId, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Deactivating city: {CityId}", cityId);
+            // Validate inputs
+            if (cityId == Guid.Empty)
+            {
+                throw new ArgumentException("City ID cannot be empty", nameof(cityId));
+            }
+
+            if (userId == Guid.Empty)
+            {
+                throw new ArgumentException("User ID cannot be empty", nameof(userId));
+            }
+
+            // Validate admin privileges
+            await _adminAuthHelper.ValidateAdminPrivilegesAsync(userId, cancellationToken);
+
+            _logger.LogInformation("User {UserId} deactivating city: {CityId}", userId, cityId);
 
             var result = await _unitOfWork.Cities.DeactivateAsync(cityId, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);

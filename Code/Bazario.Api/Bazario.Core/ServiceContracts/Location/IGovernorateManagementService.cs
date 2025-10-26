@@ -12,14 +12,22 @@ namespace Bazario.Core.ServiceContracts.Location
     public interface IGovernorateManagementService
     {
         /// <summary>
-        /// Creates a new governorate
+        /// Creates a new governorate (Admin only)
         /// </summary>
-        Task<GovernorateResponse> CreateGovernorateAsync(GovernorateAddRequest request, CancellationToken cancellationToken = default);
+        /// <param name="request">Governorate creation request</param>
+        /// <param name="userId">User ID performing the operation (must have admin privileges)</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <exception cref="UnauthorizedAccessException">Thrown when user does not have admin privileges</exception>
+        Task<GovernorateResponse> CreateGovernorateAsync(GovernorateAddRequest request, Guid userId, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Updates an existing governorate
+        /// Updates an existing governorate (Admin only)
         /// </summary>
-        Task<GovernorateResponse> UpdateGovernorateAsync(GovernorateUpdateRequest request, CancellationToken cancellationToken = default);
+        /// <param name="request">Governorate update request</param>
+        /// <param name="userId">User ID performing the operation (must have admin privileges)</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <exception cref="UnauthorizedAccessException">Thrown when user does not have admin privileges</exception>
+        Task<GovernorateResponse> UpdateGovernorateAsync(GovernorateUpdateRequest request, Guid userId, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Gets a governorate by ID with city count
@@ -47,9 +55,13 @@ namespace Bazario.Core.ServiceContracts.Location
         Task<List<GovernorateResponse>> GetSameDayDeliveryGovernoratesAsync(Guid countryId, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Deactivates a governorate (soft delete)
+        /// Deactivates a governorate (Admin only)
         /// </summary>
-        Task<bool> DeactivateGovernorateAsync(Guid governorateId, CancellationToken cancellationToken = default);
+        /// <param name="governorateId">Governorate ID to deactivate</param>
+        /// <param name="userId">User ID performing the operation (must have admin privileges)</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <exception cref="UnauthorizedAccessException">Thrown when user does not have admin privileges</exception>
+        Task<bool> DeactivateGovernorateAsync(Guid governorateId, Guid userId, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Checks if a governorate exists by name within a country

@@ -9,6 +9,7 @@ using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.DTO.Catalog.Product;
 using Bazario.Core.Extensions.Catalog;
 using Bazario.Core.Helpers.Catalog.Product;
+using Bazario.Core.Helpers.Authorization;
 using Bazario.Core.ServiceContracts.Catalog.Product;
 
 namespace Bazario.Core.Services.Catalog.Product
@@ -22,15 +23,18 @@ namespace Bazario.Core.Services.Catalog.Product
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IProductValidationHelper _validationHelper;
+        private readonly IAdminAuthorizationHelper _adminAuthHelper;
         private readonly ILogger<ProductManagementService> _logger;
 
         public ProductManagementService(
             IUnitOfWork unitOfWork,
             IProductValidationHelper validationHelper,
+            IAdminAuthorizationHelper adminAuthHelper,
             ILogger<ProductManagementService> logger)
         {
             _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _validationHelper = validationHelper ?? throw new ArgumentNullException(nameof(validationHelper));
+            _adminAuthHelper = adminAuthHelper ?? throw new ArgumentNullException(nameof(adminAuthHelper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -206,12 +210,8 @@ namespace Bazario.Core.Services.Catalog.Product
                     throw new ArgumentException("Reason is required for hard deletion", nameof(reason));
                 }
 
-                // Check if user has admin privileges
-                if (!await _validationHelper.HasAdminPrivilegesAsync(deletedBy, cancellationToken))
-                {
-                    _logger.LogWarning("User {UserId} attempted hard delete of product {ProductId} without admin privileges", deletedBy, productId);
-                    throw new UnauthorizedAccessException("Only administrators can perform hard deletion of products");
-                }
+                // Validate admin privileges
+                await _adminAuthHelper.ValidateAdminPrivilegesAsync(deletedBy, cancellationToken);
 
                 // Check if product can be safely deleted
                 if (!await _validationHelper.CanProductBeSafelyDeletedAsync(productId, cancellationToken))

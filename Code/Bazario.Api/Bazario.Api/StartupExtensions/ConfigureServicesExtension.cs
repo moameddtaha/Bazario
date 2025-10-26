@@ -31,6 +31,7 @@ using Bazario.Core.Domain.RepositoryContracts.Review;
 using Bazario.Core.Domain.RepositoryContracts.Location;
 using Bazario.Core.Domain.RepositoryContracts.UserManagement;
 using Bazario.Core.Helpers.Authentication;
+using Bazario.Core.Helpers.Authorization;
 using Bazario.Core.Helpers.Catalog.Product;
 using Bazario.Core.Helpers.Infrastructure;
 using Bazario.Core.Models.Infrastructure;
@@ -165,6 +166,7 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<ITokenHelper, TokenHelper>();
             services.AddScoped<IUserCreationService, UserCreationService>();
             services.AddScoped<IRoleManagementHelper, RoleManagementHelper>();
+            services.AddScoped<IAdminAuthorizationHelper, AdminAuthorizationHelper>(); // Admin authorization using role-based security
             services.AddScoped<IEmailHelper, EmailHelper>();
             services.AddScoped<IShippingZoneService, ShippingZoneService>();
             services.AddScoped<IOrderMetricsHelper, OrderMetricsHelper>();

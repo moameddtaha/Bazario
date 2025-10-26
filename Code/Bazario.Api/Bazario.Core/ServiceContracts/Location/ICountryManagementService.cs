@@ -12,14 +12,22 @@ namespace Bazario.Core.ServiceContracts.Location
     public interface ICountryManagementService
     {
         /// <summary>
-        /// Creates a new country
+        /// Creates a new country (Admin only)
         /// </summary>
-        Task<CountryResponse> CreateCountryAsync(CountryAddRequest request, CancellationToken cancellationToken = default);
+        /// <param name="request">Country creation request</param>
+        /// <param name="userId">User ID performing the operation (must have admin privileges)</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <exception cref="UnauthorizedAccessException">Thrown when user does not have admin privileges</exception>
+        Task<CountryResponse> CreateCountryAsync(CountryAddRequest request, Guid userId, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Updates an existing country
+        /// Updates an existing country (Admin only)
         /// </summary>
-        Task<CountryResponse> UpdateCountryAsync(CountryUpdateRequest request, CancellationToken cancellationToken = default);
+        /// <param name="request">Country update request</param>
+        /// <param name="userId">User ID performing the operation (must have admin privileges)</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <exception cref="UnauthorizedAccessException">Thrown when user does not have admin privileges</exception>
+        Task<CountryResponse> UpdateCountryAsync(CountryUpdateRequest request, Guid userId, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Gets a country by ID with governorate count
@@ -42,9 +50,13 @@ namespace Bazario.Core.ServiceContracts.Location
         Task<List<CountryResponse>> GetActiveCountriesAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Deactivates a country (soft delete)
+        /// Deactivates a country (Admin only)
         /// </summary>
-        Task<bool> DeactivateCountryAsync(Guid countryId, CancellationToken cancellationToken = default);
+        /// <param name="countryId">Country ID to deactivate</param>
+        /// <param name="userId">User ID performing the operation (must have admin privileges)</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <exception cref="UnauthorizedAccessException">Thrown when user does not have admin privileges</exception>
+        Task<bool> DeactivateCountryAsync(Guid countryId, Guid userId, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Checks if a country exists by code

@@ -10,11 +10,6 @@ namespace Bazario.Core.Helpers.Catalog.Product
     public interface IProductValidationHelper
     {
         /// <summary>
-        /// Checks if a user has admin privileges
-        /// </summary>
-        Task<bool> HasAdminPrivilegesAsync(Guid userId, CancellationToken cancellationToken = default);
-
-        /// <summary>
         /// Checks if a product can be safely deleted
         /// </summary>
         Task<bool> CanProductBeSafelyDeletedAsync(Guid productId, CancellationToken cancellationToken = default);

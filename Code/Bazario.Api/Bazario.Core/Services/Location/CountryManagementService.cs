@@ -9,29 +9,58 @@ using Microsoft.Extensions.Logging;
 using Bazario.Core.Domain.Entities.Location;
 using Bazario.Core.Domain.RepositoryContracts.Location;
 using Bazario.Core.Domain.RepositoryContracts;
+using Bazario.Core.Helpers.Authorization;
 
 namespace Bazario.Core.Services.Location
 {
     /// <summary>
     /// Service for managing country entities.
     /// Uses Unit of Work pattern for transaction management and data consistency.
+    /// Requires admin privileges for write operations (Create, Update, Deactivate).
     /// </summary>
     public class CountryManagementService : ICountryManagementService
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IAdminAuthorizationHelper _adminAuthHelper;
         private readonly ILogger<CountryManagementService> _logger;
 
         public CountryManagementService(
             IUnitOfWork unitOfWork,
+            IAdminAuthorizationHelper adminAuthHelper,
             ILogger<CountryManagementService> logger)
         {
             _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
+            _adminAuthHelper = adminAuthHelper ?? throw new ArgumentNullException(nameof(adminAuthHelper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public async Task<CountryResponse> CreateCountryAsync(CountryAddRequest request, CancellationToken cancellationToken = default)
+        public async Task<CountryResponse> CreateCountryAsync(CountryAddRequest request, Guid userId, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Creating new country: {CountryName} ({Code})", request.Name, request.Code);
+            // Validate inputs
+            if (request == null)
+            {
+                throw new ArgumentNullException(nameof(request));
+            }
+
+            if (userId == Guid.Empty)
+            {
+                throw new ArgumentException("User ID cannot be empty", nameof(userId));
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Name))
+            {
+                throw new ArgumentException("Country name is required", nameof(request));
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Code))
+            {
+                throw new ArgumentException("Country code is required", nameof(request));
+            }
+
+            // Validate admin privileges
+            await _adminAuthHelper.ValidateAdminPrivilegesAsync(userId, cancellationToken);
+
+            _logger.LogInformation("User {UserId} creating new country: {CountryName} ({Code})", userId, request.Name, request.Code);
 
             // Validate uniqueness
             if (await _unitOfWork.Countries.ExistsByCodeAsync(request.Code, cancellationToken))
@@ -73,9 +102,33 @@ namespace Bazario.Core.Services.Location
             };
         }
 
-        public async Task<CountryResponse> UpdateCountryAsync(CountryUpdateRequest request, CancellationToken cancellationToken = default)
+        public async Task<CountryResponse> UpdateCountryAsync(CountryUpdateRequest request, Guid userId, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Updating country: {CountryId}", request.CountryId);
+            // Validate inputs
+            if (request == null)
+            {
+                throw new ArgumentNullException(nameof(request));
+            }
+
+            if (userId == Guid.Empty)
+            {
+                throw new ArgumentException("User ID cannot be empty", nameof(userId));
+            }
+
+            if (request.CountryId == Guid.Empty)
+            {
+                throw new ArgumentException("Country ID cannot be empty", nameof(request));
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Name))
+            {
+                throw new ArgumentException("Country name is required", nameof(request));
+            }
+
+            // Validate admin privileges
+            await _adminAuthHelper.ValidateAdminPrivilegesAsync(userId, cancellationToken);
+
+            _logger.LogInformation("User {UserId} updating country: {CountryId}", userId, request.CountryId);
 
             var existingCountry = await _unitOfWork.Countries.GetByIdAsync(request.CountryId, cancellationToken);
             if (existingCountry == null)
@@ -191,9 +244,23 @@ namespace Bazario.Core.Services.Location
             }).ToList();
         }
 
-        public async Task<bool> DeactivateCountryAsync(Guid countryId, CancellationToken cancellationToken = default)
+        public async Task<bool> DeactivateCountryAsync(Guid countryId, Guid userId, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Deactivating country: {CountryId}", countryId);
+            // Validate inputs
+            if (countryId == Guid.Empty)
+            {
+                throw new ArgumentException("Country ID cannot be empty", nameof(countryId));
+            }
+
+            if (userId == Guid.Empty)
+            {
+                throw new ArgumentException("User ID cannot be empty", nameof(userId));
+            }
+
+            // Validate admin privileges
+            await _adminAuthHelper.ValidateAdminPrivilegesAsync(userId, cancellationToken);
+
+            _logger.LogInformation("User {UserId} deactivating country: {CountryId}", userId, countryId);
 
             var result = await _unitOfWork.Countries.DeactivateAsync(countryId, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);

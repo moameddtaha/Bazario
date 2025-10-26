@@ -12,14 +12,22 @@ namespace Bazario.Core.ServiceContracts.Location
     public interface ICityManagementService
     {
         /// <summary>
-        /// Creates a new city
+        /// Creates a new city (Admin only)
         /// </summary>
-        Task<CityResponse> CreateCityAsync(CityAddRequest request, CancellationToken cancellationToken = default);
+        /// <param name="request">City creation request</param>
+        /// <param name="userId">User ID performing the operation (must have admin privileges)</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <exception cref="UnauthorizedAccessException">Thrown when user does not have admin privileges</exception>
+        Task<CityResponse> CreateCityAsync(CityAddRequest request, Guid userId, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Updates an existing city
+        /// Updates an existing city (Admin only)
         /// </summary>
-        Task<CityResponse> UpdateCityAsync(CityUpdateRequest request, CancellationToken cancellationToken = default);
+        /// <param name="request">City update request</param>
+        /// <param name="userId">User ID performing the operation (must have admin privileges)</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <exception cref="UnauthorizedAccessException">Thrown when user does not have admin privileges</exception>
+        Task<CityResponse> UpdateCityAsync(CityUpdateRequest request, Guid userId, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Gets a city by ID
@@ -52,9 +60,13 @@ namespace Bazario.Core.ServiceContracts.Location
         Task<List<CityResponse>> GetSameDayDeliveryCitiesAsync(Guid governorateId, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Deactivates a city (soft delete)
+        /// Deactivates a city (Admin only)
         /// </summary>
-        Task<bool> DeactivateCityAsync(Guid cityId, CancellationToken cancellationToken = default);
+        /// <param name="cityId">City ID to deactivate</param>
+        /// <param name="userId">User ID performing the operation (must have admin privileges)</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <exception cref="UnauthorizedAccessException">Thrown when user does not have admin privileges</exception>
+        Task<bool> DeactivateCityAsync(Guid cityId, Guid userId, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Checks if a city exists by name within a governorate

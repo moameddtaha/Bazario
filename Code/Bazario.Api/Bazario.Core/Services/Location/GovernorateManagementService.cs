@@ -8,32 +8,42 @@ using Bazario.Core.ServiceContracts.Location;
 using Microsoft.Extensions.Logging;
 using Bazario.Core.Domain.Entities.Location;
 using Bazario.Core.Domain.RepositoryContracts;
+using Bazario.Core.Helpers.Authorization;
 
 namespace Bazario.Core.Services.Location
 {
     /// <summary>
     /// Service for managing governorate entities.
     /// Uses Unit of Work pattern for transaction management and data consistency.
+    /// Requires admin privileges for write operations (Create, Update, Deactivate).
     /// </summary>
     public class GovernorateManagementService : IGovernorateManagementService
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IAdminAuthorizationHelper _adminAuthHelper;
         private readonly ILogger<GovernorateManagementService> _logger;
 
         public GovernorateManagementService(
             IUnitOfWork unitOfWork,
+            IAdminAuthorizationHelper adminAuthHelper,
             ILogger<GovernorateManagementService> logger)
         {
             _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
+            _adminAuthHelper = adminAuthHelper ?? throw new ArgumentNullException(nameof(adminAuthHelper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public async Task<GovernorateResponse> CreateGovernorateAsync(GovernorateAddRequest request, CancellationToken cancellationToken = default)
+        public async Task<GovernorateResponse> CreateGovernorateAsync(GovernorateAddRequest request, Guid userId, CancellationToken cancellationToken = default)
         {
             // Validate inputs
             if (request == null)
             {
                 throw new ArgumentNullException(nameof(request));
+            }
+
+            if (userId == Guid.Empty)
+            {
+                throw new ArgumentException("User ID cannot be empty", nameof(userId));
             }
 
             if (request.CountryId == Guid.Empty)
@@ -46,7 +56,10 @@ namespace Bazario.Core.Services.Location
                 throw new ArgumentException("Governorate name is required", nameof(request));
             }
 
-            _logger.LogInformation("Creating new governorate: {GovernorateName} for country {CountryId}", request.Name, request.CountryId);
+            // Validate admin privileges
+            await _adminAuthHelper.ValidateAdminPrivilegesAsync(userId, cancellationToken);
+
+            _logger.LogInformation("User {UserId} creating new governorate: {GovernorateName} for country {CountryId}", userId, request.Name, request.CountryId);
 
             try
             {
@@ -98,6 +111,10 @@ namespace Bazario.Core.Services.Location
             {
                 throw;
             }
+            catch (UnauthorizedAccessException)
+            {
+                throw; // Re-throw authorization exceptions
+            }
             catch (InvalidOperationException)
             {
                 throw;
@@ -109,12 +126,17 @@ namespace Bazario.Core.Services.Location
             }
         }
 
-        public async Task<GovernorateResponse> UpdateGovernorateAsync(GovernorateUpdateRequest request, CancellationToken cancellationToken = default)
+        public async Task<GovernorateResponse> UpdateGovernorateAsync(GovernorateUpdateRequest request, Guid userId, CancellationToken cancellationToken = default)
         {
             // Validate inputs
             if (request == null)
             {
                 throw new ArgumentNullException(nameof(request));
+            }
+
+            if (userId == Guid.Empty)
+            {
+                throw new ArgumentException("User ID cannot be empty", nameof(userId));
             }
 
             if (request.GovernorateId == Guid.Empty)
@@ -127,7 +149,10 @@ namespace Bazario.Core.Services.Location
                 throw new ArgumentException("Governorate name is required", nameof(request));
             }
 
-            _logger.LogInformation("Updating governorate: {GovernorateId}", request.GovernorateId);
+            // Validate admin privileges
+            await _adminAuthHelper.ValidateAdminPrivilegesAsync(userId, cancellationToken);
+
+            _logger.LogInformation("User {UserId} updating governorate: {GovernorateId}", userId, request.GovernorateId);
 
             try
             {
@@ -174,6 +199,10 @@ namespace Bazario.Core.Services.Location
             catch (ArgumentException)
             {
                 throw;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                throw; // Re-throw authorization exceptions
             }
             catch (InvalidOperationException)
             {
@@ -368,7 +397,7 @@ namespace Bazario.Core.Services.Location
             }
         }
 
-        public async Task<bool> DeactivateGovernorateAsync(Guid governorateId, CancellationToken cancellationToken = default)
+        public async Task<bool> DeactivateGovernorateAsync(Guid governorateId, Guid userId, CancellationToken cancellationToken = default)
         {
             // Validate inputs
             if (governorateId == Guid.Empty)
@@ -376,7 +405,15 @@ namespace Bazario.Core.Services.Location
                 throw new ArgumentException("Governorate ID cannot be empty", nameof(governorateId));
             }
 
-            _logger.LogInformation("Deactivating governorate: {GovernorateId}", governorateId);
+            if (userId == Guid.Empty)
+            {
+                throw new ArgumentException("User ID cannot be empty", nameof(userId));
+            }
+
+            // Validate admin privileges
+            await _adminAuthHelper.ValidateAdminPrivilegesAsync(userId, cancellationToken);
+
+            _logger.LogInformation("User {UserId} deactivating governorate: {GovernorateId}", userId, governorateId);
 
             try
             {
@@ -404,6 +441,10 @@ namespace Bazario.Core.Services.Location
             catch (ArgumentException)
             {
                 throw;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                throw; // Re-throw authorization exceptions
             }
             catch (InvalidOperationException)
             {
