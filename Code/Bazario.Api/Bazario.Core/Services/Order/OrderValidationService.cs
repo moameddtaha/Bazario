@@ -155,6 +155,13 @@ namespace Bazario.Core.Services.Order
             List<string>? discountCodes = null,
             CancellationToken cancellationToken = default)
         {
+            // Note: customerId parameter is currently unused but reserved for future customer-specific pricing/discounts
+            // Validate for consistency even though not used in current implementation
+            if (customerId == Guid.Empty)
+            {
+                throw new ArgumentException("Customer ID cannot be empty", nameof(customerId));
+            }
+
             _logger.LogDebug("Calculating order total for {ItemCount} items, customer: {CustomerId}, shipping to: {City}, {State}",
                 orderItems?.Count ?? 0, customerId, shippingAddress?.City, shippingAddress?.State);
 
@@ -240,6 +247,17 @@ namespace Bazario.Core.Services.Order
 
         public void ValidateOrderUpdateBusinessRules(OrderUpdateRequest orderUpdateRequest, Domain.Entities.Order.Order existingOrder)
         {
+            // Validate inputs
+            if (orderUpdateRequest == null)
+            {
+                throw new ArgumentNullException(nameof(orderUpdateRequest), "Order update request cannot be null");
+            }
+
+            if (existingOrder == null)
+            {
+                throw new ArgumentNullException(nameof(existingOrder), "Existing order cannot be null");
+            }
+
             _logger.LogDebug("Validating business rules for order update: {OrderId}", orderUpdateRequest.OrderId);
 
             // Get the values that will be used for validation (either from request or existing order)
@@ -301,7 +319,7 @@ namespace Bazario.Core.Services.Order
                 throw new ArgumentNullException(nameof(orderItems), "Order items cannot be null");
             }
 
-            _logger.LogDebug("Validating stock availability with details for {ItemCount} items", orderItems?.Count ?? 0);
+            _logger.LogDebug("Validating stock availability with details for {ItemCount} items", orderItems.Count);
 
             var result = new StockValidationResult
             {
@@ -311,7 +329,7 @@ namespace Bazario.Core.Services.Order
 
             try
             {
-                if (orderItems == null || !orderItems.Any())
+                if (orderItems.Count == 0)
                 {
                     _logger.LogWarning("Order validation failed: No order items provided");
                     result.IsValid = false;
