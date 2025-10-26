@@ -450,9 +450,9 @@ namespace Bazario.Infrastructure.Repositories.Order
                 // Get orders by joining through OrderItems -> Product -> Store
                 var orders = await _context.Orders
                     .Include(o => o.Customer)
-                    .Include(o => o.OrderItems)
+                    .Include(o => o.OrderItems!)
                         .ThenInclude(oi => oi.Product)
-                    .Where(o => o.OrderItems.Any(oi => oi.Product != null && oi.Product.StoreId == storeId))
+                    .Where(o => o.OrderItems != null && o.OrderItems.Any(oi => oi.Product != null && oi.Product.StoreId == storeId))
                     .ToListAsync(cancellationToken);
 
                 _logger.LogDebug("Retrieved {OrderCount} orders for store {StoreId}", orders.Count, storeId);

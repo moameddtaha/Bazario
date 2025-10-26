@@ -6,28 +6,25 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Bazario.Core.ServiceContracts.Order;
 using Bazario.Core.ServiceContracts.Store;
-using Bazario.Core.Domain.RepositoryContracts.Location;
+using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Enums.Order;
-
+ 
 namespace Bazario.Core.Services.Order
 {
     public class ShippingZoneService : IShippingZoneService
     {
+        private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<ShippingZoneService> _logger;
         private readonly IStoreShippingConfigurationService _storeShippingConfigurationService;
-        private readonly IStoreGovernorateSupportRepository _governorateSupportRepository;
-        private readonly ICityRepository _cityRepository;
 
         public ShippingZoneService(
+            IUnitOfWork unitOfWork,
             ILogger<ShippingZoneService> logger,
-            IStoreShippingConfigurationService storeShippingConfigurationService,
-            IStoreGovernorateSupportRepository governorateSupportRepository,
-            ICityRepository cityRepository)
+            IStoreShippingConfigurationService storeShippingConfigurationService)
         {
+            _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _storeShippingConfigurationService = storeShippingConfigurationService ?? throw new ArgumentNullException(nameof(storeShippingConfigurationService));
-            _governorateSupportRepository = governorateSupportRepository ?? throw new ArgumentNullException(nameof(governorateSupportRepository));
-            _cityRepository = cityRepository ?? throw new ArgumentNullException(nameof(cityRepository));
         }
 
         // Production-ready method to resolve city name to governorate ID via database lookup
@@ -48,7 +45,7 @@ namespace Bazario.Core.Services.Order
             try
             {
                 // Search for city in database (case-insensitive)
-                var cities = await _cityRepository.SearchByNameAsync(cityName, cancellationToken);
+                var cities = await _unitOfWork.Cities.SearchByNameAsync(cityName, cancellationToken);
                 var city = cities.FirstOrDefault(c => c.Name.Equals(cityName, StringComparison.OrdinalIgnoreCase));
 
                 if (city == null)
@@ -88,7 +85,7 @@ namespace Bazario.Core.Services.Order
 
             try
             {
-                return await _governorateSupportRepository.IsGovernorateSupportedAsync(storeId, governorateId, cancellationToken);
+                return await _unitOfWork.StoreGovernorateSupports.IsGovernorateSupportedAsync(storeId, governorateId, cancellationToken);
             }
             catch (Exception ex)
             {
