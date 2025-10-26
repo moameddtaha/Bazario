@@ -39,8 +39,7 @@ namespace Bazario.Core.ServiceContracts.Order
         /// <exception cref="InvalidOperationException">Thrown when business rules are violated or refund processing fails</exception>
         /// <remarks>
         /// Business rules:
-        /// - Order must be in "Delivered" or "Completed" status
-        /// - Order must have been paid (not "Pending")
+        /// - Order must be in "Delivered" or "Completed" status (ensures order has been paid)
         /// - Refund must be within 30 days of order date
         /// - Refund amount must be greater than 0 and not exceed order total
         /// - Order status will be updated to "Refunded" after successful refund

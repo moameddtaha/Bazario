@@ -151,14 +151,7 @@ namespace Bazario.Core.Services.Order
                         "Only Delivered or Completed orders can be refunded.");
                 }
 
-                // Business Rule 3: Order must have been paid (not pending payment)
-                if (order.Status == "Pending")
-                {
-                    throw new InvalidOperationException(
-                        "Cannot refund an order that hasn't been paid yet.");
-                }
-
-                // Business Rule 4: Refund must be within allowed time period (30 days)
+                // Business Rule 3: Refund must be within allowed time period (30 days)
                 var daysSinceOrder = (DateTime.UtcNow - order.Date).Days;
                 if (daysSinceOrder > RefundPeriodDays)
                 {
