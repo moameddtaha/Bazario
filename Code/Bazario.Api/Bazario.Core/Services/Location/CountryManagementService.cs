@@ -62,44 +62,64 @@ namespace Bazario.Core.Services.Location
 
             _logger.LogInformation("User {UserId} creating new country: {CountryName} ({Code})", userId, request.Name, request.Code);
 
-            // Validate uniqueness
-            if (await _unitOfWork.Countries.ExistsByCodeAsync(request.Code, cancellationToken))
+            try
             {
-                throw new InvalidOperationException($"A country with code '{request.Code}' already exists");
+                // Validate uniqueness
+                if (await _unitOfWork.Countries.ExistsByCodeAsync(request.Code, cancellationToken))
+                {
+                    throw new InvalidOperationException($"A country with code '{request.Code}' already exists");
+                }
+
+                if (await _unitOfWork.Countries.ExistsByNameAsync(request.Name, cancellationToken))
+                {
+                    throw new InvalidOperationException($"A country with name '{request.Name}' already exists");
+                }
+
+                // Create entity
+                var country = new Country
+                {
+                    Name = request.Name,
+                    Code = request.Code.ToUpperInvariant(),
+                    NameArabic = request.NameArabic,
+                    SupportsPostalCodes = request.SupportsPostalCodes,
+                    IsActive = true
+                };
+
+                var createdCountry = await _unitOfWork.Countries.AddAsync(country, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                _logger.LogInformation("Successfully created country: {CountryId}", createdCountry.CountryId);
+
+                return new CountryResponse
+                {
+                    CountryId = createdCountry.CountryId,
+                    Name = createdCountry.Name,
+                    Code = createdCountry.Code,
+                    NameArabic = createdCountry.NameArabic,
+                    IsActive = createdCountry.IsActive,
+                    SupportsPostalCodes = createdCountry.SupportsPostalCodes,
+                    GovernorateCount = 0,
+                    CreatedAt = createdCountry.CreatedAt,
+                    UpdatedAt = createdCountry.UpdatedAt
+                };
             }
-
-            if (await _unitOfWork.Countries.ExistsByNameAsync(request.Name, cancellationToken))
+            catch (ArgumentException)
             {
-                throw new InvalidOperationException($"A country with name '{request.Name}' already exists");
+                throw;
             }
-
-            // Create entity
-            var country = new Country
+            catch (UnauthorizedAccessException)
             {
-                Name = request.Name,
-                Code = request.Code.ToUpperInvariant(),
-                NameArabic = request.NameArabic,
-                SupportsPostalCodes = request.SupportsPostalCodes,
-                IsActive = true
-            };
-
-            var createdCountry = await _unitOfWork.Countries.AddAsync(country, cancellationToken);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-            _logger.LogInformation("Successfully created country: {CountryId}", createdCountry.CountryId);
-
-            return new CountryResponse
+                throw; // Re-throw authorization exceptions
+            }
+            catch (InvalidOperationException)
             {
-                CountryId = createdCountry.CountryId,
-                Name = createdCountry.Name,
-                Code = createdCountry.Code,
-                NameArabic = createdCountry.NameArabic,
-                IsActive = createdCountry.IsActive,
-                SupportsPostalCodes = createdCountry.SupportsPostalCodes,
-                GovernorateCount = 0,
-                CreatedAt = createdCountry.CreatedAt,
-                UpdatedAt = createdCountry.UpdatedAt
-            };
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to create country: {CountryName} ({Code})", request.Name, request.Code);
+                throw new InvalidOperationException($"Failed to create country '{request.Name}': {ex.Message}", ex);
+            }
         }
 
         public async Task<CountryResponse> UpdateCountryAsync(CountryUpdateRequest request, Guid userId, CancellationToken cancellationToken = default)
@@ -130,82 +150,138 @@ namespace Bazario.Core.Services.Location
 
             _logger.LogInformation("User {UserId} updating country: {CountryId}", userId, request.CountryId);
 
-            var existingCountry = await _unitOfWork.Countries.GetByIdAsync(request.CountryId, cancellationToken);
-            if (existingCountry == null)
+            try
             {
-                throw new InvalidOperationException($"Country with ID {request.CountryId} not found");
+                var existingCountry = await _unitOfWork.Countries.GetByIdAsync(request.CountryId, cancellationToken);
+                if (existingCountry == null)
+                {
+                    throw new InvalidOperationException($"Country with ID {request.CountryId} not found");
+                }
+
+                // Check name uniqueness (excluding current country)
+                var countries = await _unitOfWork.Countries.GetAllAsync(cancellationToken);
+                if (countries.Any(c => c.Name == request.Name && c.CountryId != request.CountryId))
+                {
+                    throw new InvalidOperationException($"A country with name '{request.Name}' already exists");
+                }
+
+                // Update entity
+                existingCountry.Name = request.Name;
+                existingCountry.NameArabic = request.NameArabic;
+                existingCountry.IsActive = request.IsActive;
+                existingCountry.SupportsPostalCodes = request.SupportsPostalCodes;
+
+                var updatedCountry = await _unitOfWork.Countries.UpdateAsync(existingCountry, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                _logger.LogInformation("Successfully updated country: {CountryId}", updatedCountry.CountryId);
+
+                return new CountryResponse
+                {
+                    CountryId = updatedCountry.CountryId,
+                    Name = updatedCountry.Name,
+                    Code = updatedCountry.Code,
+                    NameArabic = updatedCountry.NameArabic,
+                    IsActive = updatedCountry.IsActive,
+                    SupportsPostalCodes = updatedCountry.SupportsPostalCodes,
+                    GovernorateCount = updatedCountry.Governorates?.Count ?? 0,
+                    CreatedAt = updatedCountry.CreatedAt,
+                    UpdatedAt = updatedCountry.UpdatedAt
+                };
             }
-
-            // Check name uniqueness (excluding current country)
-            var countries = await _unitOfWork.Countries.GetAllAsync(cancellationToken);
-            if (countries.Any(c => c.Name == request.Name && c.CountryId != request.CountryId))
+            catch (ArgumentException)
             {
-                throw new InvalidOperationException($"A country with name '{request.Name}' already exists");
+                throw;
             }
-
-            // Update entity
-            existingCountry.Name = request.Name;
-            existingCountry.NameArabic = request.NameArabic;
-            existingCountry.IsActive = request.IsActive;
-            existingCountry.SupportsPostalCodes = request.SupportsPostalCodes;
-
-            var updatedCountry = await _unitOfWork.Countries.UpdateAsync(existingCountry, cancellationToken);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-            _logger.LogInformation("Successfully updated country: {CountryId}", updatedCountry.CountryId);
-
-            return new CountryResponse
+            catch (UnauthorizedAccessException)
             {
-                CountryId = updatedCountry.CountryId,
-                Name = updatedCountry.Name,
-                Code = updatedCountry.Code,
-                NameArabic = updatedCountry.NameArabic,
-                IsActive = updatedCountry.IsActive,
-                SupportsPostalCodes = updatedCountry.SupportsPostalCodes,
-                GovernorateCount = updatedCountry.Governorates?.Count ?? 0,
-                CreatedAt = updatedCountry.CreatedAt,
-                UpdatedAt = updatedCountry.UpdatedAt
-            };
+                throw; // Re-throw authorization exceptions
+            }
+            catch (InvalidOperationException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to update country: {CountryId}", request.CountryId);
+                throw new InvalidOperationException($"Failed to update country {request.CountryId}: {ex.Message}", ex);
+            }
         }
 
         public async Task<CountryResponse?> GetCountryByIdAsync(Guid countryId, CancellationToken cancellationToken = default)
         {
-            var country = await _unitOfWork.Countries.GetByIdAsync(countryId, cancellationToken);
-            if (country == null)
-                return null;
-
-            return new CountryResponse
+            // Validate inputs
+            if (countryId == Guid.Empty)
             {
-                CountryId = country.CountryId,
-                Name = country.Name,
-                Code = country.Code,
-                NameArabic = country.NameArabic,
-                IsActive = country.IsActive,
-                SupportsPostalCodes = country.SupportsPostalCodes,
-                GovernorateCount = country.Governorates?.Count ?? 0,
-                CreatedAt = country.CreatedAt,
-                UpdatedAt = country.UpdatedAt
-            };
+                throw new ArgumentException("Country ID cannot be empty", nameof(countryId));
+            }
+
+            try
+            {
+                var country = await _unitOfWork.Countries.GetByIdAsync(countryId, cancellationToken);
+                if (country == null)
+                    return null;
+
+                return new CountryResponse
+                {
+                    CountryId = country.CountryId,
+                    Name = country.Name,
+                    Code = country.Code,
+                    NameArabic = country.NameArabic,
+                    IsActive = country.IsActive,
+                    SupportsPostalCodes = country.SupportsPostalCodes,
+                    GovernorateCount = country.Governorates?.Count ?? 0,
+                    CreatedAt = country.CreatedAt,
+                    UpdatedAt = country.UpdatedAt
+                };
+            }
+            catch (ArgumentException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get country: {CountryId}", countryId);
+                throw new InvalidOperationException($"Failed to get country {countryId}: {ex.Message}", ex);
+            }
         }
 
         public async Task<CountryResponse?> GetCountryByCodeAsync(string code, CancellationToken cancellationToken = default)
         {
-            var country = await _unitOfWork.Countries.GetByCodeAsync(code, cancellationToken);
-            if (country == null)
-                return null;
-
-            return new CountryResponse
+            // Validate inputs
+            if (string.IsNullOrWhiteSpace(code))
             {
-                CountryId = country.CountryId,
-                Name = country.Name,
-                Code = country.Code,
-                NameArabic = country.NameArabic,
-                IsActive = country.IsActive,
-                SupportsPostalCodes = country.SupportsPostalCodes,
-                GovernorateCount = country.Governorates?.Count ?? 0,
-                CreatedAt = country.CreatedAt,
-                UpdatedAt = country.UpdatedAt
-            };
+                throw new ArgumentException("Country code is required", nameof(code));
+            }
+
+            try
+            {
+                var country = await _unitOfWork.Countries.GetByCodeAsync(code, cancellationToken);
+                if (country == null)
+                    return null;
+
+                return new CountryResponse
+                {
+                    CountryId = country.CountryId,
+                    Name = country.Name,
+                    Code = country.Code,
+                    NameArabic = country.NameArabic,
+                    IsActive = country.IsActive,
+                    SupportsPostalCodes = country.SupportsPostalCodes,
+                    GovernorateCount = country.Governorates?.Count ?? 0,
+                    CreatedAt = country.CreatedAt,
+                    UpdatedAt = country.UpdatedAt
+                };
+            }
+            catch (ArgumentException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get country by code: {Code}", code);
+                throw new InvalidOperationException($"Failed to get country by code '{code}': {ex.Message}", ex);
+            }
         }
 
         public async Task<List<CountryResponse>> GetAllCountriesAsync(CancellationToken cancellationToken = default)
@@ -262,29 +338,92 @@ namespace Bazario.Core.Services.Location
 
             _logger.LogInformation("User {UserId} deactivating country: {CountryId}", userId, countryId);
 
-            var result = await _unitOfWork.Countries.DeactivateAsync(countryId, cancellationToken);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-            if (result)
+            try
             {
-                _logger.LogInformation("Successfully deactivated country: {CountryId}", countryId);
-            }
-            else
-            {
-                _logger.LogWarning("Failed to deactivate country: {CountryId}", countryId);
-            }
+                // Check if country exists first
+                var country = await _unitOfWork.Countries.GetByIdAsync(countryId, cancellationToken);
+                if (country == null)
+                {
+                    throw new InvalidOperationException($"Country with ID {countryId} not found");
+                }
 
-            return result;
+                var result = await _unitOfWork.Countries.DeactivateAsync(countryId, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                if (result)
+                {
+                    _logger.LogInformation("Successfully deactivated country: {CountryId}", countryId);
+                }
+                else
+                {
+                    _logger.LogWarning("Failed to deactivate country: {CountryId}", countryId);
+                }
+
+                return result;
+            }
+            catch (ArgumentException)
+            {
+                throw;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                throw; // Re-throw authorization exceptions
+            }
+            catch (InvalidOperationException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to deactivate country: {CountryId}", countryId);
+                throw new InvalidOperationException($"Failed to deactivate country {countryId}: {ex.Message}", ex);
+            }
         }
 
         public async Task<bool> ExistsByCodeAsync(string code, CancellationToken cancellationToken = default)
         {
-            return await _unitOfWork.Countries.ExistsByCodeAsync(code, cancellationToken);
+            // Validate inputs
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                throw new ArgumentException("Country code is required", nameof(code));
+            }
+
+            try
+            {
+                return await _unitOfWork.Countries.ExistsByCodeAsync(code, cancellationToken);
+            }
+            catch (ArgumentException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to check if country exists by code: {Code}", code);
+                throw new InvalidOperationException($"Failed to check if country code '{code}' exists: {ex.Message}", ex);
+            }
         }
 
         public async Task<bool> ExistsByNameAsync(string name, CancellationToken cancellationToken = default)
         {
-            return await _unitOfWork.Countries.ExistsByNameAsync(name, cancellationToken);
+            // Validate inputs
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                throw new ArgumentException("Country name is required", nameof(name));
+            }
+
+            try
+            {
+                return await _unitOfWork.Countries.ExistsByNameAsync(name, cancellationToken);
+            }
+            catch (ArgumentException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to check if country exists by name: {Name}", name);
+                throw new InvalidOperationException($"Failed to check if country name '{name}' exists: {ex.Message}", ex);
+            }
         }
     }
 }
