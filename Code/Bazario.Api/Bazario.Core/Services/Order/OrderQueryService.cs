@@ -261,64 +261,14 @@ namespace Bazario.Core.Services.Order
         /// </summary>
         private static Expression<Func<OrderEntity, bool>> BuildSearchPredicate(OrderSearchCriteria searchCriteria)
         {
-            // Start with a predicate that matches all orders
-            Expression<Func<OrderEntity, bool>> predicate = o => true;
-
-            // Apply filters by combining expressions
-            if (searchCriteria.CustomerId.HasValue)
-            {
-                var customerId = searchCriteria.CustomerId.Value;
-                predicate = CombinePredicates(predicate, o => o.CustomerId == customerId);
-            }
-
-            if (searchCriteria.Status.HasValue)
-            {
-                var status = searchCriteria.Status.Value.ToString();
-                predicate = CombinePredicates(predicate, o => o.Status == status);
-            }
-
-            if (searchCriteria.StartDate.HasValue)
-            {
-                var startDate = searchCriteria.StartDate.Value;
-                predicate = CombinePredicates(predicate, o => o.Date >= startDate);
-            }
-
-            if (searchCriteria.EndDate.HasValue)
-            {
-                var endDate = searchCriteria.EndDate.Value;
-                predicate = CombinePredicates(predicate, o => o.Date <= endDate);
-            }
-
-            if (searchCriteria.MinAmount.HasValue)
-            {
-                var minAmount = searchCriteria.MinAmount.Value;
-                predicate = CombinePredicates(predicate, o => o.TotalAmount >= minAmount);
-            }
-
-            if (searchCriteria.MaxAmount.HasValue)
-            {
-                var maxAmount = searchCriteria.MaxAmount.Value;
-                predicate = CombinePredicates(predicate, o => o.TotalAmount <= maxAmount);
-            }
-
-            return predicate;
-        }
-
-        /// <summary>
-        /// Combines two predicates with AND logic
-        /// </summary>
-        private static Expression<Func<OrderEntity, bool>> CombinePredicates(
-            Expression<Func<OrderEntity, bool>> first,
-            Expression<Func<OrderEntity, bool>> second)
-        {
-            var parameter = Expression.Parameter(typeof(OrderEntity), "o");
-
-            var firstBody = Expression.Invoke(first, parameter);
-            var secondBody = Expression.Invoke(second, parameter);
-
-            var combined = Expression.AndAlso(firstBody, secondBody);
-
-            return Expression.Lambda<Func<OrderEntity, bool>>(combined, parameter);
+            // Build a single combined predicate expression
+            return o =>
+                (!searchCriteria.CustomerId.HasValue || o.CustomerId == searchCriteria.CustomerId.Value) &&
+                (!searchCriteria.Status.HasValue || o.Status == searchCriteria.Status.Value.ToString()) &&
+                (!searchCriteria.StartDate.HasValue || o.Date >= searchCriteria.StartDate.Value) &&
+                (!searchCriteria.EndDate.HasValue || o.Date <= searchCriteria.EndDate.Value) &&
+                (!searchCriteria.MinAmount.HasValue || o.TotalAmount >= searchCriteria.MinAmount.Value) &&
+                (!searchCriteria.MaxAmount.HasValue || o.TotalAmount <= searchCriteria.MaxAmount.Value);
         }
     }
 }
