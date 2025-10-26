@@ -15,11 +15,6 @@ using Bazario.Core.Enums.Inventory;
 
 namespace Bazario.Core.Services.Order
 {
-    /// <summary>
-    /// Service implementation for order validation and business rules
-    /// Handles order validation, business rule checks, and calculations
-    /// Refactored to follow KISS principle using OrderCalculator helper
-    /// </summary>
     public class OrderValidationService : IOrderValidationService
     {
         private readonly IOrderRepository _orderRepository;
@@ -41,6 +36,12 @@ namespace Bazario.Core.Services.Order
 
         public async Task<bool> CanOrderBeModifiedAsync(Guid orderId, CancellationToken cancellationToken = default)
         {
+            // Validate inputs
+            if (orderId == Guid.Empty)
+            {
+                throw new ArgumentException("Order ID cannot be empty", nameof(orderId));
+            }
+
             _logger.LogDebug("Checking if order can be modified: {OrderId}", orderId);
 
             try
@@ -58,15 +59,26 @@ namespace Bazario.Core.Services.Order
 
                 return canModify;
             }
+            catch (ArgumentException)
+            {
+                // Re-throw validation exceptions
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to check if order can be modified: {OrderId}", orderId);
-                throw;
+                throw new InvalidOperationException($"Failed to check if order {orderId} can be modified: {ex.Message}", ex);
             }
         }
 
         public async Task<bool> CanOrderBeCancelledAsync(Guid orderId, CancellationToken cancellationToken = default)
         {
+            // Validate inputs
+            if (orderId == Guid.Empty)
+            {
+                throw new ArgumentException("Order ID cannot be empty", nameof(orderId));
+            }
+
             _logger.LogDebug("Checking if order can be cancelled: {OrderId}", orderId);
 
             try
@@ -85,15 +97,31 @@ namespace Bazario.Core.Services.Order
 
                 return canCancel;
             }
+            catch (ArgumentException)
+            {
+                // Re-throw validation exceptions
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to check if order can be cancelled: {OrderId}", orderId);
-                throw;
+                throw new InvalidOperationException($"Failed to check if order {orderId} can be cancelled: {ex.Message}", ex);
             }
         }
 
         public bool IsValidStatusTransition(string currentStatus, string newStatus)
         {
+            // Validate inputs
+            if (string.IsNullOrWhiteSpace(currentStatus))
+            {
+                throw new ArgumentException("Current status cannot be null or empty", nameof(currentStatus));
+            }
+
+            if (string.IsNullOrWhiteSpace(newStatus))
+            {
+                throw new ArgumentException("New status cannot be null or empty", nameof(newStatus));
+            }
+
             _logger.LogDebug("Validating status transition from {CurrentStatus} to {NewStatus}", currentStatus, newStatus);
 
             // Define valid status transitions
@@ -184,23 +212,24 @@ namespace Bazario.Core.Services.Order
 
                 return calculation;
             }
+            catch (ArgumentException)
+            {
+                // Re-throw validation exceptions
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to calculate order total");
-                throw;
+                throw new InvalidOperationException($"Failed to calculate order total: {ex.Message}", ex);
             }
         }
 
         private void ValidateCalculationInputs(List<OrderItemAddRequest> orderItems, ShippingAddress shippingAddress)
         {
-            if (orderItems == null || !orderItems.Any())
+            // Note: Null checks are already performed by caller, this validates semantic requirements
+            if (orderItems.Count == 0)
             {
-                throw new ArgumentException("Order items cannot be null or empty", nameof(orderItems));
-            }
-
-            if (shippingAddress == null)
-            {
-                throw new ArgumentException("Shipping address is required for order calculation", nameof(shippingAddress));
+                throw new ArgumentException("Order items cannot be empty", nameof(orderItems));
             }
 
             if (string.IsNullOrWhiteSpace(shippingAddress.City))
@@ -266,6 +295,12 @@ namespace Bazario.Core.Services.Order
             List<OrderItemAddRequest> orderItems,
             CancellationToken cancellationToken = default)
         {
+            // Validate inputs
+            if (orderItems == null)
+            {
+                throw new ArgumentNullException(nameof(orderItems), "Order items cannot be null");
+            }
+
             _logger.LogDebug("Validating stock availability with details for {ItemCount} items", orderItems?.Count ?? 0);
 
             var result = new StockValidationResult
@@ -373,10 +408,15 @@ namespace Bazario.Core.Services.Order
 
                 return result;
             }
+            catch (ArgumentException)
+            {
+                // Re-throw validation exceptions
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to validate stock availability with details");
-                throw;
+                throw new InvalidOperationException($"Failed to validate stock availability: {ex.Message}", ex);
             }
         }
 
