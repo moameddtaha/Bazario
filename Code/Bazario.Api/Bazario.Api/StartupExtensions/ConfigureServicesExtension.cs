@@ -20,7 +20,6 @@ using Bazario.Core.Services.Inventory;
 using Bazario.Core.Services.Location;
 using Bazario.Core.Services.Auth;
 using Bazario.Core.Helpers.Order;
-using Bazario.Core.Helpers.Inventory;
 using Bazario.Core.Helpers.Store;
 using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Domain.RepositoryContracts.Authentication;
@@ -174,7 +173,7 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<IProductValidationHelper, ProductValidationHelper>();
             // IInventoryHelper removed - functionality moved to IInventoryAnalyticsService
             services.AddScoped<IStoreShippingConfigurationHelper, StoreShippingConfigurationHelper>();
-            services.AddScoped<IStoreQueryHelper, StoreQueryHelper>();
+            // IStoreQueryHelper removed - functionality moved to StoreQueryService as private methods
 
             // Register Service Aggregators (Dependency Bundling)
             services.AddScoped<IUserAuthenticationDependencies, UserAuthenticationDependencies>();

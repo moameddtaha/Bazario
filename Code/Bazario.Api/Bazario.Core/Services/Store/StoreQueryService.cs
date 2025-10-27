@@ -6,11 +6,11 @@ using System.Threading.Tasks;
 using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.DTO.Store;
 using Bazario.Core.Extensions.Store;
-using Bazario.Core.Helpers.Store;
 using Bazario.Core.Models.Shared;
 using Bazario.Core.Models.Store;
 using Bazario.Core.ServiceContracts.Store;
 using Microsoft.Extensions.Logging;
+using StoreEntity = Bazario.Core.Domain.Entities.Store.Store;
 
 namespace Bazario.Core.Services.Store
 {
@@ -21,16 +21,13 @@ namespace Bazario.Core.Services.Store
     public class StoreQueryService : IStoreQueryService
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IStoreQueryHelper _queryHelper;
         private readonly ILogger<StoreQueryService> _logger;
 
         public StoreQueryService(
             IUnitOfWork unitOfWork,
-            IStoreQueryHelper queryHelper,
             ILogger<StoreQueryService> logger)
         {
             _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
-            _queryHelper = queryHelper ?? throw new ArgumentNullException(nameof(queryHelper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -108,7 +105,7 @@ namespace Bazario.Core.Services.Store
                 var query = _unitOfWork.Stores.GetStoresQueryable();
 
                 // Apply soft deletion filters using helper method
-                query = _queryHelper.ApplySoftDeletionFilters(query, searchCriteria);
+                query = ApplySoftDeletionFilters(query, searchCriteria);
 
                 // Apply search filter using repository method (case-insensitive)
                 if (!string.IsNullOrWhiteSpace(searchCriteria.SearchTerm))
@@ -133,7 +130,7 @@ namespace Bazario.Core.Services.Store
                 }
 
                 // Apply sorting using helper method
-                query = _queryHelper.ApplySorting(query, searchCriteria);
+                query = ApplySorting(query, searchCriteria);
 
                 // Get total count with SQL COUNT
                 var totalCount = await _unitOfWork.Stores.GetStoresCountAsync(query, cancellationToken);
@@ -182,13 +179,13 @@ namespace Bazario.Core.Services.Store
                 var query = _unitOfWork.Stores.GetStoresQueryable();
 
                 // Apply soft deletion filters using helper method
-                query = _queryHelper.ApplySoftDeletionFilters(query, searchCriteria);
+                query = ApplySoftDeletionFilters(query, searchCriteria);
 
                 // Apply category filter using repository method (case-insensitive)
                 query = _unitOfWork.Stores.ApplyCategoryFilter(query, searchCriteria.Category);
 
                 // Apply sorting using helper method
-                query = _queryHelper.ApplySorting(query, searchCriteria);
+                query = ApplySorting(query, searchCriteria);
 
                 // Get total count with SQL COUNT
                 var totalCount = await _unitOfWork.Stores.GetStoresCountAsync(query, cancellationToken);
@@ -216,6 +213,38 @@ namespace Bazario.Core.Services.Store
                 _logger.LogError(ex, "Failed to get stores by category: {Category}", searchCriteria.Category);
                 throw;
             }
+        }
+
+        private IQueryable<StoreEntity> ApplySoftDeletionFilters(IQueryable<StoreEntity> query, StoreSearchCriteria searchCriteria)
+        {
+            if (searchCriteria.OnlyDeleted)
+            {
+                // Need to ignore the global filter to get deleted stores
+                return _unitOfWork.Stores.GetStoresQueryableIgnoreFilters().Where(s => s.IsDeleted);
+            }
+            else if (searchCriteria.IncludeDeleted)
+            {
+                // Need to ignore the global filter to include both active and deleted stores
+                return _unitOfWork.Stores.GetStoresQueryableIgnoreFilters();
+            }
+
+            // If neither OnlyDeleted nor IncludeDeleted, the global HasQueryFilter
+            // automatically applies !s.IsDeleted, so no additional filter needed
+            return query;
+        }
+
+        private IQueryable<StoreEntity> ApplySorting(IQueryable<StoreEntity> query, StoreSearchCriteria searchCriteria)
+        {
+            return searchCriteria.SortBy?.ToLower() switch
+            {
+                "name" => searchCriteria.SortDescending ?
+                    query.OrderByDescending(s => s.Name) :
+                    query.OrderBy(s => s.Name),
+                "createdat" => searchCriteria.SortDescending ?
+                    query.OrderByDescending(s => s.CreatedAt) :
+                    query.OrderBy(s => s.CreatedAt),
+                _ => query.OrderBy(s => s.Name)
+            };
         }
     }
 }
