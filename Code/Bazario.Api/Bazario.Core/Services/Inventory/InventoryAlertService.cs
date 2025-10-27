@@ -5,7 +5,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.Models.Inventory;
 using Bazario.Core.ServiceContracts.Inventory;
-using Bazario.Core.Helpers.Inventory;
 using Microsoft.Extensions.Logging;
 using Bazario.Core.ServiceContracts.Infrastructure;
 
@@ -20,19 +19,19 @@ namespace Bazario.Core.Services.Inventory
         private readonly ILogger<InventoryAlertService> _logger;
         private readonly IEmailService _emailService;
         private readonly IInventoryQueryService _inventoryQueryService;
-        private readonly IInventoryHelper _inventoryHelper;
+        private readonly IInventoryAnalyticsService _inventoryAnalyticsService;
         private readonly Dictionary<Guid, InventoryAlertPreferences> _alertPreferences = new();
 
         public InventoryAlertService(
             ILogger<InventoryAlertService> logger,
             IEmailService emailService,
             IInventoryQueryService inventoryQueryService,
-            IInventoryHelper inventoryHelper)
+            IInventoryAnalyticsService inventoryAnalyticsService)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _emailService = emailService ?? throw new ArgumentNullException(nameof(emailService));
             _inventoryQueryService = inventoryQueryService ?? throw new ArgumentNullException(nameof(inventoryQueryService));
-            _inventoryHelper = inventoryHelper ?? throw new ArgumentNullException(nameof(inventoryHelper));
+            _inventoryAnalyticsService = inventoryAnalyticsService ?? throw new ArgumentNullException(nameof(inventoryAnalyticsService));
         }
 
         public async Task SendLowStockAlertAsync(
@@ -50,8 +49,8 @@ namespace Bazario.Core.Services.Inventory
                 var inventoryStatus = await _inventoryQueryService.GetInventoryStatusAsync(productId, cancellationToken);
                 
                 // Get store preferences
-                var storeId = await _inventoryHelper.GetStoreIdForProductAsync(productId, cancellationToken);
-                var preferences = _inventoryHelper.GetAlertPreferences(storeId, _alertPreferences);
+                var storeId = await _inventoryAnalyticsService.GetStoreIdForProductAsync(productId, cancellationToken);
+                var preferences = GetAlertPreferences(storeId, _alertPreferences);
                 
                 if (!preferences.EnableLowStockAlerts)
                 {
@@ -96,8 +95,8 @@ namespace Bazario.Core.Services.Inventory
                 var inventoryStatus = await _inventoryQueryService.GetInventoryStatusAsync(productId, cancellationToken);
                 
                 // Get store preferences
-                var storeId = await _inventoryHelper.GetStoreIdForProductAsync(productId, cancellationToken);
-                var preferences = _inventoryHelper.GetAlertPreferences(storeId, _alertPreferences);
+                var storeId = await _inventoryAnalyticsService.GetStoreIdForProductAsync(productId, cancellationToken);
+                var preferences = GetAlertPreferences(storeId, _alertPreferences);
                 
                 if (!preferences.EnableOutOfStockAlerts)
                 {
@@ -151,8 +150,8 @@ namespace Bazario.Core.Services.Inventory
                 {
                     var storeId = storeGroup.Key;
                     var storeAlerts = storeGroup.ToList();
-                    var preferences = _inventoryHelper.GetAlertPreferences(storeId, _alertPreferences);
-                    
+                    var preferences = GetAlertPreferences(storeId, _alertPreferences);
+
                     if (!preferences.EnableLowStockAlerts)
                     {
                         _logger.LogDebug("Low stock alerts disabled for store {StoreId}", storeId);
@@ -161,7 +160,7 @@ namespace Bazario.Core.Services.Inventory
 
                     // Create bulk email content
                     var subject = $"Bulk Low Stock Alert - {storeAlerts.Count} Products";
-                    var body = _inventoryHelper.CreateBulkAlertEmailBody(storeAlerts, storeId);
+                    var body = CreateBulkAlertEmailBody(storeAlerts, storeId);
 
                     // Note: IEmailService doesn't have a generic SendEmailAsync method
                     // This would need to be implemented or use a different email service
@@ -197,8 +196,8 @@ namespace Bazario.Core.Services.Inventory
                 var inventoryStatus = await _inventoryQueryService.GetInventoryStatusAsync(productId, cancellationToken);
                 
                 // Get store preferences
-                var storeId = await _inventoryHelper.GetStoreIdForProductAsync(productId, cancellationToken);
-                var preferences = _inventoryHelper.GetAlertPreferences(storeId, _alertPreferences);
+                var storeId = await _inventoryAnalyticsService.GetStoreIdForProductAsync(productId, cancellationToken);
+                var preferences = GetAlertPreferences(storeId, _alertPreferences);
                 
                 if (!preferences.EnableRestockRecommendations)
                 {
@@ -330,6 +329,62 @@ namespace Bazario.Core.Services.Inventory
                 _logger.LogError(ex, "Failed to configure alert preferences for store {StoreId}", storeId);
                 return Task.FromResult(false);
             }
+        }
+
+        private InventoryAlertPreferences GetAlertPreferences(Guid storeId, Dictionary<Guid, InventoryAlertPreferences> alertPreferences)
+        {
+            if (alertPreferences.TryGetValue(storeId, out var preferences))
+            {
+                return preferences;
+            }
+
+            // Return default preferences if none configured
+            return new InventoryAlertPreferences
+            {
+                StoreId = storeId,
+                AlertEmail = "admin@bazario.com", // Default email
+                EnableLowStockAlerts = true,
+                EnableOutOfStockAlerts = true,
+                EnableRestockRecommendations = true,
+                DefaultLowStockThreshold = 10, // Default threshold
+                SendDailySummary = false,
+                SendWeeklySummary = true,
+                CreatedAt = DateTime.UtcNow
+            };
+        }
+
+        private string CreateBulkAlertEmailBody(List<LowStockAlert> alerts, Guid storeId)
+        {
+            var alertRows = alerts.Select(alert => $@"
+                <tr>
+                    <td>{alert.ProductName}</td>
+                    <td>{alert.CurrentStock}</td>
+                    <td>{alert.Threshold}</td>
+                    <td>{alert.AlertDate:yyyy-MM-dd HH:mm}</td>
+                </tr>").ToList();
+
+            return $@"
+                <h2>Bulk Low Stock Alert</h2>
+                <p><strong>Store ID:</strong> {storeId}</p>
+                <p><strong>Alert Time:</strong> {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC</p>
+                <p><strong>Total Products:</strong> {alerts.Count}</p>
+
+                <table border='1' style='border-collapse: collapse; width: 100%;'>
+                    <thead>
+                        <tr style='background-color: #f2f2f2;'>
+                            <th>Product Name</th>
+                            <th>Current Stock</th>
+                            <th>Threshold</th>
+                            <th>Alert Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {string.Join("", alertRows)}
+                    </tbody>
+                </table>
+
+                <p>Please review these products and consider restocking to avoid stockouts.</p>
+            ";
         }
 
     }

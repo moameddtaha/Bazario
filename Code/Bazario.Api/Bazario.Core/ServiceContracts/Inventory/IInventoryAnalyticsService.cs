@@ -41,5 +41,20 @@ namespace Bazario.Core.ServiceContracts.Inventory
         /// Gets dead stock analysis (slow-moving items)
         /// </summary>
         Task<List<DeadStockItem>> GetDeadStockAnalysisAsync(Guid storeId, int daysSinceLastSale = 90, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets the store ID for a given product
+        /// </summary>
+        Task<Guid> GetStoreIdForProductAsync(Guid productId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets the total sales quantity for a product within a date range
+        /// </summary>
+        Task<int> GetProductSalesQuantityAsync(Guid productId, DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets the total revenue for a product within a date range
+        /// </summary>
+        Task<decimal> GetProductRevenueAsync(Guid productId, DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default);
     }
 }

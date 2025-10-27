@@ -117,6 +117,15 @@ namespace Bazario.Core.Services.Inventory
         public Task<List<DeadStockItem>> GetDeadStockAnalysisAsync(Guid storeId, int daysSinceLastSale = 90, CancellationToken cancellationToken = default)
             => _analyticsService.GetDeadStockAnalysisAsync(storeId, daysSinceLastSale, cancellationToken);
 
+        public Task<Guid> GetStoreIdForProductAsync(Guid productId, CancellationToken cancellationToken = default)
+            => _analyticsService.GetStoreIdForProductAsync(productId, cancellationToken);
+
+        public Task<int> GetProductSalesQuantityAsync(Guid productId, DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default)
+            => _analyticsService.GetProductSalesQuantityAsync(productId, startDate, endDate, cancellationToken);
+
+        public Task<decimal> GetProductRevenueAsync(Guid productId, DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default)
+            => _analyticsService.GetProductRevenueAsync(productId, startDate, endDate, cancellationToken);
+
         // IInventoryAlertService methods
         public Task SendLowStockAlertAsync(Guid productId, int currentStock, int threshold, CancellationToken cancellationToken = default)
             => _alertService.SendLowStockAlertAsync(productId, currentStock, threshold, cancellationToken);

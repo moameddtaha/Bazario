@@ -172,7 +172,7 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<IOrderMetricsHelper, OrderMetricsHelper>();
             services.AddScoped<OrderCalculator>(); // Order calculation helper (KISS refactoring)
             services.AddScoped<IProductValidationHelper, ProductValidationHelper>();
-            services.AddScoped<IInventoryHelper, InventoryHelper>();
+            // IInventoryHelper removed - functionality moved to IInventoryAnalyticsService
             services.AddScoped<IStoreShippingConfigurationHelper, StoreShippingConfigurationHelper>();
             services.AddScoped<IStoreQueryHelper, StoreQueryHelper>();
 

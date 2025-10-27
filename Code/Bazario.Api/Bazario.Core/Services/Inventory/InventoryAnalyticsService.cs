@@ -5,7 +5,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.Models.Inventory;
 using Bazario.Core.ServiceContracts.Inventory;
-using Bazario.Core.Helpers.Inventory;
 using Microsoft.Extensions.Logging;
 using Bazario.Core.Domain.RepositoryContracts.Catalog;
 using Bazario.Core.Domain.RepositoryContracts;
@@ -20,16 +19,13 @@ namespace Bazario.Core.Services.Inventory
     public class InventoryAnalyticsService : IInventoryAnalyticsService
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IInventoryHelper _inventoryHelper;
         private readonly ILogger<InventoryAnalyticsService> _logger;
 
         public InventoryAnalyticsService(
             IUnitOfWork unitOfWork,
-            IInventoryHelper inventoryHelper,
             ILogger<InventoryAnalyticsService> logger)
         {
             _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
-            _inventoryHelper = inventoryHelper ?? throw new ArgumentNullException(nameof(inventoryHelper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -96,8 +92,8 @@ namespace Bazario.Core.Services.Inventory
                 foreach (var product in activeProducts)
                 {
                     // Get sales data for this product in the date range
-                    var totalSold = await _inventoryHelper.GetProductSalesQuantityAsync(product.ProductId, start, end, cancellationToken);
-                    var totalRevenue = await _inventoryHelper.GetProductRevenueAsync(product.ProductId, start, end, cancellationToken);
+                    var totalSold = await GetProductSalesQuantityAsync(product.ProductId, start, end, cancellationToken);
+                    var totalRevenue = await GetProductRevenueAsync(product.ProductId, start, end, cancellationToken);
 
                     // Calculate turnover metrics
                     var averageInventory = product.StockQuantity; // Simplified - in real app, calculate average over period
@@ -248,7 +244,7 @@ namespace Bazario.Core.Services.Inventory
                 foreach (var product in activeProducts)
                 {
                     // Get historical sales data
-                    var totalSold = await _inventoryHelper.GetProductSalesQuantityAsync(product.ProductId, startDate, endDate, cancellationToken);
+                    var totalSold = await GetProductSalesQuantityAsync(product.ProductId, startDate, endDate, cancellationToken);
                     var daysInPeriod = (endDate - startDate).Days;
                     var dailyAverageSales = daysInPeriod > 0 ? (double)totalSold / daysInPeriod : 0;
 
@@ -319,7 +315,7 @@ namespace Bazario.Core.Services.Inventory
                 foreach (var product in activeProducts)
                 {
                     // Get sales data for this product
-                    var totalSold = await _inventoryHelper.GetProductSalesQuantityAsync(product.ProductId, DateTime.MinValue, DateTime.UtcNow, cancellationToken);
+                    var totalSold = await GetProductSalesQuantityAsync(product.ProductId, DateTime.MinValue, DateTime.UtcNow, cancellationToken);
                     var hasRecentSales = totalSold > 0;
                     
                     // If no sales or very low sales, consider it dead stock
@@ -362,17 +358,94 @@ namespace Bazario.Core.Services.Inventory
         {
             if (totalValue > 1000 && daysSinceLastSale > 180)
                 return "High-value dead stock - consider liquidation sale or bundling";
-            
+
             if (totalValue > 500 && daysSinceLastSale > 120)
                 return "Medium-value dead stock - consider discount promotion";
-            
+
             if (daysSinceLastSale > 90)
                 return "Low-value dead stock - consider clearance sale";
-            
+
             if (currentStock > 50)
                 return "High inventory - consider reducing order quantity";
-            
+
             return "Monitor closely - may need marketing push";
+        }
+
+        public async Task<Guid> GetStoreIdForProductAsync(Guid productId, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                // Query the database to get the store ID for the product
+                var productEntity = await _unitOfWork.Products.GetProductByIdAsync(productId, cancellationToken);
+                if (productEntity != null)
+                {
+                    return productEntity.StoreId;
+                }
+
+                _logger.LogWarning("Product {ProductId} not found when getting store ID", productId);
+                return Guid.Empty;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting store ID for product {ProductId}", productId);
+                return Guid.Empty;
+            }
+        }
+
+        public async Task<int> GetProductSalesQuantityAsync(Guid productId, DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                // Query order items to get sales quantity for the product
+                var orders = await _unitOfWork.Orders.GetAllOrdersAsync(cancellationToken);
+                var ordersInRange = orders.Where(o => o.Date >= startDate && o.Date <= endDate).ToList();
+
+                var totalQuantity = 0;
+                foreach (var order in ordersInRange)
+                {
+                    // Get order items for this order and product
+                    if (order.OrderItems != null)
+                    {
+                        var productItems = order.OrderItems.Where(oi => oi.ProductId == productId);
+                        totalQuantity += productItems.Sum(oi => oi.Quantity);
+                    }
+                }
+
+                return totalQuantity;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting sales quantity for product {ProductId}", productId);
+                return 0;
+            }
+        }
+
+        public async Task<decimal> GetProductRevenueAsync(Guid productId, DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                // Query order items to get revenue for the product
+                var orders = await _unitOfWork.Orders.GetAllOrdersAsync(cancellationToken);
+                var ordersInRange = orders.Where(o => o.Date >= startDate && o.Date <= endDate).ToList();
+
+                var totalRevenue = 0m;
+                foreach (var order in ordersInRange)
+                {
+                    // Get order items for this order and product
+                    if (order.OrderItems != null)
+                    {
+                        var productItems = order.OrderItems.Where(oi => oi.ProductId == productId);
+                        totalRevenue += productItems.Sum(oi => oi.Price * oi.Quantity);
+                    }
+                }
+
+                return totalRevenue;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting revenue for product {ProductId}", productId);
+                return 0;
+            }
         }
 
     }
