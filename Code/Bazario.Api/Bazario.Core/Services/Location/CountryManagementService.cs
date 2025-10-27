@@ -286,38 +286,54 @@ namespace Bazario.Core.Services.Location
 
         public async Task<List<CountryResponse>> GetAllCountriesAsync(CancellationToken cancellationToken = default)
         {
-            var countries = await _unitOfWork.Countries.GetAllAsync(cancellationToken);
-
-            return countries.Select(c => new CountryResponse
+            try
             {
-                CountryId = c.CountryId,
-                Name = c.Name,
-                Code = c.Code,
-                NameArabic = c.NameArabic,
-                IsActive = c.IsActive,
-                SupportsPostalCodes = c.SupportsPostalCodes,
-                GovernorateCount = c.Governorates?.Count ?? 0,
-                CreatedAt = c.CreatedAt,
-                UpdatedAt = c.UpdatedAt
-            }).ToList();
+                var countries = await _unitOfWork.Countries.GetAllAsync(cancellationToken);
+
+                return countries.Select(c => new CountryResponse
+                {
+                    CountryId = c.CountryId,
+                    Name = c.Name,
+                    Code = c.Code,
+                    NameArabic = c.NameArabic,
+                    IsActive = c.IsActive,
+                    SupportsPostalCodes = c.SupportsPostalCodes,
+                    GovernorateCount = c.Governorates?.Count ?? 0,
+                    CreatedAt = c.CreatedAt,
+                    UpdatedAt = c.UpdatedAt
+                }).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get all countries");
+                throw new InvalidOperationException($"Failed to get all countries: {ex.Message}", ex);
+            }
         }
 
         public async Task<List<CountryResponse>> GetActiveCountriesAsync(CancellationToken cancellationToken = default)
         {
-            var countries = await _unitOfWork.Countries.GetActiveCountriesAsync(cancellationToken);
-
-            return countries.Select(c => new CountryResponse
+            try
             {
-                CountryId = c.CountryId,
-                Name = c.Name,
-                Code = c.Code,
-                NameArabic = c.NameArabic,
-                IsActive = c.IsActive,
-                SupportsPostalCodes = c.SupportsPostalCodes,
-                GovernorateCount = c.Governorates?.Count ?? 0,
-                CreatedAt = c.CreatedAt,
-                UpdatedAt = c.UpdatedAt
-            }).ToList();
+                var countries = await _unitOfWork.Countries.GetActiveCountriesAsync(cancellationToken);
+
+                return countries.Select(c => new CountryResponse
+                {
+                    CountryId = c.CountryId,
+                    Name = c.Name,
+                    Code = c.Code,
+                    NameArabic = c.NameArabic,
+                    IsActive = c.IsActive,
+                    SupportsPostalCodes = c.SupportsPostalCodes,
+                    GovernorateCount = c.Governorates?.Count ?? 0,
+                    CreatedAt = c.CreatedAt,
+                    UpdatedAt = c.UpdatedAt
+                }).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get active countries");
+                throw new InvalidOperationException($"Failed to get active countries: {ex.Message}", ex);
+            }
         }
 
         public async Task<bool> DeactivateCountryAsync(Guid countryId, Guid userId, CancellationToken cancellationToken = default)
