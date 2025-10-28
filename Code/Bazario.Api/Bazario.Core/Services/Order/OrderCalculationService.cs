@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Bazario.Core.Domain.RepositoryContracts.Catalog;
+using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.DTO.Order;
 using Bazario.Core.Enums.Catalog;
 using Bazario.Core.Enums.Order;
@@ -19,20 +19,17 @@ namespace Bazario.Core.Services.Order
     /// </summary>
     public class OrderCalculationService : IOrderCalculationService
     {
-        private readonly IProductRepository _productRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly IShippingZoneService _shippingZoneService;
-        private readonly IDiscountRepository _discountRepository;
         private readonly ILogger<OrderCalculationService> _logger;
 
         public OrderCalculationService(
-            IProductRepository productRepository,
+            IUnitOfWork unitOfWork,
             IShippingZoneService shippingZoneService,
-            IDiscountRepository discountRepository,
             ILogger<OrderCalculationService> logger)
         {
-            _productRepository = productRepository ?? throw new ArgumentNullException(nameof(productRepository));
+            _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _shippingZoneService = shippingZoneService ?? throw new ArgumentNullException(nameof(shippingZoneService));
-            _discountRepository = discountRepository ?? throw new ArgumentNullException(nameof(discountRepository));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -49,7 +46,7 @@ namespace Bazario.Core.Services.Order
 
             foreach (var item in orderItems)
             {
-                var product = await _productRepository.GetProductByIdAsync(item.ProductId, cancellationToken);
+                var product = await _unitOfWork.Products.GetProductByIdAsync(item.ProductId, cancellationToken);
                 if (product == null)
                 {
                     throw new InvalidOperationException($"Product {item.ProductId} not found");
@@ -75,7 +72,7 @@ namespace Bazario.Core.Services.Order
 
             foreach (var item in orderItems)
             {
-                var product = await _productRepository.GetProductByIdAsync(item.ProductId, cancellationToken);
+                var product = await _unitOfWork.Products.GetProductByIdAsync(item.ProductId, cancellationToken);
                 if (product != null)
                 {
                     var storeId = product.StoreId;
@@ -233,7 +230,7 @@ namespace Bazario.Core.Services.Order
         {
             _logger.LogDebug("Validating discount code: {DiscountCode}", discountCode);
 
-            var (isValid, discount, errorMessage) = await _discountRepository.ValidateDiscountAsync(
+            var (isValid, discount, errorMessage) = await _unitOfWork.Discounts.ValidateDiscountAsync(
                 discountCode,
                 subtotal,
                 storeIds,
