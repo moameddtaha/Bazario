@@ -11,24 +11,24 @@ using Bazario.Core.Models.Order;
 using Bazario.Core.ServiceContracts.Order;
 using Microsoft.Extensions.Logging;
 
-namespace Bazario.Core.Helpers.Order
+namespace Bazario.Core.Services.Order
 {
     /// <summary>
-    /// Helper class for calculating order totals, shipping, and discounts
+    /// Service for calculating order totals, shipping, and discounts
     /// Follows KISS principle by breaking down complex calculations into focused methods
     /// </summary>
-    public class OrderCalculator
+    public class OrderCalculationService : IOrderCalculationService
     {
         private readonly IProductRepository _productRepository;
         private readonly IShippingZoneService _shippingZoneService;
         private readonly IDiscountRepository _discountRepository;
-        private readonly ILogger<OrderCalculator> _logger;
+        private readonly ILogger<OrderCalculationService> _logger;
 
-        public OrderCalculator(
+        public OrderCalculationService(
             IProductRepository productRepository,
             IShippingZoneService shippingZoneService,
             IDiscountRepository discountRepository,
-            ILogger<OrderCalculator> logger)
+            ILogger<OrderCalculationService> logger)
         {
             _productRepository = productRepository ?? throw new ArgumentNullException(nameof(productRepository));
             _shippingZoneService = shippingZoneService ?? throw new ArgumentNullException(nameof(shippingZoneService));

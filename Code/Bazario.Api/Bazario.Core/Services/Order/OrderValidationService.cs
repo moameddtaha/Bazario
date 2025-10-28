@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using Bazario.Core.DTO.Order;
 using Bazario.Core.ServiceContracts.Order;
 using Bazario.Core.Models.Order;
-using Bazario.Core.Helpers.Order;
 using Microsoft.Extensions.Logging;
 using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Enums.Order;
@@ -17,16 +16,16 @@ namespace Bazario.Core.Services.Order
     public class OrderValidationService : IOrderValidationService
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly OrderCalculator _orderCalculator;
+        private readonly IOrderCalculationService _orderCalculationService;
         private readonly ILogger<OrderValidationService> _logger;
 
         public OrderValidationService(
             IUnitOfWork unitOfWork,
-            OrderCalculator orderCalculator,
+            IOrderCalculationService orderCalculationService,
             ILogger<OrderValidationService> logger)
         {
             _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
-            _orderCalculator = orderCalculator ?? throw new ArgumentNullException(nameof(orderCalculator));
+            _orderCalculationService = orderCalculationService ?? throw new ArgumentNullException(nameof(orderCalculationService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -178,20 +177,20 @@ namespace Bazario.Core.Services.Order
                 ValidateCalculationInputs(orderItems, shippingAddress);
 
                 // Step 1: Calculate subtotal
-                var subtotal = await _orderCalculator.CalculateSubtotalAsync(orderItems, cancellationToken);
+                var subtotal = await _orderCalculationService.CalculateSubtotalAsync(orderItems, cancellationToken);
 
                 // Step 2: Group items by store
-                var itemsByStore = await _orderCalculator.GroupItemsByStoreAsync(orderItems, cancellationToken);
+                var itemsByStore = await _orderCalculationService.GroupItemsByStoreAsync(orderItems, cancellationToken);
                 var storeIds = itemsByStore.Keys.ToList();
 
                 // Step 3: Calculate shipping cost
-                var shippingCost = await _orderCalculator.CalculateShippingCostAsync(
+                var shippingCost = await _orderCalculationService.CalculateShippingCostAsync(
                     itemsByStore,
                     shippingAddress,
                     cancellationToken);
 
                 // Step 4: Calculate discounts
-                var (discountAmount, appliedDiscounts, appliedDiscountTypes) = await _orderCalculator.CalculateDiscountsAsync(
+                var (discountAmount, appliedDiscounts, appliedDiscountTypes) = await _orderCalculationService.CalculateDiscountsAsync(
                     discountCodes,
                     subtotal,
                     storeIds,
