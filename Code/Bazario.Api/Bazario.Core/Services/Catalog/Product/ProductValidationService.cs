@@ -1,7 +1,9 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.RepositoryContracts.Catalog;
+using Bazario.Core.Domain.RepositoryContracts.Order;
 using Bazario.Core.Domain.RepositoryContracts.Store;
 using Bazario.Core.Models.Catalog.Product;
 using Bazario.Core.ServiceContracts.Catalog.Product;
@@ -11,21 +13,24 @@ namespace Bazario.Core.Services.Catalog.Product
 {
     /// <summary>
     /// Service implementation for product validation operations
-    /// Handles product validation logic and business rules
+    /// Handles product validation logic and business rules including deletion safety
     /// </summary>
     public class ProductValidationService : IProductValidationService
     {
         private readonly IProductRepository _productRepository;
         private readonly IStoreRepository _storeRepository;
+        private readonly IOrderRepository _orderRepository;
         private readonly ILogger<ProductValidationService> _logger;
 
         public ProductValidationService(
             IProductRepository productRepository,
             IStoreRepository storeRepository,
+            IOrderRepository orderRepository,
             ILogger<ProductValidationService> logger)
         {
             _productRepository = productRepository ?? throw new ArgumentNullException(nameof(productRepository));
             _storeRepository = storeRepository ?? throw new ArgumentNullException(nameof(storeRepository));
+            _orderRepository = orderRepository ?? throw new ArgumentNullException(nameof(orderRepository));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -125,6 +130,140 @@ namespace Bazario.Core.Services.Catalog.Product
             {
                 _logger.LogError(ex, "Failed to validate product for order: ProductId: {ProductId}, Quantity: {Quantity}", productId, quantity);
                 throw;
+            }
+        }
+
+        public async Task<bool> CanProductBeSafelyDeletedAsync(Guid productId, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                // Check if product has any active orders
+                var hasActiveOrders = await HasProductActiveOrdersAsync(productId, cancellationToken);
+                if (hasActiveOrders)
+                {
+                    _logger.LogWarning("Product {ProductId} has active orders and cannot be safely deleted", productId);
+                    return false;
+                }
+
+                // Check if product has any pending reservations
+                var hasPendingReservations = await HasProductPendingReservationsAsync(productId, cancellationToken);
+                if (hasPendingReservations)
+                {
+                    _logger.LogWarning("Product {ProductId} has pending reservations and cannot be safely deleted", productId);
+                    return false;
+                }
+
+                // Check if product has any reviews (optional - might want to keep for historical data)
+                var hasReviews = await HasProductReviewsAsync(productId, cancellationToken);
+                if (hasReviews)
+                {
+                    _logger.LogInformation("Product {ProductId} has reviews - consider soft delete instead", productId);
+                    // This is a warning, not a blocker
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error checking if product {ProductId} can be safely deleted", productId);
+                return false; // Fail safe - don't allow deletion on error
+            }
+        }
+
+        public async Task<bool> HasProductActiveOrdersAsync(Guid productId, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                // Check if product has any orders in pending, processing, or shipped status
+                var orders = await _orderRepository.GetAllOrdersAsync(cancellationToken);
+                var activeOrders = orders.Where(o =>
+                    o.Status == "Pending" ||
+                    o.Status == "Processing" ||
+                    o.Status == "Shipped" ||
+                    o.Status == "Confirmed")
+                    .ToList();
+
+                foreach (var order in activeOrders)
+                {
+                    if (order.OrderItems != null)
+                    {
+                        if (order.OrderItems.Any(oi => oi.ProductId == productId))
+                        {
+                            return true;
+                        }
+                    }
+                }
+
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error checking active orders for product {ProductId}", productId);
+                return true; // Assume it has active orders to be safe
+            }
+        }
+
+        public async Task<bool> HasProductPendingReservationsAsync(Guid productId, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                _logger.LogDebug("Checking pending reservations for product {ProductId}", productId);
+
+                // Check if there are any recent orders that might indicate reservations
+                var recentOrders = await _orderRepository.GetAllOrdersAsync(cancellationToken);
+                var recentProductOrders = recentOrders
+                    .Where(o => o.Date > DateTime.UtcNow.AddDays(-7)) // Last 7 days
+                    .Where(o => o.OrderItems != null && o.OrderItems.Any(oi => oi.ProductId == productId))
+                    .Where(o => o.Status == "Pending" || o.Status == "Processing")
+                    .ToList();
+
+                var hasActiveReservations = recentProductOrders.Any();
+
+                if (hasActiveReservations)
+                {
+                    _logger.LogWarning("Product {ProductId} has recent orders that might indicate active reservations", productId);
+                    return true;
+                }
+
+                _logger.LogDebug("No pending reservations found for product {ProductId}", productId);
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error checking pending reservations for product {ProductId}", productId);
+                return true; // Assume it has reservations to be safe
+            }
+        }
+
+        public async Task<bool> HasProductReviewsAsync(Guid productId, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                _logger.LogDebug("Checking reviews for product {ProductId}", productId);
+
+                // Check if there are any orders that might have generated reviews
+                var allOrders = await _orderRepository.GetAllOrdersAsync(cancellationToken);
+                var productOrders = allOrders
+                    .Where(o => o.OrderItems != null && o.OrderItems.Any(oi => oi.ProductId == productId))
+                    .Where(o => o.Status == "Delivered") // Only delivered orders can have reviews
+                    .ToList();
+
+                // Simulate that delivered orders might have reviews
+                var hasPotentialReviews = productOrders.Any();
+
+                if (hasPotentialReviews)
+                {
+                    _logger.LogInformation("Product {ProductId} has delivered orders that might have generated reviews", productId);
+                    return true;
+                }
+
+                _logger.LogDebug("No reviews found for product {ProductId}", productId);
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error checking reviews for product {ProductId}", productId);
+                return false; // Assume no reviews on error
             }
         }
     }

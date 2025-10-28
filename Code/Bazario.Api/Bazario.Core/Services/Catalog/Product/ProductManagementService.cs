@@ -8,7 +8,6 @@ using Bazario.Core.Domain.RepositoryContracts.Order;
 using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.DTO.Catalog.Product;
 using Bazario.Core.Extensions.Catalog;
-using Bazario.Core.Helpers.Catalog.Product;
 using Bazario.Core.Helpers.Authorization;
 using Bazario.Core.ServiceContracts.Catalog.Product;
 
@@ -22,18 +21,18 @@ namespace Bazario.Core.Services.Catalog.Product
     public class ProductManagementService : IProductManagementService
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IProductValidationHelper _validationHelper;
+        private readonly IProductValidationService _validationService;
         private readonly IAdminAuthorizationHelper _adminAuthHelper;
         private readonly ILogger<ProductManagementService> _logger;
 
         public ProductManagementService(
             IUnitOfWork unitOfWork,
-            IProductValidationHelper validationHelper,
+            IProductValidationService validationService,
             IAdminAuthorizationHelper adminAuthHelper,
             ILogger<ProductManagementService> logger)
         {
             _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
-            _validationHelper = validationHelper ?? throw new ArgumentNullException(nameof(validationHelper));
+            _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
             _adminAuthHelper = adminAuthHelper ?? throw new ArgumentNullException(nameof(adminAuthHelper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
@@ -214,7 +213,7 @@ namespace Bazario.Core.Services.Catalog.Product
                 await _adminAuthHelper.ValidateAdminPrivilegesAsync(deletedBy, cancellationToken);
 
                 // Check if product can be safely deleted
-                if (!await _validationHelper.CanProductBeSafelyDeletedAsync(productId, cancellationToken))
+                if (!await _validationService.CanProductBeSafelyDeletedAsync(productId, cancellationToken))
                 {
                     _logger.LogWarning("Product {ProductId} cannot be safely deleted - has active orders or dependencies", productId);
                     throw new InvalidOperationException("Product cannot be safely deleted due to active orders or dependencies");

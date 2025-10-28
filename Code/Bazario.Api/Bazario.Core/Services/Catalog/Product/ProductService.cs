@@ -129,5 +129,29 @@ namespace Bazario.Core.Services.Catalog.Product
             _logger.LogDebug("Delegating ValidateForOrderAsync to ProductValidationService");
             return await _validationService.ValidateForOrderAsync(productId, quantity, cancellationToken);
         }
+
+        public async Task<bool> CanProductBeSafelyDeletedAsync(Guid productId, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Delegating CanProductBeSafelyDeletedAsync to ProductValidationService");
+            return await _validationService.CanProductBeSafelyDeletedAsync(productId, cancellationToken);
+        }
+
+        public async Task<bool> HasProductActiveOrdersAsync(Guid productId, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Delegating HasProductActiveOrdersAsync to ProductValidationService");
+            return await _validationService.HasProductActiveOrdersAsync(productId, cancellationToken);
+        }
+
+        public async Task<bool> HasProductPendingReservationsAsync(Guid productId, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Delegating HasProductPendingReservationsAsync to ProductValidationService");
+            return await _validationService.HasProductPendingReservationsAsync(productId, cancellationToken);
+        }
+
+        public async Task<bool> HasProductReviewsAsync(Guid productId, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Delegating HasProductReviewsAsync to ProductValidationService");
+            return await _validationService.HasProductReviewsAsync(productId, cancellationToken);
+        }
     }
 }

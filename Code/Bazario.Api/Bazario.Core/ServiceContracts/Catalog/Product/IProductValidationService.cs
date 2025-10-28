@@ -19,5 +19,37 @@ namespace Bazario.Core.ServiceContracts.Catalog.Product
         /// <param name="cancellationToken">Cancellation token</param>
         /// <returns>Validation result</returns>
         Task<ProductOrderValidation> ValidateForOrderAsync(Guid productId, int quantity, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Checks if a product can be safely deleted
+        /// </summary>
+        /// <param name="productId">Product ID</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>True if product can be safely deleted, false otherwise</returns>
+        Task<bool> CanProductBeSafelyDeletedAsync(Guid productId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Checks if a product has any active orders
+        /// </summary>
+        /// <param name="productId">Product ID</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>True if product has active orders, false otherwise</returns>
+        Task<bool> HasProductActiveOrdersAsync(Guid productId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Checks if a product has any pending reservations
+        /// </summary>
+        /// <param name="productId">Product ID</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>True if product has pending reservations, false otherwise</returns>
+        Task<bool> HasProductPendingReservationsAsync(Guid productId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Checks if a product has any reviews
+        /// </summary>
+        /// <param name="productId">Product ID</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>True if product has reviews, false otherwise</returns>
+        Task<bool> HasProductReviewsAsync(Guid productId, CancellationToken cancellationToken = default);
     }
 }

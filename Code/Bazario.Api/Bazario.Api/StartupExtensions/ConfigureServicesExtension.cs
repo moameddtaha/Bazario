@@ -31,7 +31,6 @@ using Bazario.Core.Domain.RepositoryContracts.Location;
 using Bazario.Core.Domain.RepositoryContracts.UserManagement;
 using Bazario.Core.Helpers.Authentication;
 using Bazario.Core.Helpers.Authorization;
-using Bazario.Core.Helpers.Catalog.Product;
 using Bazario.Core.Helpers.Infrastructure;
 using Bazario.Core.Models.Infrastructure;
 using Bazario.Core.ServiceContracts.Authentication;
@@ -170,7 +169,7 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<IShippingZoneService, ShippingZoneService>();
             services.AddScoped<IOrderMetricsHelper, OrderMetricsHelper>();
             services.AddScoped<OrderCalculator>(); // Order calculation helper (KISS refactoring)
-            services.AddScoped<IProductValidationHelper, ProductValidationHelper>();
+            // IProductValidationHelper removed - functionality moved to IProductValidationService
             // IInventoryHelper removed - functionality moved to IInventoryAnalyticsService
             services.AddScoped<IStoreShippingConfigurationHelper, StoreShippingConfigurationHelper>();
             // IStoreQueryHelper removed - functionality moved to StoreQueryService as private methods
