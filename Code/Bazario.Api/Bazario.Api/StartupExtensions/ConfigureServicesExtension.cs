@@ -95,15 +95,39 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<ICityRepository, CityRepository>(); // Location-based shipping (city-governorate resolution)
             services.AddScoped<IStoreGovernorateSupportRepository, StoreGovernorateSupportRepository>(); // Store-governorate junction table
 
-            // Register Location Management Services
+            // ========================================
+            // LOCATION MANAGEMENT SERVICES
+            // ========================================
             services.AddScoped<ICountryManagementService, CountryManagementService>();
             services.AddScoped<IGovernorateManagementService, GovernorateManagementService>();
             services.AddScoped<ICityManagementService, CityManagementService>();
 
-            // Register Core Services
+            // ========================================
+            // AUTHENTICATION SERVICES
+            // ========================================
             services.AddScoped<IJwtService, JwtService>();
-            
-            // Register Store Services (SOLID principle separation)
+            services.AddScoped<IUserCreationService, UserCreationService>();
+            services.AddScoped<IRoleManagementService, RoleManagementService>();
+
+            // Service Aggregators (Dependency Bundling)
+            services.AddScoped<IUserAuthenticationDependencies, UserAuthenticationDependencies>();
+            services.AddScoped<IUserRegistrationDependencies, UserRegistrationDependencies>();
+
+            services.AddScoped<IUserRegistrationService, UserRegistrationService>();
+            services.AddScoped<IUserAuthenticationService, UserAuthenticationService>();
+            services.AddScoped<IUserManagementService, UserManagementService>();
+            services.AddScoped<IPasswordRecoveryService, PasswordRecoveryService>();
+            services.AddScoped<IRefreshTokenService, RefreshTokenService>();
+            services.AddScoped<IAuthService, AuthService>(); // Coordinating service
+
+            // ========================================
+            // AUTHORIZATION SERVICES
+            // ========================================
+            services.AddScoped<IAdminAuthorizationService, AdminAuthorizationService>();
+
+            // ========================================
+            // STORE SERVICES
+            // ========================================
             services.AddScoped<IStoreAuthorizationService, StoreAuthorizationService>();
             services.AddScoped<IStoreValidationService, StoreValidationService>();
             services.AddScoped<IStoreQueryService, StoreQueryService>();
@@ -111,24 +135,32 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<IStoreManagementService, StoreManagementService>();
             services.AddScoped<IStoreShippingConfigurationService, StoreShippingConfigurationService>();
             services.AddScoped<IStoreService, StoreService>(); // Composite interface
-            
-            // Register Product Services (SOLID principle separation)
+
+            // ========================================
+            // PRODUCT SERVICES
+            // ========================================
             services.AddScoped<IProductManagementService, ProductManagementService>();
             services.AddScoped<IProductQueryService, ProductQueryService>();
             services.AddScoped<IProductInventoryService, ProductInventoryService>();
             services.AddScoped<IProductAnalyticsService, ProductAnalyticsService>();
             services.AddScoped<IProductValidationService, ProductValidationService>();
             services.AddScoped<IProductService, ProductService>(); // Composite interface
-            
-            // Register Order Services (SOLID principle separation)
+
+            // ========================================
+            // ORDER SERVICES
+            // ========================================
             services.AddScoped<IOrderManagementService, OrderManagementService>();
             services.AddScoped<IOrderQueryService, OrderQueryService>();
             services.AddScoped<IOrderValidationService, OrderValidationService>();
             services.AddScoped<IOrderAnalyticsService, OrderAnalyticsService>();
             services.AddScoped<IOrderPaymentService, OrderPaymentService>();
+            services.AddScoped<IShippingZoneService, ShippingZoneService>();
+            services.AddScoped<IOrderCalculationService, OrderCalculationService>();
             services.AddScoped<IOrderService, OrderService>(); // Composite interface
-            
-            // Register Inventory Services (SOLID principle separation)
+
+            // ========================================
+            // INVENTORY SERVICES
+            // ========================================
             services.AddScoped<IInventoryManagementService, InventoryManagementService>();
             services.AddScoped<IInventoryQueryService, InventoryQueryService>();
             services.AddScoped<IInventoryValidationService, InventoryValidationService>();
@@ -136,16 +168,17 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<IInventoryAlertService, InventoryAlertService>();
             services.AddScoped<IInventoryService, InventoryService>(); // Composite interface
 
-            // Register Discount Services (SOLID principle separation)
+            // ========================================
+            // DISCOUNT SERVICES
+            // ========================================
             services.AddScoped<IDiscountManagementService, DiscountManagementService>();
             services.AddScoped<IDiscountValidationService, DiscountValidationService>();
             services.AddScoped<IDiscountAnalyticsService, DiscountAnalyticsService>();
             services.AddScoped<IDiscountService, DiscountService>(); // Composite interface
 
-            // Configure EmailSettings
-            services.Configure<EmailSettings>(configuration.GetSection("EmailSettings"));
-            
-            // Register Email Services with factory pattern
+            // ========================================
+            // INFRASTRUCTURE SERVICES
+            // ========================================
             services.AddScoped<IEmailTemplateService>(sp =>
             {
                 var logger = sp.GetRequiredService<ILogger<EmailTemplateService>>();
@@ -161,37 +194,17 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<IEmailService, EmailService>();
             services.AddScoped<IEmailSender, EmailSender>();
 
-            // Register Helper Classes (Business Logic Extraction)
+            // ========================================
+            // HELPER CLASSES (Pure Business Logic - No Database Access)
+            // ========================================
             services.AddScoped<ITokenHelper, TokenHelper>();
-            services.AddScoped<IUserCreationService, UserCreationService>();
-            services.AddScoped<IRoleManagementService, RoleManagementService>(); // Renamed from Helper to Service
-            services.AddScoped<IAdminAuthorizationService, AdminAuthorizationService>(); // Renamed from Helper to Service - admin authorization using role-based security
             services.AddScoped<IEmailHelper, EmailHelper>();
-            services.AddScoped<IShippingZoneService, ShippingZoneService>();
             services.AddScoped<IOrderMetricsHelper, OrderMetricsHelper>();
-            services.AddScoped<IOrderCalculationService, OrderCalculationService>(); // Renamed from OrderCalculator helper to service - accesses database via repositories
-            // IProductValidationHelper removed - functionality moved to IProductValidationService
-            // IInventoryHelper removed - functionality moved to IInventoryAnalyticsService
             services.AddScoped<IStoreShippingConfigurationHelper, StoreShippingConfigurationHelper>();
-            // IStoreQueryHelper removed - functionality moved to StoreQueryService as private methods
 
-            // Register Service Aggregators (Dependency Bundling)
-            services.AddScoped<IUserAuthenticationDependencies, UserAuthenticationDependencies>();
-            services.AddScoped<IUserRegistrationDependencies, UserRegistrationDependencies>();
-            
-            // Register Auth Services (Focused Services - Dependencies First)
-            services.AddScoped<IUserRegistrationService, UserRegistrationService>();
-            services.AddScoped<IUserAuthenticationService, UserAuthenticationService>();
-            services.AddScoped<IUserManagementService, UserManagementService>();
-            services.AddScoped<IPasswordRecoveryService, PasswordRecoveryService>();
-            services.AddScoped<IRefreshTokenService, RefreshTokenService>();
-            
-            // Register Coordinating Auth Service (Depends on Focused Services)
-            services.AddScoped<IAuthService, AuthService>();
-
-            // Memory Cache removed - using database for refresh token storage
-
-            // Add JWT Bearer Authentication (Single, clean configuration)
+            // ========================================
+            // JWT AUTHENTICATION CONFIGURATION
+            // ========================================
             services.AddAuthentication(options => {
                 options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
                 options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
