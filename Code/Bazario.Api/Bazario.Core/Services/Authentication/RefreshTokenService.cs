@@ -21,7 +21,7 @@ namespace Bazario.Core.Services.Authentication
         private readonly IUnitOfWork _unitOfWork;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IJwtService _jwtService;
-        private readonly IRoleManagementHelper _roleManagementHelper;
+        private readonly IRoleManagementService _roleManagementService;
         private readonly ILogger<RefreshTokenService> _logger;
         private readonly IConfiguration _configuration;
 
@@ -30,14 +30,14 @@ namespace Bazario.Core.Services.Authentication
             IUnitOfWork unitOfWork,
             UserManager<ApplicationUser> userManager,
             IJwtService jwtService,
-            IRoleManagementHelper roleManagementHelper,
+            IRoleManagementService roleManagementService,
             ILogger<RefreshTokenService> logger,
             IConfiguration configuration)
         {
             _unitOfWork = unitOfWork;
             _userManager = userManager;
             _jwtService = jwtService;
-            _roleManagementHelper = roleManagementHelper;
+            _roleManagementService = roleManagementService;
             _logger = logger;
             _configuration = configuration;
         }
@@ -125,7 +125,7 @@ namespace Bazario.Core.Services.Authentication
                 }
 
                 // Generate new tokens
-                var roles = await _roleManagementHelper.GetUserRolesAsync(user);
+                var roles = await _roleManagementService.GetUserRolesAsync(user);
                 var (newAccessToken, newRefreshToken, accessTokenExpiration, refreshTokenExpiration) = GenerateTokens(user, roles);
                 
                 // Store the new refresh token

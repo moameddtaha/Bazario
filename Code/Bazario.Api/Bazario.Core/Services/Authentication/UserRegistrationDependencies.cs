@@ -1,6 +1,6 @@
 using Bazario.Core.Helpers.Authentication;
-using Bazario.Core.Helpers.Infrastructure;
 using Bazario.Core.ServiceContracts.Authentication;
+using Bazario.Core.Helpers.Infrastructure;
 
 namespace Bazario.Core.Services.Authentication
 {
@@ -10,20 +10,19 @@ namespace Bazario.Core.Services.Authentication
     public class UserRegistrationDependencies : IUserRegistrationDependencies
     {
         public IUserCreationService UserCreationService { get; }
-        public IRoleManagementHelper RoleManagementHelper { get; }
+        public IRoleManagementService RoleManagementService { get; }
         public ITokenHelper TokenHelper { get; }
         public IEmailHelper EmailHelper { get; }
         public IRefreshTokenService RefreshTokenService { get; }
-
         public UserRegistrationDependencies(
             IUserCreationService userCreationService,
-            IRoleManagementHelper roleManagementHelper,
+            IRoleManagementService roleManagementService,
             ITokenHelper tokenHelper,
             IEmailHelper emailHelper,
             IRefreshTokenService refreshTokenService)
         {
             UserCreationService = userCreationService;
-            RoleManagementHelper = roleManagementHelper;
+            RoleManagementService = roleManagementService;
             TokenHelper = tokenHelper;
             EmailHelper = emailHelper;
             RefreshTokenService = refreshTokenService;

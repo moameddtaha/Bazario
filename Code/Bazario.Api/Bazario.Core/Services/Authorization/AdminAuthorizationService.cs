@@ -2,29 +2,32 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.IdentityEntities;
-using Bazario.Core.Helpers.Authentication;
+using Bazario.Core.ServiceContracts.Authentication;
+using Bazario.Core.ServiceContracts.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 
-namespace Bazario.Core.Helpers.Authorization
+namespace Bazario.Core.Services.Authorization
 {
     /// <summary>
-    /// Helper class for admin authorization operations using ASP.NET Core Identity roles
+    /// Service for admin authorization operations using ASP.NET Core Identity roles
+    /// Handles role-based authorization checks for administrative operations
+    /// Accesses database via UserManager for authentication purposes
     /// </summary>
-    public class AdminAuthorizationHelper : IAdminAuthorizationHelper
+    public class AdminAuthorizationService : IAdminAuthorizationService
     {
         private readonly UserManager<ApplicationUser> _userManager;
-        private readonly IRoleManagementHelper _roleManagementHelper;
-        private readonly ILogger<AdminAuthorizationHelper> _logger;
+        private readonly IRoleManagementService _roleManagementService;
+        private readonly ILogger<AdminAuthorizationService> _logger;
         private const string AdminRoleName = "Admin";
 
-        public AdminAuthorizationHelper(
+        public AdminAuthorizationService(
             UserManager<ApplicationUser> userManager,
-            IRoleManagementHelper roleManagementHelper,
-            ILogger<AdminAuthorizationHelper> logger)
+            IRoleManagementService roleManagementService,
+            ILogger<AdminAuthorizationService> logger)
         {
             _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
-            _roleManagementHelper = roleManagementHelper ?? throw new ArgumentNullException(nameof(roleManagementHelper));
+            _roleManagementService = roleManagementService ?? throw new ArgumentNullException(nameof(roleManagementService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -49,7 +52,7 @@ namespace Bazario.Core.Helpers.Authorization
                 }
 
                 // Check if user has Admin role
-                var isAdmin = await _roleManagementHelper.UserHasRoleAsync(user, AdminRoleName);
+                var isAdmin = await _roleManagementService.UserHasRoleAsync(user, AdminRoleName);
 
                 if (isAdmin)
                 {

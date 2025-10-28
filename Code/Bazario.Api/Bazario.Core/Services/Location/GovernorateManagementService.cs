@@ -8,7 +8,7 @@ using Bazario.Core.ServiceContracts.Location;
 using Microsoft.Extensions.Logging;
 using Bazario.Core.Domain.Entities.Location;
 using Bazario.Core.Domain.RepositoryContracts;
-using Bazario.Core.Helpers.Authorization;
+using Bazario.Core.ServiceContracts.Authorization;
 
 namespace Bazario.Core.Services.Location
 {
@@ -20,16 +20,16 @@ namespace Bazario.Core.Services.Location
     public class GovernorateManagementService : IGovernorateManagementService
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IAdminAuthorizationHelper _adminAuthHelper;
+        private readonly IAdminAuthorizationService _adminAuthService;
         private readonly ILogger<GovernorateManagementService> _logger;
 
         public GovernorateManagementService(
             IUnitOfWork unitOfWork,
-            IAdminAuthorizationHelper adminAuthHelper,
+            IAdminAuthorizationService adminAuthHelper,
             ILogger<GovernorateManagementService> logger)
         {
             _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
-            _adminAuthHelper = adminAuthHelper ?? throw new ArgumentNullException(nameof(adminAuthHelper));
+            _adminAuthService = adminAuthHelper ?? throw new ArgumentNullException(nameof(adminAuthHelper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -57,7 +57,7 @@ namespace Bazario.Core.Services.Location
             }
 
             // Validate admin privileges
-            await _adminAuthHelper.ValidateAdminPrivilegesAsync(userId, cancellationToken);
+            await _adminAuthService.ValidateAdminPrivilegesAsync(userId, cancellationToken);
 
             _logger.LogInformation("User {UserId} creating new governorate: {GovernorateName} for country {CountryId}", userId, request.Name, request.CountryId);
 
@@ -150,7 +150,7 @@ namespace Bazario.Core.Services.Location
             }
 
             // Validate admin privileges
-            await _adminAuthHelper.ValidateAdminPrivilegesAsync(userId, cancellationToken);
+            await _adminAuthService.ValidateAdminPrivilegesAsync(userId, cancellationToken);
 
             _logger.LogInformation("User {UserId} updating governorate: {GovernorateId}", userId, request.GovernorateId);
 
@@ -411,7 +411,7 @@ namespace Bazario.Core.Services.Location
             }
 
             // Validate admin privileges
-            await _adminAuthHelper.ValidateAdminPrivilegesAsync(userId, cancellationToken);
+            await _adminAuthService.ValidateAdminPrivilegesAsync(userId, cancellationToken);
 
             _logger.LogInformation("User {UserId} deactivating governorate: {GovernorateId}", userId, governorateId);
 

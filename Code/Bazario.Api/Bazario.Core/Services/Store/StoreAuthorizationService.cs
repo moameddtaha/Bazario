@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.IdentityEntities;
 using Bazario.Core.Domain.RepositoryContracts;
-using Bazario.Core.Helpers.Authentication;
+using Bazario.Core.ServiceContracts.Authentication;
 using Bazario.Core.ServiceContracts.Store;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
@@ -17,18 +17,18 @@ namespace Bazario.Core.Services.Store
     public class StoreAuthorizationService : IStoreAuthorizationService
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IRoleManagementHelper _roleManagementHelper;
+        private readonly IRoleManagementService _roleManagementService;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly ILogger<StoreAuthorizationService> _logger;
 
         public StoreAuthorizationService(
             IUnitOfWork unitOfWork,
-            IRoleManagementHelper roleManagementHelper,
+            IRoleManagementService roleManagementHelper,
             UserManager<ApplicationUser> userManager,
             ILogger<StoreAuthorizationService> logger)
         {
             _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
-            _roleManagementHelper = roleManagementHelper ?? throw new ArgumentNullException(nameof(roleManagementHelper));
+            _roleManagementService = roleManagementHelper ?? throw new ArgumentNullException(nameof(roleManagementHelper));
             _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
@@ -47,7 +47,7 @@ namespace Bazario.Core.Services.Store
                     return false;
                 }
 
-                var isAdmin = await _roleManagementHelper.UserHasRoleAsync(user, "Admin");
+                var isAdmin = await _roleManagementService.UserHasRoleAsync(user, "Admin");
                 _logger.LogDebug("Admin check for user {UserId}: {IsAdmin}", userId, isAdmin);
                 return isAdmin;
             }

@@ -1,17 +1,20 @@
 using Bazario.Core.Domain.IdentityEntities;
+using Bazario.Core.ServiceContracts.Authentication;
 using Microsoft.AspNetCore.Identity;
 
-namespace Bazario.Core.Helpers.Authentication
+namespace Bazario.Core.Services.Authentication
 {
     /// <summary>
-    /// Helper class for role management operations
+    /// Service for role management operations
+    /// Handles user role assignment and validation using ASP.NET Core Identity
+    /// Accesses database via RoleManager and UserManager for authentication purposes
     /// </summary>
-    public class RoleManagementHelper : IRoleManagementHelper
+    public class RoleManagementService : IRoleManagementService
     {
         private readonly RoleManager<ApplicationRole> _roleManager;
         private readonly UserManager<ApplicationUser> _userManager;
 
-        public RoleManagementHelper(
+        public RoleManagementService(
             RoleManager<ApplicationRole> roleManager,
             UserManager<ApplicationUser> userManager)
         {

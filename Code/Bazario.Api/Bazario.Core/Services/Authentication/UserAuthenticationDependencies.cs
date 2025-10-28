@@ -1,5 +1,5 @@
-using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Helpers.Authentication;
+using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.ServiceContracts.Authentication;
 
 namespace Bazario.Core.Services.Authentication
@@ -11,18 +11,17 @@ namespace Bazario.Core.Services.Authentication
     public class UserAuthenticationDependencies : IUserAuthenticationDependencies
     {
         public ITokenHelper TokenHelper { get; }
-        public IRoleManagementHelper RoleManagementHelper { get; }
+        public IRoleManagementService RoleManagementService { get; }
         public IUnitOfWork UnitOfWork { get; }
         public IRefreshTokenService RefreshTokenService { get; }
-
         public UserAuthenticationDependencies(
             ITokenHelper tokenHelper,
-            IRoleManagementHelper roleManagementHelper,
+            IRoleManagementService roleManagementService,
             IUnitOfWork unitOfWork,
             IRefreshTokenService refreshTokenService)
         {
             TokenHelper = tokenHelper;
-            RoleManagementHelper = roleManagementHelper;
+            RoleManagementService = roleManagementService;
             UnitOfWork = unitOfWork;
             RefreshTokenService = refreshTokenService;
         }

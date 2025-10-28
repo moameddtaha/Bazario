@@ -67,18 +67,18 @@ namespace Bazario.Core.Services.Authentication
 
                 // Ensure role exists and assign it
                 var roleName = request.Role.ToString();
-                if (!await _deps.RoleManagementHelper.EnsureRoleExistsAsync(roleName))
+                if (!await _deps.RoleManagementService.EnsureRoleExistsAsync(roleName))
                 {
                     throw new BusinessRuleException($"Failed to create role '{roleName}'.", "RoleCreationFailed");
                 }
 
-                if (!await _deps.RoleManagementHelper.AssignRoleToUserAsync(user, roleName))
+                if (!await _deps.RoleManagementService.AssignRoleToUserAsync(user, roleName))
                 {
                     throw new BusinessRuleException($"Failed to assign role '{roleName}' to user.", "RoleAssignmentFailed");
                 }
 
                 // Generate tokens
-                var roles = await _deps.RoleManagementHelper.GetUserRolesAsync(user);
+                var roles = await _deps.RoleManagementService.GetUserRolesAsync(user);
                 var (accessToken, refreshToken, accessTokenExpiration, refreshTokenExpiration) = _deps.TokenHelper.GenerateTokens(user, roles);
                 
                 // Store refresh token

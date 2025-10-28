@@ -72,7 +72,7 @@ namespace Bazario.Core.Services.Authentication
                 await UpdateUserLoginInfoAsync(user);
 
                 // Generate tokens
-                var roles = await _deps.RoleManagementHelper.GetUserRolesAsync(user);
+                var roles = await _deps.RoleManagementService.GetUserRolesAsync(user);
                 var (accessToken, refreshToken, accessTokenExpiration, refreshTokenExpiration) = _deps.TokenHelper.GenerateTokens(user, roles);
                 
                 // Store refresh token
@@ -120,7 +120,7 @@ namespace Bazario.Core.Services.Authentication
         private async Task UpdateUserLoginInfoAsync(ApplicationUser user)
         {
             user.LastLoginAt = DateTime.UtcNow;
-            var roles = await _deps.RoleManagementHelper.GetUserRolesAsync(user);
+            var roles = await _deps.RoleManagementService.GetUserRolesAsync(user);
 
             // Update role-specific user data
             if (roles.Contains("Customer"))

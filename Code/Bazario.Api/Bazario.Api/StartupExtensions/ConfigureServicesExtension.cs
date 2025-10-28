@@ -30,14 +30,15 @@ using Bazario.Core.Domain.RepositoryContracts.Review;
 using Bazario.Core.Domain.RepositoryContracts.Location;
 using Bazario.Core.Domain.RepositoryContracts.UserManagement;
 using Bazario.Core.Helpers.Authentication;
-using Bazario.Core.Helpers.Authorization;
 using Bazario.Core.Helpers.Infrastructure;
 using Bazario.Core.Models.Infrastructure;
 using Bazario.Core.ServiceContracts.Authentication;
+using Bazario.Core.ServiceContracts.Authorization;
 using Bazario.Core.ServiceContracts.Catalog.Product;
 using Bazario.Core.ServiceContracts.Catalog.Discount;
 using Bazario.Core.ServiceContracts.Infrastructure;
 using Bazario.Core.Services.Authentication;
+using Bazario.Core.Services.Authorization;
 using Bazario.Core.Services.Catalog.Product;
 using Bazario.Core.Services.Catalog.Discount;
 using Bazario.Core.Services.Infrastructure;
@@ -163,8 +164,8 @@ namespace Bazario.Api.StartupExtensions
             // Register Helper Classes (Business Logic Extraction)
             services.AddScoped<ITokenHelper, TokenHelper>();
             services.AddScoped<IUserCreationService, UserCreationService>();
-            services.AddScoped<IRoleManagementHelper, RoleManagementHelper>();
-            services.AddScoped<IAdminAuthorizationHelper, AdminAuthorizationHelper>(); // Admin authorization using role-based security
+            services.AddScoped<IRoleManagementService, RoleManagementService>(); // Renamed from Helper to Service
+            services.AddScoped<IAdminAuthorizationService, AdminAuthorizationService>(); // Renamed from Helper to Service - admin authorization using role-based security
             services.AddScoped<IEmailHelper, EmailHelper>();
             services.AddScoped<IShippingZoneService, ShippingZoneService>();
             services.AddScoped<IOrderMetricsHelper, OrderMetricsHelper>();

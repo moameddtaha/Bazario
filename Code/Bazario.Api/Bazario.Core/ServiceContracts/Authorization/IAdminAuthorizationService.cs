@@ -2,12 +2,14 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Bazario.Core.Helpers.Authorization
+namespace Bazario.Core.ServiceContracts.Authorization
 {
     /// <summary>
-    /// Helper interface for admin authorization operations
+    /// Service interface for admin authorization operations
+    /// Handles role-based authorization checks for administrative operations
+    /// Accesses database via UserManager for authentication purposes
     /// </summary>
-    public interface IAdminAuthorizationHelper
+    public interface IAdminAuthorizationService
     {
         /// <summary>
         /// Checks if a user has admin privileges

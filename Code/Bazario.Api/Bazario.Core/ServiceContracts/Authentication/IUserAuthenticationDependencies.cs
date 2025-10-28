@@ -1,5 +1,6 @@
-using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Helpers.Authentication;
+using Bazario.Core.Domain.RepositoryContracts;
+using Bazario.Core.ServiceContracts.Authentication;
 
 namespace Bazario.Core.ServiceContracts.Authentication
 {
@@ -13,20 +14,11 @@ namespace Bazario.Core.ServiceContracts.Authentication
         /// Helper for token generation and management
         /// </summary>
         ITokenHelper TokenHelper { get; }
-
-        /// <summary>
-        /// Helper for role management operations
-        /// </summary>
-        IRoleManagementHelper RoleManagementHelper { get; }
-
-        /// <summary>
+        /// Service for role management operations
+        IRoleManagementService RoleManagementService { get; }
         /// Unit of Work for coordinated repository access (Customers, Sellers, Admins, etc.)
-        /// </summary>
         IUnitOfWork UnitOfWork { get; }
-
-        /// <summary>
         /// Service for refresh token operations
-        /// </summary>
         IRefreshTokenService RefreshTokenService { get; }
     }
 }

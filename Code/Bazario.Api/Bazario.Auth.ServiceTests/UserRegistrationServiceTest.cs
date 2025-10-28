@@ -145,15 +145,15 @@ namespace Bazario.Auth.ServiceTests
                 .ReturnsAsync(user);
 
             _depsMock
-                .Setup(d => d.RoleManagementHelper.EnsureRoleExistsAsync("Customer"))
+                .Setup(d => d.RoleManagementService.EnsureRoleExistsAsync("Customer"))
                 .ReturnsAsync(true);
 
             _depsMock
-                .Setup(d => d.RoleManagementHelper.AssignRoleToUserAsync(user, "Customer"))
+                .Setup(d => d.RoleManagementService.AssignRoleToUserAsync(user, "Customer"))
                 .ReturnsAsync(true);
 
             _depsMock
-                .Setup(d => d.RoleManagementHelper.GetUserRolesAsync(user))
+                .Setup(d => d.RoleManagementService.GetUserRolesAsync(user))
                 .ReturnsAsync(roles);
 
             _depsMock
@@ -210,15 +210,15 @@ namespace Bazario.Auth.ServiceTests
                 .ReturnsAsync(user);
 
             _depsMock
-                .Setup(d => d.RoleManagementHelper.EnsureRoleExistsAsync("Seller"))
+                .Setup(d => d.RoleManagementService.EnsureRoleExistsAsync("Seller"))
                 .ReturnsAsync(true);
 
             _depsMock
-                .Setup(d => d.RoleManagementHelper.AssignRoleToUserAsync(user, "Seller"))
+                .Setup(d => d.RoleManagementService.AssignRoleToUserAsync(user, "Seller"))
                 .ReturnsAsync(true);
 
             _depsMock
-                .Setup(d => d.RoleManagementHelper.GetUserRolesAsync(user))
+                .Setup(d => d.RoleManagementService.GetUserRolesAsync(user))
                 .ReturnsAsync(roles);
 
             _depsMock
@@ -327,7 +327,7 @@ namespace Bazario.Auth.ServiceTests
                 .ReturnsAsync(user);
 
             _depsMock
-                .Setup(d => d.RoleManagementHelper.EnsureRoleExistsAsync("Customer"))
+                .Setup(d => d.RoleManagementService.EnsureRoleExistsAsync("Customer"))
                 .ReturnsAsync(false);
 
             var userRegistrationService = CreateUserRegistrationService();
@@ -357,11 +357,11 @@ namespace Bazario.Auth.ServiceTests
                 .ReturnsAsync(user);
 
             _depsMock
-                .Setup(d => d.RoleManagementHelper.EnsureRoleExistsAsync("Customer"))
+                .Setup(d => d.RoleManagementService.EnsureRoleExistsAsync("Customer"))
                 .ReturnsAsync(true);
 
             _depsMock
-                .Setup(d => d.RoleManagementHelper.AssignRoleToUserAsync(user, "Customer"))
+                .Setup(d => d.RoleManagementService.AssignRoleToUserAsync(user, "Customer"))
                 .ReturnsAsync(false);
 
             var userRegistrationService = CreateUserRegistrationService();
@@ -392,15 +392,15 @@ namespace Bazario.Auth.ServiceTests
                 .ReturnsAsync(user);
 
             _depsMock
-                .Setup(d => d.RoleManagementHelper.EnsureRoleExistsAsync("Customer"))
+                .Setup(d => d.RoleManagementService.EnsureRoleExistsAsync("Customer"))
                 .ReturnsAsync(true);
 
             _depsMock
-                .Setup(d => d.RoleManagementHelper.AssignRoleToUserAsync(user, "Customer"))
+                .Setup(d => d.RoleManagementService.AssignRoleToUserAsync(user, "Customer"))
                 .ReturnsAsync(true);
 
             _depsMock
-                .Setup(d => d.RoleManagementHelper.GetUserRolesAsync(user))
+                .Setup(d => d.RoleManagementService.GetUserRolesAsync(user))
                 .ReturnsAsync(roles);
 
             _depsMock
@@ -436,15 +436,15 @@ namespace Bazario.Auth.ServiceTests
                 .ReturnsAsync(user);
 
             _depsMock
-                .Setup(d => d.RoleManagementHelper.EnsureRoleExistsAsync("Customer"))
+                .Setup(d => d.RoleManagementService.EnsureRoleExistsAsync("Customer"))
                 .ReturnsAsync(true);
 
             _depsMock
-                .Setup(d => d.RoleManagementHelper.AssignRoleToUserAsync(user, "Customer"))
+                .Setup(d => d.RoleManagementService.AssignRoleToUserAsync(user, "Customer"))
                 .ReturnsAsync(true);
 
             _depsMock
-                .Setup(d => d.RoleManagementHelper.GetUserRolesAsync(user))
+                .Setup(d => d.RoleManagementService.GetUserRolesAsync(user))
                 .ReturnsAsync(roles);
 
             _depsMock
@@ -484,15 +484,15 @@ namespace Bazario.Auth.ServiceTests
                 .ReturnsAsync(user);
 
             _depsMock
-                .Setup(d => d.RoleManagementHelper.EnsureRoleExistsAsync("Customer"))
+                .Setup(d => d.RoleManagementService.EnsureRoleExistsAsync("Customer"))
                 .ReturnsAsync(true);
 
             _depsMock
-                .Setup(d => d.RoleManagementHelper.AssignRoleToUserAsync(user, "Customer"))
+                .Setup(d => d.RoleManagementService.AssignRoleToUserAsync(user, "Customer"))
                 .ReturnsAsync(true);
 
             _depsMock
-                .Setup(d => d.RoleManagementHelper.GetUserRolesAsync(user))
+                .Setup(d => d.RoleManagementService.GetUserRolesAsync(user))
                 .ReturnsAsync(roles);
 
             _depsMock

@@ -8,7 +8,7 @@ using Bazario.Core.Domain.RepositoryContracts.Order;
 using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.DTO.Catalog.Product;
 using Bazario.Core.Extensions.Catalog;
-using Bazario.Core.Helpers.Authorization;
+using Bazario.Core.ServiceContracts.Authorization;
 using Bazario.Core.ServiceContracts.Catalog.Product;
 
 namespace Bazario.Core.Services.Catalog.Product
@@ -22,18 +22,18 @@ namespace Bazario.Core.Services.Catalog.Product
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IProductValidationService _validationService;
-        private readonly IAdminAuthorizationHelper _adminAuthHelper;
+        private readonly IAdminAuthorizationService _adminAuthService;
         private readonly ILogger<ProductManagementService> _logger;
 
         public ProductManagementService(
             IUnitOfWork unitOfWork,
             IProductValidationService validationService,
-            IAdminAuthorizationHelper adminAuthHelper,
+            IAdminAuthorizationService adminAuthHelper,
             ILogger<ProductManagementService> logger)
         {
             _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
-            _adminAuthHelper = adminAuthHelper ?? throw new ArgumentNullException(nameof(adminAuthHelper));
+            _adminAuthService = adminAuthHelper ?? throw new ArgumentNullException(nameof(adminAuthHelper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -210,7 +210,7 @@ namespace Bazario.Core.Services.Catalog.Product
                 }
 
                 // Validate admin privileges
-                await _adminAuthHelper.ValidateAdminPrivilegesAsync(deletedBy, cancellationToken);
+                await _adminAuthService.ValidateAdminPrivilegesAsync(deletedBy, cancellationToken);
 
                 // Check if product can be safely deleted
                 if (!await _validationService.CanProductBeSafelyDeletedAsync(productId, cancellationToken))

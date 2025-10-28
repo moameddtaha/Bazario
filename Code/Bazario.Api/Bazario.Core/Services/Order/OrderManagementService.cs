@@ -6,7 +6,7 @@ using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.DTO.Order;
 using Bazario.Core.Enums.Order;
 using Bazario.Core.Extensions.Order;
-using Bazario.Core.Helpers.Authorization;
+using Bazario.Core.ServiceContracts.Authorization;
 using Bazario.Core.ServiceContracts.Order;
 using Microsoft.Extensions.Logging;
 
@@ -21,18 +21,18 @@ namespace Bazario.Core.Services.Order
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IOrderValidationService _validationService;
-        private readonly IAdminAuthorizationHelper _adminAuthHelper;
+        private readonly IAdminAuthorizationService _adminAuthService;
         private readonly ILogger<OrderManagementService> _logger;
 
         public OrderManagementService(
             IUnitOfWork unitOfWork,
             IOrderValidationService validationService,
-            IAdminAuthorizationHelper adminAuthHelper,
+            IAdminAuthorizationService adminAuthHelper,
             ILogger<OrderManagementService> logger)
         {
             _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
-            _adminAuthHelper = adminAuthHelper ?? throw new ArgumentNullException(nameof(adminAuthHelper));
+            _adminAuthService = adminAuthHelper ?? throw new ArgumentNullException(nameof(adminAuthHelper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -346,7 +346,7 @@ namespace Bazario.Core.Services.Order
                 }
 
                 // Validate admin privileges
-                await _adminAuthHelper.ValidateAdminPrivilegesAsync(deletedBy, cancellationToken);
+                await _adminAuthService.ValidateAdminPrivilegesAsync(deletedBy, cancellationToken);
 
                 // Check if order exists before deletion
                 var existingOrder = await _unitOfWork.Orders.GetOrderByIdAsync(orderId, cancellationToken);

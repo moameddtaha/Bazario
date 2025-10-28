@@ -17,16 +17,16 @@ namespace Bazario.Core.Services.Auth
     public class UserManagementService : IUserManagementService
     {
         private readonly UserManager<ApplicationUser> _userManager;
-        private readonly IRoleManagementHelper _roleManagementHelper;
+        private readonly IRoleManagementService _roleManagementService;
         private readonly ILogger<UserManagementService> _logger;
 
         public UserManagementService(
             UserManager<ApplicationUser> userManager,
-            IRoleManagementHelper roleManagementHelper,
+            IRoleManagementService roleManagementService,
             ILogger<UserManagementService> logger)
         {
             _userManager = userManager;
-            _roleManagementHelper = roleManagementHelper;
+            _roleManagementService = roleManagementService;
             _logger = logger;
         }
 
@@ -40,7 +40,7 @@ namespace Bazario.Core.Services.Auth
                     return UserResult.NotFound($"User with ID {userId} not found");
                 }
 
-                var roles = await _roleManagementHelper.GetUserRolesAsync(user);
+                var roles = await _roleManagementService.GetUserRolesAsync(user);
                 var userResponse = CreateUserResponse(user, roles.ToList());
                 
                 return UserResult.Success(userResponse);
