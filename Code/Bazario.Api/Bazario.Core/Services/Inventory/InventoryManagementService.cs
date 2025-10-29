@@ -170,6 +170,11 @@ namespace Bazario.Core.Services.Inventory
                 _logger.LogDebug("Reserving stock for {ItemCount} items, Customer: {CustomerId}",
                     reservationRequest.Items.Count, reservationRequest.CustomerId);
 
+                // Bulk retrieve all products to avoid N+1 query problem
+                // Instead of 100 individual queries, this makes 1 query with WHERE IN clause
+                var productIds = reservationRequest.Items.Select(i => i.ProductId).ToList();
+                var productsDict = await GetProductsByIdsAsync(productIds, cancellationToken);
+
                 var result = new StockReservationResult
                 {
                     ReservationId = Guid.NewGuid(),
@@ -179,7 +184,9 @@ namespace Bazario.Core.Services.Inventory
 
                 foreach (var item in reservationRequest.Items)
                 {
-                    var product = await _unitOfWork.Products.GetProductByIdAsync(item.ProductId, cancellationToken);
+                    // O(1) dictionary lookup instead of database query
+                    productsDict.TryGetValue(item.ProductId, out var product);
+
                     if (product == null || product.StockQuantity < item.Quantity)
                     {
                         result.IsSuccessful = false;
@@ -337,6 +344,11 @@ namespace Bazario.Core.Services.Inventory
 
                 _logger.LogDebug("Processing bulk stock update for {ItemCount} items", bulkUpdateRequest.Items.Count);
 
+                // Bulk retrieve all products to avoid N+1 query problem
+                // Instead of N individual queries (one per UpdateStockAsync call), this makes 1 query
+                var productIds = bulkUpdateRequest.Items.Select(i => i.ProductId).ToList();
+                var productsDict = await GetProductsByIdsAsync(productIds, cancellationToken);
+
                 var result = new BulkInventoryUpdateResult
                 {
                     TotalItems = bulkUpdateRequest.Items.Count
@@ -346,27 +358,35 @@ namespace Bazario.Core.Services.Inventory
                 {
                     try
                     {
-                        var updateResult = await UpdateStockAsync(
-                            item.ProductId,
-                            item.NewQuantity,
-                            StockUpdateType.Adjustment,
-                            bulkUpdateRequest.Reason ?? "Bulk update",
-                            bulkUpdateRequest.UpdatedBy,
-                            cancellationToken);
-
-                        if (updateResult.IsSuccessful)
-                        {
-                            result.SuccessfulUpdates++;
-                        }
-                        else
+                        // O(1) dictionary lookup instead of database query
+                        if (!productsDict.TryGetValue(item.ProductId, out var product))
                         {
                             result.FailedUpdates++;
                             result.Errors.Add(new BulkUpdateError
                             {
                                 ProductId = item.ProductId,
-                                ErrorMessage = updateResult.ErrorMessage ?? "Unknown error"
+                                ErrorMessage = "Product not found"
                             });
+                            continue;
                         }
+
+                        // Validate quantity range
+                        if (item.NewQuantity < MIN_STOCK_QUANTITY || item.NewQuantity > MAX_STOCK_QUANTITY)
+                        {
+                            result.FailedUpdates++;
+                            result.Errors.Add(new BulkUpdateError
+                            {
+                                ProductId = item.ProductId,
+                                ErrorMessage = $"Stock quantity must be between {MIN_STOCK_QUANTITY} and {MAX_STOCK_QUANTITY}"
+                            });
+                            continue;
+                        }
+
+                        // Update stock (Adjustment type - sets to exact value)
+                        product.StockQuantity = item.NewQuantity;
+                        await _unitOfWork.Products.UpdateProductAsync(product, cancellationToken);
+
+                        result.SuccessfulUpdates++;
                     }
                     catch (Exception ex)
                     {
@@ -378,6 +398,12 @@ namespace Bazario.Core.Services.Inventory
                             ErrorMessage = ex.Message
                         });
                     }
+                }
+
+                // Save all changes in one transaction
+                if (result.SuccessfulUpdates > 0)
+                {
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
                 }
 
                 _logger.LogInformation("Bulk stock update completed. Success: {SuccessCount}, Failed: {FailedCount}",
@@ -480,6 +506,34 @@ namespace Bazario.Core.Services.Inventory
                 _logger.LogError(ex, "Unexpected error while cleaning up expired reservations");
                 throw new InvalidOperationException($"Unexpected error while cleaning up expired reservations: {ex.Message}", ex);
             }
+        }
+
+        /// <summary>
+        /// Bulk retrieves products by their IDs to avoid N+1 query problem
+        /// </summary>
+        /// <param name="productIds">Collection of product IDs to retrieve</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>Dictionary mapping product IDs to product entities for O(1) lookup</returns>
+        private async Task<Dictionary<Guid, Domain.Entities.Catalog.Product>> GetProductsByIdsAsync(
+            IEnumerable<Guid> productIds,
+            CancellationToken cancellationToken)
+        {
+            var uniqueIds = productIds.Distinct().ToList();
+
+            if (uniqueIds.Count == 0)
+            {
+                return new Dictionary<Guid, Domain.Entities.Catalog.Product>();
+            }
+
+            // Use GetFilteredProductsAsync with Contains predicate for true bulk retrieval
+            // This generates a single SQL query: WHERE ProductId IN (id1, id2, id3, ...)
+            // instead of N separate queries (one per product)
+            var productsList = await _unitOfWork.Products.GetFilteredProductsAsync(
+                p => uniqueIds.Contains(p.ProductId),
+                cancellationToken);
+
+            // Convert to dictionary for O(1) lookup in calling methods
+            return productsList.ToDictionary(p => p.ProductId);
         }
     }
 }
