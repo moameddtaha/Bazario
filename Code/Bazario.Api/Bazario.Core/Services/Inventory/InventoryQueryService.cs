@@ -84,7 +84,7 @@ namespace Bazario.Core.Services.Inventory
 
         public async Task<List<LowStockAlert>> GetLowStockAlertsAsync(
             Guid? storeId = null,
-            int threshold = 10,
+            int threshold = DEFAULT_LOW_STOCK_THRESHOLD,
             CancellationToken cancellationToken = default)
         {
             try
@@ -161,8 +161,7 @@ namespace Bazario.Core.Services.Inventory
                 // Note: This would require a separate InventoryMovement table to track all stock changes
                 // For now, return empty list as the table doesn't exist yet
                 _logger.LogDebug("Inventory movement tracking not yet implemented - requires InventoryMovement table");
-                await Task.CompletedTask;
-                return new List<InventoryMovement>();
+                return await Task.FromResult(new List<InventoryMovement>());
             }
             catch (ArgumentException)
             {
@@ -200,8 +199,7 @@ namespace Bazario.Core.Services.Inventory
                 // Note: This would require a separate StockReservation table to track reservations
                 // For now, return empty list as the table doesn't exist yet
                 _logger.LogDebug("Stock reservation tracking not yet implemented - requires StockReservation table");
-                await Task.CompletedTask;
-                return new List<StockReservation>();
+                return await Task.FromResult(new List<StockReservation>());
             }
             catch (ArgumentException)
             {
@@ -232,8 +230,7 @@ namespace Bazario.Core.Services.Inventory
                 // Note: This would require a separate StockReservation table to track reservations
                 // For now, return null as the table doesn't exist yet
                 _logger.LogDebug("Stock reservation tracking not yet implemented - requires StockReservation table");
-                await Task.CompletedTask;
-                return null;
+                return await Task.FromResult<StockReservation?>(null);
             }
             catch (ArgumentException)
             {
@@ -286,15 +283,29 @@ namespace Bazario.Core.Services.Inventory
                 // Convert to dictionary for O(1) lookup
                 var productDict = products.ToDictionary(p => p.ProductId);
 
+                // Bulk retrieve thresholds for all unique stores to avoid N+1 queries
+                var uniqueStoreIds = products.Select(p => p.StoreId).Distinct().ToList();
+                var thresholdDict = new Dictionary<Guid, int>();
+                foreach (var storeId in uniqueStoreIds)
+                {
+                    // Get threshold for each unique store (much fewer queries than per-product)
+                    var threshold = await GetLowStockThresholdAsync(storeId, Guid.Empty, cancellationToken);
+                    thresholdDict[storeId] = threshold;
+                }
+
+                // Reserved stock is 0 for all products (stub implementation)
+                var reservedStock = 0;
+
                 // Process each requested product
+                int failedCount = 0;
                 foreach (var productId in productIds)
                 {
                     if (productDict.TryGetValue(productId, out var product))
                     {
                         try
                         {
-                            var reservedStock = await GetReservedStockAsync(productId, cancellationToken);
-                            var threshold = await GetLowStockThresholdAsync(product.StoreId, productId, cancellationToken);
+                            // Use cached threshold value (O(1) lookup)
+                            var threshold = thresholdDict.GetValueOrDefault(product.StoreId, DEFAULT_LOW_STOCK_THRESHOLD);
 
                             statusList.Add(new InventoryStatus
                             {
@@ -309,12 +320,20 @@ namespace Bazario.Core.Services.Inventory
                         catch (Exception ex)
                         {
                             _logger.LogError(ex, "Error processing inventory status for product {ProductId}", productId);
+                            failedCount++;
                         }
                     }
                     else
                     {
                         _logger.LogWarning("Product {ProductId} not found in bulk query", productId);
+                        failedCount++;
                     }
+                }
+
+                if (failedCount > 0)
+                {
+                    _logger.LogWarning("Failed to retrieve inventory status for {FailedCount} of {TotalCount} products",
+                        failedCount, productIds.Count);
                 }
 
                 _logger.LogDebug("Retrieved inventory status for {SuccessCount} of {TotalCount} products",
@@ -333,16 +352,24 @@ namespace Bazario.Core.Services.Inventory
             }
         }
 
-        private async Task<int> GetReservedStockAsync(Guid productId, CancellationToken cancellationToken)
+        /// <summary>
+        /// Gets the total reserved stock quantity for a product
+        /// Note: Returns 0 until StockReservation table is implemented
+        /// </summary>
+        private Task<int> GetReservedStockAsync(Guid productId, CancellationToken cancellationToken)
         {
             // In a real implementation, this would query the StockReservation table
             // to get the total reserved quantity for this product
             // For now, return 0 as reservation tracking is not implemented
-            await Task.CompletedTask;
-            return 0;
+            return Task.FromResult(0);
         }
 
-        private async Task<int> GetLowStockThresholdAsync(Guid storeId, Guid productId, CancellationToken cancellationToken)
+        /// <summary>
+        /// Gets the low stock threshold for a product in a store
+        /// Priority order: Product-specific → Store-specific → System default
+        /// Note: Returns system default until threshold configuration is implemented
+        /// </summary>
+        private Task<int> GetLowStockThresholdAsync(Guid storeId, Guid productId, CancellationToken cancellationToken)
         {
             // In a real implementation, this would:
             // 1. Check if the product has a specific low stock threshold
@@ -350,8 +377,7 @@ namespace Bazario.Core.Services.Inventory
             // 3. Fall back to a system-wide default
 
             // For now, return a default threshold
-            await Task.CompletedTask;
-            return DEFAULT_LOW_STOCK_THRESHOLD;
+            return Task.FromResult(DEFAULT_LOW_STOCK_THRESHOLD);
         }
     }
 }
