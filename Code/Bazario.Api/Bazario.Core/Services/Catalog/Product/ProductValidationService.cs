@@ -2,9 +2,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Bazario.Core.Domain.RepositoryContracts.Catalog;
-using Bazario.Core.Domain.RepositoryContracts.Order;
-using Bazario.Core.Domain.RepositoryContracts.Store;
+using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Models.Catalog.Product;
 using Bazario.Core.ServiceContracts.Catalog.Product;
 using Microsoft.Extensions.Logging;
@@ -17,20 +15,14 @@ namespace Bazario.Core.Services.Catalog.Product
     /// </summary>
     public class ProductValidationService : IProductValidationService
     {
-        private readonly IProductRepository _productRepository;
-        private readonly IStoreRepository _storeRepository;
-        private readonly IOrderRepository _orderRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<ProductValidationService> _logger;
 
         public ProductValidationService(
-            IProductRepository productRepository,
-            IStoreRepository storeRepository,
-            IOrderRepository orderRepository,
+            IUnitOfWork unitOfWork,
             ILogger<ProductValidationService> logger)
         {
-            _productRepository = productRepository ?? throw new ArgumentNullException(nameof(productRepository));
-            _storeRepository = storeRepository ?? throw new ArgumentNullException(nameof(storeRepository));
-            _orderRepository = orderRepository ?? throw new ArgumentNullException(nameof(orderRepository));
+            _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -52,7 +44,7 @@ namespace Bazario.Core.Services.Catalog.Product
                 }
 
                 // Get product details
-                var product = await _productRepository.GetProductByIdAsync(productId, cancellationToken);
+                var product = await _unitOfWork.Products.GetProductByIdAsync(productId, cancellationToken);
                 if (product == null)
                 {
                     _logger.LogDebug("Product validation failed: Product not found. ProductId: {ProductId}", productId);
@@ -68,7 +60,7 @@ namespace Bazario.Core.Services.Catalog.Product
                 }
 
                 // Get store details
-                var store = await _storeRepository.GetStoreByIdAsync(product.StoreId, cancellationToken);
+                var store = await _unitOfWork.Stores.GetStoreByIdAsync(product.StoreId, cancellationToken);
                 if (store == null)
                 {
                     _logger.LogDebug("Product validation failed: Store not found. ProductId: {ProductId}, StoreId: {StoreId}", 
@@ -175,7 +167,7 @@ namespace Bazario.Core.Services.Catalog.Product
             try
             {
                 // Check if product has any orders in pending, processing, or shipped status
-                var orders = await _orderRepository.GetAllOrdersAsync(cancellationToken);
+                var orders = await _unitOfWork.Orders.GetAllOrdersAsync(cancellationToken);
                 var activeOrders = orders.Where(o =>
                     o.Status == "Pending" ||
                     o.Status == "Processing" ||
@@ -210,7 +202,7 @@ namespace Bazario.Core.Services.Catalog.Product
                 _logger.LogDebug("Checking pending reservations for product {ProductId}", productId);
 
                 // Check if there are any recent orders that might indicate reservations
-                var recentOrders = await _orderRepository.GetAllOrdersAsync(cancellationToken);
+                var recentOrders = await _unitOfWork.Orders.GetAllOrdersAsync(cancellationToken);
                 var recentProductOrders = recentOrders
                     .Where(o => o.Date > DateTime.UtcNow.AddDays(-7)) // Last 7 days
                     .Where(o => o.OrderItems != null && o.OrderItems.Any(oi => oi.ProductId == productId))
@@ -242,7 +234,7 @@ namespace Bazario.Core.Services.Catalog.Product
                 _logger.LogDebug("Checking reviews for product {ProductId}", productId);
 
                 // Check if there are any orders that might have generated reviews
-                var allOrders = await _orderRepository.GetAllOrdersAsync(cancellationToken);
+                var allOrders = await _unitOfWork.Orders.GetAllOrdersAsync(cancellationToken);
                 var productOrders = allOrders
                     .Where(o => o.OrderItems != null && o.OrderItems.Any(oi => oi.ProductId == productId))
                     .Where(o => o.Status == "Delivered") // Only delivered orders can have reviews
