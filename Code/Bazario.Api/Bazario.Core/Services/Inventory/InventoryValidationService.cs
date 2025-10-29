@@ -444,25 +444,27 @@ namespace Bazario.Core.Services.Inventory
         #region Private Helper Methods
 
         /// <summary>
-        /// Retrieves multiple products by their IDs in a single query
+        /// Retrieves multiple products by their IDs in a single database query
         /// </summary>
         private async Task<Dictionary<Guid, Domain.Entities.Catalog.Product>> GetProductsByIdsAsync(
             IEnumerable<Guid> productIds,
             CancellationToken cancellationToken)
         {
             var uniqueIds = productIds.Distinct().ToList();
-            var products = new Dictionary<Guid, Domain.Entities.Catalog.Product>();
 
-            foreach (var productId in uniqueIds)
+            if (uniqueIds.Count == 0)
             {
-                var product = await _unitOfWork.Products.GetProductByIdAsync(productId, cancellationToken);
-                if (product != null)
-                {
-                    products[productId] = product;
-                }
+                return new Dictionary<Guid, Domain.Entities.Catalog.Product>();
             }
 
-            return products;
+            // Use GetFilteredProductsAsync with Contains predicate for true bulk retrieval
+            // This generates a single SQL query: WHERE ProductId IN (id1, id2, id3, ...)
+            var productsList = await _unitOfWork.Products.GetFilteredProductsAsync(
+                p => uniqueIds.Contains(p.ProductId),
+                cancellationToken);
+
+            // Convert to dictionary for O(1) lookup
+            return productsList.ToDictionary(p => p.ProductId);
         }
 
         /// <summary>
