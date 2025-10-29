@@ -8,8 +8,6 @@ using Bazario.Core.Models.Inventory;
 using Bazario.Core.ServiceContracts.Inventory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
-using Bazario.Core.Domain.RepositoryContracts.Catalog;
-using Bazario.Core.Domain.RepositoryContracts.Store;
 using Bazario.Core.Domain.RepositoryContracts;
 
 namespace Bazario.Core.Services.Inventory
@@ -68,20 +66,30 @@ namespace Bazario.Core.Services.Inventory
 
                 var results = new List<StockValidationResult>();
 
-                foreach (var item in stockCheckRequest)
+                // Validate all items first
+                for (int i = 0; i < stockCheckRequest.Count; i++)
                 {
-                    // Validate item
+                    var item = stockCheckRequest[i];
+
                     if (item.ProductId == Guid.Empty)
                     {
-                        throw new ArgumentException($"Product ID cannot be empty at index {stockCheckRequest.IndexOf(item)}", nameof(stockCheckRequest));
+                        throw new ArgumentException($"Product ID cannot be empty at index {i}", nameof(stockCheckRequest));
                     }
 
                     if (item.RequestedQuantity <= 0)
                     {
-                        throw new ArgumentException($"Requested quantity must be greater than 0 at index {stockCheckRequest.IndexOf(item)}", nameof(stockCheckRequest));
+                        throw new ArgumentException($"Requested quantity must be greater than 0 at index {i}", nameof(stockCheckRequest));
                     }
+                }
 
-                    var product = await _unitOfWork.Products.GetProductByIdAsync(item.ProductId, cancellationToken);
+                // Bulk retrieve all products
+                var productIds = stockCheckRequest.Select(item => item.ProductId).ToList();
+                var products = await GetProductsByIdsAsync(productIds, cancellationToken);
+
+                // Process results
+                foreach (var item in stockCheckRequest)
+                {
+                    products.TryGetValue(item.ProductId, out var product);
 
                     var result = new StockValidationResult
                     {
@@ -194,6 +202,7 @@ namespace Bazario.Core.Services.Inventory
 
                 _logger.LogDebug("Validating reservation request for {Count} items", reservationRequest.Items.Count);
 
+                // Validate all items first
                 foreach (var item in reservationRequest.Items)
                 {
                     if (item.ProductId == Guid.Empty)
@@ -205,8 +214,17 @@ namespace Bazario.Core.Services.Inventory
                     {
                         throw new ArgumentException("Quantity must be greater than 0 in reservation items", nameof(reservationRequest));
                     }
+                }
 
-                    var product = await _unitOfWork.Products.GetProductByIdAsync(item.ProductId, cancellationToken);
+                // Bulk retrieve all products
+                var productIds = reservationRequest.Items.Select(item => item.ProductId).ToList();
+                var products = await GetProductsByIdsAsync(productIds, cancellationToken);
+
+                // Check availability for all items
+                foreach (var item in reservationRequest.Items)
+                {
+                    products.TryGetValue(item.ProductId, out var product);
+
                     if (!IsProductAvailableForQuantity(product, item.Quantity))
                     {
                         _logger.LogWarning("Reservation validation failed for product {ProductId}", item.ProductId);
@@ -296,6 +314,7 @@ namespace Bazario.Core.Services.Inventory
 
                 var errors = new List<BulkUpdateError>();
 
+                // First pass: validate simple constraints
                 foreach (var item in bulkUpdateRequest.Items)
                 {
                     if (item.ProductId == Guid.Empty)
@@ -315,11 +334,25 @@ namespace Bazario.Core.Services.Inventory
                             ProductId = item.ProductId,
                             ErrorMessage = "Quantity cannot be negative"
                         });
-                        continue;
+                    }
+                }
+
+                // Second pass: bulk retrieve products and validate existence
+                var validProductIds = bulkUpdateRequest.Items
+                    .Where(item => item.ProductId != Guid.Empty)
+                    .Select(item => item.ProductId)
+                    .ToList();
+
+                var products = await GetProductsByIdsAsync(validProductIds, cancellationToken);
+
+                foreach (var item in bulkUpdateRequest.Items)
+                {
+                    if (item.ProductId == Guid.Empty)
+                    {
+                        continue; // Already added error above
                     }
 
-                    var product = await _unitOfWork.Products.GetProductByIdAsync(item.ProductId, cancellationToken);
-                    if (product == null)
+                    if (!products.ContainsKey(item.ProductId))
                     {
                         errors.Add(new BulkUpdateError
                         {
@@ -411,6 +444,28 @@ namespace Bazario.Core.Services.Inventory
         #region Private Helper Methods
 
         /// <summary>
+        /// Retrieves multiple products by their IDs in a single query
+        /// </summary>
+        private async Task<Dictionary<Guid, Domain.Entities.Catalog.Product>> GetProductsByIdsAsync(
+            IEnumerable<Guid> productIds,
+            CancellationToken cancellationToken)
+        {
+            var uniqueIds = productIds.Distinct().ToList();
+            var products = new Dictionary<Guid, Domain.Entities.Catalog.Product>();
+
+            foreach (var productId in uniqueIds)
+            {
+                var product = await _unitOfWork.Products.GetProductByIdAsync(productId, cancellationToken);
+                if (product != null)
+                {
+                    products[productId] = product;
+                }
+            }
+
+            return products;
+        }
+
+        /// <summary>
         /// Checks if product is available for the requested quantity
         /// </summary>
         private bool IsProductAvailableForQuantity(Domain.Entities.Catalog.Product? product, int requiredQuantity)
@@ -479,6 +534,11 @@ namespace Bazario.Core.Services.Inventory
                     _logger.LogDebug("Calculated store-specific threshold {Threshold} for store {StoreId}",
                         calculatedStoreThreshold, storeId);
                     return calculatedStoreThreshold;
+                }
+                else
+                {
+                    _logger.LogWarning("Store {StoreId} not found when determining low stock threshold for product {ProductId}, using system default",
+                        storeId, productId);
                 }
 
                 // 4. Fall back to system-wide configuration
@@ -552,6 +612,11 @@ namespace Bazario.Core.Services.Inventory
         /// </summary>
         internal void SetProductThreshold(Guid productId, int threshold)
         {
+            if (productId == Guid.Empty)
+            {
+                throw new ArgumentException("Product ID cannot be empty", nameof(productId));
+            }
+
             if (threshold < 0)
             {
                 throw new ArgumentException("Threshold cannot be negative", nameof(threshold));
@@ -568,6 +633,11 @@ namespace Bazario.Core.Services.Inventory
         /// </summary>
         internal void SetStoreThreshold(Guid storeId, int threshold)
         {
+            if (storeId == Guid.Empty)
+            {
+                throw new ArgumentException("Store ID cannot be empty", nameof(storeId));
+            }
+
             if (threshold < 0)
             {
                 throw new ArgumentException("Threshold cannot be negative", nameof(threshold));
