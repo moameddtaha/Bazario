@@ -24,6 +24,7 @@ using Bazario.Core.Helpers.Store;
 using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Domain.RepositoryContracts.Authentication;
 using Bazario.Core.Domain.RepositoryContracts.Catalog;
+using Bazario.Core.Domain.RepositoryContracts.Inventory;
 using Bazario.Core.Domain.RepositoryContracts.Store;
 using Bazario.Core.Domain.RepositoryContracts.Order;
 using Bazario.Core.Domain.RepositoryContracts.Review;
@@ -45,6 +46,7 @@ using Bazario.Core.Services.Infrastructure;
 using Bazario.Infrastructure.Repositories.Authentication;
 using Bazario.Infrastructure.Repositories.UserManagement;
 using Bazario.Infrastructure.Repositories.Catalog;
+using Bazario.Infrastructure.Repositories.Inventory;
 using Bazario.Infrastructure.Repositories.Review;
 using Bazario.Infrastructure.Repositories.Location;
 using Bazario.Infrastructure.Repositories.Order;
@@ -94,6 +96,7 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<IGovernorateRepository, GovernorateRepository>(); // Location-based shipping
             services.AddScoped<ICityRepository, CityRepository>(); // Location-based shipping (city-governorate resolution)
             services.AddScoped<IStoreGovernorateSupportRepository, StoreGovernorateSupportRepository>(); // Store-governorate junction table
+            services.AddScoped<IStockReservationRepository, StockReservationRepository>(); // Stock reservation system
 
             // ========================================
             // LOCATION MANAGEMENT SERVICES

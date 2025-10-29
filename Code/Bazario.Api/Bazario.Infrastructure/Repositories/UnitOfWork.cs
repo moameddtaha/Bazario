@@ -1,6 +1,7 @@
 using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Domain.RepositoryContracts.Authentication;
 using Bazario.Core.Domain.RepositoryContracts.Catalog;
+using Bazario.Core.Domain.RepositoryContracts.Inventory;
 using Bazario.Core.Domain.RepositoryContracts.Location;
 using Bazario.Core.Domain.RepositoryContracts.Order;
 using Bazario.Core.Domain.RepositoryContracts.Review;
@@ -39,6 +40,7 @@ namespace Bazario.Infrastructure.Repositories
         private readonly IOrderRepository _orders;
         private readonly IOrderItemRepository _orderItems;
         private readonly IReviewRepository _reviews;
+        private readonly IStockReservationRepository _stockReservations;
 
         public UnitOfWork(
             ApplicationDbContext context,
@@ -57,7 +59,8 @@ namespace Bazario.Infrastructure.Repositories
             IStoreShippingConfigurationRepository storeShippingConfigurations,
             IOrderRepository orders,
             IOrderItemRepository orderItems,
-            IReviewRepository reviews)
+            IReviewRepository reviews,
+            IStockReservationRepository stockReservations)
         {
             _context = context ?? throw new ArgumentNullException(nameof(context));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -76,6 +79,7 @@ namespace Bazario.Infrastructure.Repositories
             _orders = orders ?? throw new ArgumentNullException(nameof(orders));
             _orderItems = orderItems ?? throw new ArgumentNullException(nameof(orderItems));
             _reviews = reviews ?? throw new ArgumentNullException(nameof(reviews));
+            _stockReservations = stockReservations ?? throw new ArgumentNullException(nameof(stockReservations));
         }
 
         // Repository properties - expose injected repositories
@@ -94,6 +98,7 @@ namespace Bazario.Infrastructure.Repositories
         public IOrderRepository Orders => _orders;
         public IOrderItemRepository OrderItems => _orderItems;
         public IReviewRepository Reviews => _reviews;
+        public IStockReservationRepository StockReservations => _stockReservations;
 
         /// <summary>
         /// Saves all changes made in this unit of work to the database

@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.Entities.Authentication;
 using Bazario.Core.Domain.Entities.Catalog;
+using Bazario.Core.Domain.Entities.Inventory;
 using Bazario.Core.Domain.Entities.Location;
 using Bazario.Core.Domain.Entities.Order;
 using Bazario.Core.Domain.Entities.Review;
@@ -35,6 +36,7 @@ namespace Bazario.Infrastructure.DbContext
         public DbSet<Governorate> Governorates { get; set; }
         public DbSet<City> Cities { get; set; }
         public DbSet<StoreGovernorateSupport> StoreGovernorateSupports { get; set; }
+        public DbSet<StockReservation> StockReservations { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {

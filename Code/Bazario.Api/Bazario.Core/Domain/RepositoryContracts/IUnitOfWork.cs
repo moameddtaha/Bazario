@@ -1,5 +1,6 @@
 using Bazario.Core.Domain.RepositoryContracts.Authentication;
 using Bazario.Core.Domain.RepositoryContracts.Catalog;
+using Bazario.Core.Domain.RepositoryContracts.Inventory;
 using Bazario.Core.Domain.RepositoryContracts.Location;
 using Bazario.Core.Domain.RepositoryContracts.Order;
 using Bazario.Core.Domain.RepositoryContracts.Review;
@@ -41,6 +42,9 @@ namespace Bazario.Core.Domain.RepositoryContracts
 
         // Review
         IReviewRepository Reviews { get; }
+
+        // Inventory
+        IStockReservationRepository StockReservations { get; }
 
         /// <summary>
         /// Saves all changes made in this unit of work to the database
