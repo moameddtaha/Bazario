@@ -627,12 +627,70 @@ namespace Bazario.Core.Services.Inventory
 
                 _logger.LogDebug("Cleaning up expired reservations older than {Minutes} minutes", expirationMinutes);
 
-                // Implement expired reservation cleanup logic
-                // This should release stock from reservations that have expired
-                // Note: This would require a StockReservation table to track reservations
-                _logger.LogInformation("Expired reservation cleanup not yet fully implemented - requires StockReservation table");
-                await Task.CompletedTask;
-                return 0;
+                // Start transaction to ensure atomicity
+                await _unitOfWork.BeginTransactionAsync(cancellationToken);
+
+                // Calculate cutoff time for expired reservations
+                var now = DateTime.UtcNow;
+                var cutoffTime = now.AddMinutes(-expirationMinutes);
+
+                // Query all expired pending reservations
+                // A reservation is expired if: Status = "Pending" AND ExpiresAt < now
+                var expiredReservations = await _unitOfWork.StockReservations.GetFilteredReservationsAsync(
+                    r => r.Status == "Pending" && r.ExpiresAt < now,
+                    cancellationToken);
+
+                if (expiredReservations == null || expiredReservations.Count == 0)
+                {
+                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                    _logger.LogDebug("No expired reservations found to cleanup");
+                    return 0;
+                }
+
+                _logger.LogInformation("Found {Count} expired reservations to cleanup", expiredReservations.Count);
+
+                // Bulk retrieve all products to avoid N+1 query
+                var productIds = expiredReservations.Select(r => r.ProductId).Distinct().ToList();
+                var productsDict = await GetProductsByIdsAsync(productIds, cancellationToken);
+
+                // Track cleanup statistics
+                int restoredCount = 0;
+                int totalReservations = expiredReservations.Count;
+
+                // Restore stock and mark reservations as expired
+                foreach (var reservation in expiredReservations)
+                {
+                    // Restore stock quantity
+                    if (productsDict.TryGetValue(reservation.ProductId, out var product))
+                    {
+                        product.StockQuantity += reservation.ReservedQuantity;
+                        await _unitOfWork.Products.UpdateProductAsync(product, cancellationToken);
+
+                        _logger.LogDebug("Restored {Quantity} units to product {ProductId} from expired reservation {ReservationId}. New stock: {NewStock}",
+                            reservation.ReservedQuantity, reservation.ProductId, reservation.ReservationId, product.StockQuantity);
+
+                        restoredCount++;
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Product {ProductId} not found when cleaning up expired reservation {ReservationId}",
+                            reservation.ProductId, reservation.ReservationId);
+                    }
+
+                    // Update reservation status to Expired
+                    reservation.Status = "Expired";
+                    reservation.ReleasedAt = now; // Use ReleasedAt to track when it was cleaned up
+                    await _unitOfWork.StockReservations.UpdateReservationAsync(reservation, cancellationToken);
+                }
+
+                // Commit all changes
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.CommitTransactionAsync(cancellationToken);
+
+                _logger.LogInformation("Successfully cleaned up {TotalCount} expired reservations. Restored stock for {RestoredCount} products",
+                    totalReservations, restoredCount);
+
+                return totalReservations;
             }
             catch (ArgumentException ex)
             {
