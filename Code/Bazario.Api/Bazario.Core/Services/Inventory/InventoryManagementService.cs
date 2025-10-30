@@ -12,9 +12,11 @@ using Microsoft.Extensions.Logging;
 namespace Bazario.Core.Services.Inventory
 {
     /// <summary>
-    /// Implementation of inventory CRUD operations
-    /// Handles stock updates, reservations, and basic inventory management
+    /// Implementation of inventory management operations for e-commerce stock control
+    /// Provides 7 core methods: UpdateStockAsync, ReserveStockAsync, ReleaseReservationAsync,
+    /// ConfirmReservationAsync, BulkUpdateStockAsync, SetLowStockThresholdAsync, CleanupExpiredReservationsAsync
     /// Uses Unit of Work pattern for transaction management and data consistency
+    /// All operations are transactional with automatic rollback on errors
     /// </summary>
     public class InventoryManagementService : IInventoryManagementService
     {
@@ -140,7 +142,7 @@ namespace Bazario.Core.Services.Inventory
             }
             catch (ArgumentException ex)
             {
-                _logger.LogWarning(ex, "Validation error while updating stock for product: {ProductId}", productId);
+                _logger.LogDebug(ex, "Validation error while updating stock for product: {ProductId}", productId);
                 // Rollback transaction if it was started
                 try
                 {
@@ -289,9 +291,9 @@ namespace Bazario.Core.Services.Inventory
                 }
 
                 // Second pass: Create reservation entities and update product stock
-                var reservationId = result.ReservationId!.Value;
+                var reservationId = result.ReservationId.Value;
                 var now = DateTime.UtcNow;
-                var expiresAt = result.ExpiresAt!.Value;
+                var expiresAt = result.ExpiresAt.Value;
 
                 foreach (var item in reservationRequest.Items)
                 {
@@ -316,7 +318,7 @@ namespace Bazario.Core.Services.Inventory
                         Status = STATUS_PENDING,
                         CreatedAt = now,
                         ExpiresAt = expiresAt,
-                        ExternalReference = reservationRequest.OrderReference,
+                        ExternalReference = reservationRequest.OrderReference ?? string.Empty,
                         OrderId = null, // Not linked to order yet
                         IsDeleted = false
                     };
@@ -324,7 +326,8 @@ namespace Bazario.Core.Services.Inventory
                     reservationsToCreate.Add(reservation);
 
                     // Deduct stock quantity (reserve the stock)
-                    product.StockQuantity -= item.Quantity;
+                    // Use Math.Max to ensure stock never goes negative (defensive programming)
+                    product.StockQuantity = Math.Max(0, product.StockQuantity - item.Quantity);
                     await _unitOfWork.Products.UpdateProductAsync(product, cancellationToken);
 
                     _logger.LogDebug("Reserved {Quantity} units of product {ProductId}. New stock: {NewStock}",
@@ -348,7 +351,7 @@ namespace Bazario.Core.Services.Inventory
             }
             catch (ArgumentException ex)
             {
-                _logger.LogWarning(ex, "Validation error while reserving stock");
+                _logger.LogDebug(ex, "Validation error while reserving stock");
                 // Rollback transaction if it was started
                 try
                 {
@@ -403,6 +406,7 @@ namespace Bazario.Core.Services.Inventory
 
                 // Retrieve all reservation records for this reservation ID
                 // Note: IsDeleted filter is redundant due to HasQueryFilter in entity configuration, but kept for clarity
+                // Repository contract: Returns empty list (not null) if no results found
                 var reservations = await _unitOfWork.StockReservations.GetFilteredReservationsAsync(
                     r => r.ReservationId == reservationId && r.Status == STATUS_PENDING && !r.IsDeleted,
                     cancellationToken);
@@ -466,7 +470,7 @@ namespace Bazario.Core.Services.Inventory
             }
             catch (ArgumentException ex)
             {
-                _logger.LogWarning(ex, "Validation error while releasing reservation: {ReservationId}", reservationId);
+                _logger.LogDebug(ex, "Validation error while releasing reservation: {ReservationId}", reservationId);
                 // Rollback transaction if it was started
                 try
                 {
@@ -565,7 +569,7 @@ namespace Bazario.Core.Services.Inventory
             }
             catch (ArgumentException ex)
             {
-                _logger.LogWarning(ex, "Validation error while confirming reservation: {ReservationId}", reservationId);
+                _logger.LogDebug(ex, "Validation error while confirming reservation: {ReservationId}", reservationId);
                 // Rollback transaction if it was started
                 try
                 {
@@ -720,7 +724,7 @@ namespace Bazario.Core.Services.Inventory
             }
             catch (ArgumentException ex)
             {
-                _logger.LogWarning(ex, "Validation error while performing bulk stock update");
+                _logger.LogDebug(ex, "Validation error while performing bulk stock update");
                 // Rollback transaction if it was started
                 try
                 {
@@ -797,7 +801,7 @@ namespace Bazario.Core.Services.Inventory
             }
             catch (ArgumentException ex)
             {
-                _logger.LogWarning(ex, "Validation error while setting low stock threshold for product: {ProductId}", productId);
+                _logger.LogDebug(ex, "Validation error while setting low stock threshold for product: {ProductId}", productId);
                 throw; // Re-throw argument exceptions as-is
             }
             catch (Exception ex)
@@ -825,11 +829,8 @@ namespace Bazario.Core.Services.Inventory
                 // Start transaction to ensure atomicity
                 await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
-                // Calculate cutoff time for expired reservations
-                var now = DateTime.UtcNow;
-                var cutoffTime = now.AddMinutes(-expirationMinutes);
-
                 // Query all expired pending reservations
+                var now = DateTime.UtcNow;
                 // A reservation is expired if: Status = STATUS_PENDING AND ExpiresAt < now
                 // Note: IsDeleted filter is redundant due to HasQueryFilter in entity configuration, but kept for clarity
                 var expiredReservations = await _unitOfWork.StockReservations.GetFilteredReservationsAsync(
@@ -847,6 +848,8 @@ namespace Bazario.Core.Services.Inventory
 
                 // Bulk retrieve all products to avoid N+1 query
                 // Note: Distinct is handled in GetProductsByIdsAsync helper
+                // Note: For very large result sets (millions of records), consider implementing pagination
+                // or batching to prevent memory exhaustion (process in chunks of 1000-10000 records)
                 var productIds = expiredReservations.Select(r => r.ProductId).ToList();
                 var productsDict = await GetProductsByIdsAsync(productIds, cancellationToken);
 
@@ -901,7 +904,7 @@ namespace Bazario.Core.Services.Inventory
             }
             catch (ArgumentException ex)
             {
-                _logger.LogWarning(ex, "Validation error while cleaning up expired reservations");
+                _logger.LogDebug(ex, "Validation error while cleaning up expired reservations");
                 // Rollback transaction if it was started
                 try
                 {
