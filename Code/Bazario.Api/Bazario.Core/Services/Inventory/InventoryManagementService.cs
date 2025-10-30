@@ -310,11 +310,59 @@ namespace Bazario.Core.Services.Inventory
 
                 _logger.LogDebug("Releasing reservation {ReservationId}. Reason: {Reason}", reservationId, reason);
 
-                // Implement reservation tracking and release logic
-                // Note: This would require a StockReservation table to track reservations
-                // For now, log the action and return true as placeholder
-                _logger.LogInformation("Reservation release not yet fully implemented - requires StockReservation table");
-                await Task.CompletedTask;
+                // Start transaction to ensure atomicity
+                await _unitOfWork.BeginTransactionAsync(cancellationToken);
+
+                // Retrieve all reservation records for this reservation ID
+                var reservations = await _unitOfWork.StockReservations.GetFilteredReservationsAsync(
+                    r => r.ReservationId == reservationId && r.Status == "Pending",
+                    cancellationToken);
+
+                if (reservations == null || reservations.Count == 0)
+                {
+                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                    _logger.LogWarning("No pending reservations found with ID: {ReservationId}", reservationId);
+                    return false;
+                }
+
+                _logger.LogDebug("Found {Count} pending reservation records to release", reservations.Count);
+
+                // Bulk retrieve all products to avoid N+1 query
+                var productIds = reservations.Select(r => r.ProductId).ToList();
+                var productsDict = await GetProductsByIdsAsync(productIds, cancellationToken);
+
+                // Restore stock quantities and update reservation status
+                var now = DateTime.UtcNow;
+                foreach (var reservation in reservations)
+                {
+                    // Restore stock quantity
+                    if (productsDict.TryGetValue(reservation.ProductId, out var product))
+                    {
+                        product.StockQuantity += reservation.ReservedQuantity;
+                        await _unitOfWork.Products.UpdateProductAsync(product, cancellationToken);
+
+                        _logger.LogDebug("Restored {Quantity} units to product {ProductId}. New stock: {NewStock}",
+                            reservation.ReservedQuantity, reservation.ProductId, product.StockQuantity);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Product {ProductId} not found when releasing reservation {ReservationId}",
+                            reservation.ProductId, reservationId);
+                    }
+
+                    // Update reservation status
+                    reservation.Status = "Released";
+                    reservation.ReleasedAt = now;
+                    await _unitOfWork.StockReservations.UpdateReservationAsync(reservation, cancellationToken);
+                }
+
+                // Commit all changes
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.CommitTransactionAsync(cancellationToken);
+
+                _logger.LogInformation("Successfully released reservation {ReservationId}. Restored stock for {Count} products. Reason: {Reason}",
+                    reservationId, reservations.Count, reason);
+
                 return true;
             }
             catch (ArgumentException ex)
