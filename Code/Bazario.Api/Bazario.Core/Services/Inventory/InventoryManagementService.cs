@@ -89,8 +89,8 @@ namespace Bazario.Core.Services.Inventory
 
                 var previousQuantity = product.StockQuantity;
 
-                // Update stock based on type
-                product.StockQuantity = updateType switch
+                // Update stock based on type with overflow validation
+                int calculatedStock = updateType switch
                 {
                     StockUpdateType.Purchase => product.StockQuantity + newQuantity,
                     StockUpdateType.Sale => Math.Max(MIN_STOCK_QUANTITY, product.StockQuantity - newQuantity),
@@ -99,6 +99,15 @@ namespace Bazario.Core.Services.Inventory
                     StockUpdateType.Damage => Math.Max(MIN_STOCK_QUANTITY, product.StockQuantity - newQuantity),
                     _ => product.StockQuantity
                 };
+
+                // Validate that calculated stock doesn't exceed maximum allowed
+                if (calculatedStock > MAX_STOCK_QUANTITY)
+                {
+                    _logger.LogWarning("Stock update would exceed maximum: {CalculatedStock} > {MaxStock}", calculatedStock, MAX_STOCK_QUANTITY);
+                    throw new ArgumentException($"Resulting stock quantity {calculatedStock} exceeds maximum allowed {MAX_STOCK_QUANTITY}");
+                }
+
+                product.StockQuantity = calculatedStock;
 
                 await _unitOfWork.Products.UpdateProductAsync(product, cancellationToken);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -170,13 +179,14 @@ namespace Bazario.Core.Services.Inventory
                 _logger.LogDebug("Reserving stock for {ItemCount} items, Customer: {CustomerId}",
                     reservationRequest.Items.Count, reservationRequest.CustomerId);
 
+                // Start transaction to ensure atomicity (all-or-nothing)
+                // IMPORTANT: Moved before product retrieval to prevent race conditions
+                await _unitOfWork.BeginTransactionAsync(cancellationToken);
+
                 // Bulk retrieve all products to avoid N+1 query problem
-                // Instead of 100 individual queries, this makes 1 query with WHERE IN clause
+                // Inside transaction to ensure consistent read with database locking
                 var productIds = reservationRequest.Items.Select(i => i.ProductId).ToList();
                 var productsDict = await GetProductsByIdsAsync(productIds, cancellationToken);
-
-                // Start transaction to ensure atomicity (all-or-nothing)
-                await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
                 var result = new StockReservationResult
                 {
@@ -246,6 +256,7 @@ namespace Bazario.Core.Services.Inventory
                     // Note: We create one record per product in the reservation
                     var reservation = new Domain.Entities.Inventory.StockReservation
                     {
+                        Id = Guid.NewGuid(), // Unique primary key for this record
                         ReservationId = reservationId, // Same ID for all items in this reservation request
                         ProductId = item.ProductId,
                         CustomerId = reservationRequest.CustomerId,
@@ -286,12 +297,30 @@ namespace Bazario.Core.Services.Inventory
             catch (ArgumentException ex)
             {
                 _logger.LogWarning(ex, "Validation error while reserving stock");
+                // Rollback transaction if it was started
+                try
+                {
+                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                }
+                catch (Exception rollbackEx)
+                {
+                    _logger.LogError(rollbackEx, "Error rolling back transaction after validation failure");
+                }
                 throw; // Re-throw argument exceptions as-is
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Unexpected error while reserving stock for customer: {CustomerId}", reservationRequest?.CustomerId);
-                throw new InvalidOperationException($"Unexpected error while reserving stock: {ex.Message}", ex);
+                // Rollback transaction if it was started
+                try
+                {
+                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                }
+                catch (Exception rollbackEx)
+                {
+                    _logger.LogError(rollbackEx, "Error rolling back transaction after unexpected error");
+                }
+                throw new InvalidOperationException("Unexpected error while reserving stock", ex);
             }
         }
 
@@ -321,8 +350,9 @@ namespace Bazario.Core.Services.Inventory
                 await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
                 // Retrieve all reservation records for this reservation ID
+                // Note: IsDeleted filter is redundant due to HasQueryFilter in entity configuration, but kept for clarity
                 var reservations = await _unitOfWork.StockReservations.GetFilteredReservationsAsync(
-                    r => r.ReservationId == reservationId && r.Status == "Pending",
+                    r => r.ReservationId == reservationId && r.Status == "Pending" && !r.IsDeleted,
                     cancellationToken);
 
                 if (reservations == null || reservations.Count == 0)
@@ -383,12 +413,30 @@ namespace Bazario.Core.Services.Inventory
             catch (ArgumentException ex)
             {
                 _logger.LogWarning(ex, "Validation error while releasing reservation: {ReservationId}", reservationId);
+                // Rollback transaction if it was started
+                try
+                {
+                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                }
+                catch (Exception rollbackEx)
+                {
+                    _logger.LogError(rollbackEx, "Error rolling back transaction after validation failure");
+                }
                 throw; // Re-throw argument exceptions as-is
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Unexpected error while releasing reservation: {ReservationId}", reservationId);
-                throw new InvalidOperationException($"Unexpected error while releasing reservation {reservationId}: {ex.Message}", ex);
+                // Rollback transaction if it was started
+                try
+                {
+                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                }
+                catch (Exception rollbackEx)
+                {
+                    _logger.LogError(rollbackEx, "Error rolling back transaction after unexpected error");
+                }
+                throw new InvalidOperationException("Unexpected error while releasing reservation", ex);
             }
         }
 
@@ -418,8 +466,9 @@ namespace Bazario.Core.Services.Inventory
                 await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
                 // Retrieve all pending reservation records for this reservation ID
+                // Note: IsDeleted filter is redundant due to HasQueryFilter in entity configuration, but kept for clarity
                 var reservations = await _unitOfWork.StockReservations.GetFilteredReservationsAsync(
-                    r => r.ReservationId == reservationId && r.Status == "Pending",
+                    r => r.ReservationId == reservationId && r.Status == "Pending" && !r.IsDeleted,
                     cancellationToken);
 
                 if (reservations == null || reservations.Count == 0)
@@ -461,12 +510,30 @@ namespace Bazario.Core.Services.Inventory
             catch (ArgumentException ex)
             {
                 _logger.LogWarning(ex, "Validation error while confirming reservation: {ReservationId}", reservationId);
+                // Rollback transaction if it was started
+                try
+                {
+                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                }
+                catch (Exception rollbackEx)
+                {
+                    _logger.LogError(rollbackEx, "Error rolling back transaction after validation failure");
+                }
                 throw; // Re-throw argument exceptions as-is
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Unexpected error while confirming reservation: {ReservationId}", reservationId);
-                throw new InvalidOperationException($"Unexpected error while confirming reservation {reservationId}: {ex.Message}", ex);
+                // Rollback transaction if it was started
+                try
+                {
+                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                }
+                catch (Exception rollbackEx)
+                {
+                    _logger.LogError(rollbackEx, "Error rolling back transaction after unexpected error");
+                }
+                throw new InvalidOperationException("Unexpected error while confirming reservation", ex);
             }
         }
 
@@ -497,8 +564,11 @@ namespace Bazario.Core.Services.Inventory
 
                 _logger.LogDebug("Processing bulk stock update for {ItemCount} items", bulkUpdateRequest.Items.Count);
 
+                // Start transaction to ensure atomicity - all updates succeed or all fail
+                await _unitOfWork.BeginTransactionAsync(cancellationToken);
+
                 // Bulk retrieve all products to avoid N+1 query problem
-                // Instead of N individual queries (one per UpdateStockAsync call), this makes 1 query
+                // Inside transaction to ensure consistent read with database locking
                 var productIds = bulkUpdateRequest.Items.Select(i => i.ProductId).ToList();
                 var productsDict = await GetProductsByIdsAsync(productIds, cancellationToken);
 
@@ -565,10 +635,17 @@ namespace Bazario.Core.Services.Inventory
                     }
                 }
 
-                // Save all changes in one transaction
+                // Commit transaction if any updates succeeded
+                // If all failed, rollback will happen in exception handler
                 if (result.SuccessfulUpdates > 0)
                 {
                     await _unitOfWork.SaveChangesAsync(cancellationToken);
+                    await _unitOfWork.CommitTransactionAsync(cancellationToken);
+                }
+                else
+                {
+                    // No successful updates - rollback transaction
+                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
                 }
 
                 _logger.LogInformation("Bulk stock update completed. Success: {SuccessCount}, Failed: {FailedCount}",
@@ -579,12 +656,30 @@ namespace Bazario.Core.Services.Inventory
             catch (ArgumentException ex)
             {
                 _logger.LogWarning(ex, "Validation error while performing bulk stock update");
+                // Rollback transaction if it was started
+                try
+                {
+                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                }
+                catch (Exception rollbackEx)
+                {
+                    _logger.LogError(rollbackEx, "Error rolling back transaction after validation failure");
+                }
                 throw; // Re-throw argument exceptions as-is
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Unexpected error while performing bulk stock update");
-                throw new InvalidOperationException($"Unexpected error while performing bulk stock update: {ex.Message}", ex);
+                // Rollback transaction if it was started
+                try
+                {
+                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                }
+                catch (Exception rollbackEx)
+                {
+                    _logger.LogError(rollbackEx, "Error rolling back transaction after unexpected error");
+                }
+                throw new InvalidOperationException("Unexpected error while performing bulk stock update", ex);
             }
         }
 
@@ -663,8 +758,9 @@ namespace Bazario.Core.Services.Inventory
 
                 // Query all expired pending reservations
                 // A reservation is expired if: Status = "Pending" AND ExpiresAt < now
+                // Note: IsDeleted filter is redundant due to HasQueryFilter in entity configuration, but kept for clarity
                 var expiredReservations = await _unitOfWork.StockReservations.GetFilteredReservationsAsync(
-                    r => r.Status == "Pending" && r.ExpiresAt < now,
+                    r => r.Status == "Pending" && r.ExpiresAt < now && !r.IsDeleted,
                     cancellationToken);
 
                 if (expiredReservations == null || expiredReservations.Count == 0)
@@ -730,12 +826,30 @@ namespace Bazario.Core.Services.Inventory
             catch (ArgumentException ex)
             {
                 _logger.LogWarning(ex, "Validation error while cleaning up expired reservations");
+                // Rollback transaction if it was started
+                try
+                {
+                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                }
+                catch (Exception rollbackEx)
+                {
+                    _logger.LogError(rollbackEx, "Error rolling back transaction after validation failure");
+                }
                 throw; // Re-throw argument exceptions as-is
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Unexpected error while cleaning up expired reservations");
-                throw new InvalidOperationException($"Unexpected error while cleaning up expired reservations: {ex.Message}", ex);
+                // Rollback transaction if it was started
+                try
+                {
+                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                }
+                catch (Exception rollbackEx)
+                {
+                    _logger.LogError(rollbackEx, "Error rolling back transaction after unexpected error");
+                }
+                throw new InvalidOperationException("Unexpected error while cleaning up expired reservations", ex);
             }
         }
 

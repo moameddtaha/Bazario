@@ -34,6 +34,7 @@ namespace Bazario.Infrastructure.DbContext.Configurations.Inventory
             builder.HasQueryFilter(r => !r.IsDeleted);
 
             // Indexes for performance optimization
+            builder.HasIndex(r => r.ReservationId); // Index for grouping reservation items
             builder.HasIndex(r => r.ProductId);
             builder.HasIndex(r => r.CustomerId);
             builder.HasIndex(r => r.OrderId);
@@ -43,6 +44,7 @@ namespace Bazario.Infrastructure.DbContext.Configurations.Inventory
             builder.HasIndex(r => r.IsDeleted); // Index for soft delete queries
 
             // Composite indexes for common query patterns
+            builder.HasIndex(r => new { r.ReservationId, r.Status }); // Get all items in a reservation by status
             builder.HasIndex(r => new { r.ProductId, r.Status }); // Get active reservations by product
             builder.HasIndex(r => new { r.Status, r.ExpiresAt }); // Find expired pending reservations
             builder.HasIndex(r => new { r.CustomerId, r.Status }); // Get customer active reservations

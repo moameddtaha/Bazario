@@ -13,7 +13,17 @@ namespace Bazario.Core.Domain.Entities.Inventory
     /// </summary>
     public class StockReservation
     {
+        /// <summary>
+        /// Unique identifier for this specific reservation record (auto-generated primary key)
+        /// </summary>
         [Key]
+        public Guid Id { get; set; }
+
+        /// <summary>
+        /// Shared identifier grouping multiple products in the same reservation request
+        /// Multiple StockReservation records can share the same ReservationId
+        /// </summary>
+        [Required]
         public Guid ReservationId { get; set; }
 
         [ForeignKey(nameof(Product))]
