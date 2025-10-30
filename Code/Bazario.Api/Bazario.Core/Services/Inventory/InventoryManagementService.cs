@@ -77,13 +77,13 @@ namespace Bazario.Core.Services.Inventory
                     productId, newQuantity, updateType, reason);
 
                 var product = await _unitOfWork.Products.GetProductByIdAsync(productId, cancellationToken);
-                if (product == null)
+                if (product == null || product.IsDeleted)
                 {
-                    _logger.LogWarning("Product {ProductId} not found for stock update", productId);
+                    _logger.LogWarning("Product {ProductId} not found or deleted for stock update", productId);
                     return new InventoryUpdateResult
                     {
                         IsSuccessful = false,
-                        ErrorMessage = "Product not found"
+                        ErrorMessage = product == null ? "Product not found" : "Product has been deleted"
                     };
                 }
 
@@ -193,16 +193,23 @@ namespace Bazario.Core.Services.Inventory
                     // O(1) dictionary lookup instead of database query
                     productsDict.TryGetValue(item.ProductId, out var product);
 
-                    if (product == null || product.StockQuantity < item.Quantity)
+                    if (product == null || product.IsDeleted || product.StockQuantity < item.Quantity)
                     {
                         result.IsSuccessful = false;
+
+                        string errorMessage = product == null
+                            ? "Product not found"
+                            : product.IsDeleted
+                                ? "Product has been deleted"
+                                : "Insufficient stock";
+
                         result.ItemResults.Add(new ReservationStatus
                         {
                             ProductId = item.ProductId,
                             RequestedQuantity = item.Quantity,
                             ReservedQuantity = 0,
                             IsFullyReserved = false,
-                            ErrorMessage = product == null ? "Product not found" : "Insufficient stock"
+                            ErrorMessage = errorMessage
                         });
                     }
                     else
@@ -335,14 +342,22 @@ namespace Bazario.Core.Services.Inventory
                 var now = DateTime.UtcNow;
                 foreach (var reservation in reservations)
                 {
-                    // Restore stock quantity
+                    // Restore stock quantity (only if product exists and is not deleted)
                     if (productsDict.TryGetValue(reservation.ProductId, out var product))
                     {
-                        product.StockQuantity += reservation.ReservedQuantity;
-                        await _unitOfWork.Products.UpdateProductAsync(product, cancellationToken);
+                        if (!product.IsDeleted)
+                        {
+                            product.StockQuantity += reservation.ReservedQuantity;
+                            await _unitOfWork.Products.UpdateProductAsync(product, cancellationToken);
 
-                        _logger.LogDebug("Restored {Quantity} units to product {ProductId}. New stock: {NewStock}",
-                            reservation.ReservedQuantity, reservation.ProductId, product.StockQuantity);
+                            _logger.LogDebug("Restored {Quantity} units to product {ProductId}. New stock: {NewStock}",
+                                reservation.ReservedQuantity, reservation.ProductId, product.StockQuantity);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Product {ProductId} is deleted, skipping stock restoration for reservation {ReservationId}",
+                                reservation.ProductId, reservationId);
+                        }
                     }
                     else
                     {
@@ -508,6 +523,18 @@ namespace Bazario.Core.Services.Inventory
                             continue;
                         }
 
+                        // Check if product is deleted
+                        if (product.IsDeleted)
+                        {
+                            result.FailedUpdates++;
+                            result.Errors.Add(new BulkUpdateError
+                            {
+                                ProductId = item.ProductId,
+                                ErrorMessage = "Product has been deleted"
+                            });
+                            continue;
+                        }
+
                         // Validate quantity range
                         if (item.NewQuantity < MIN_STOCK_QUANTITY || item.NewQuantity > MAX_STOCK_QUANTITY)
                         {
@@ -585,9 +612,9 @@ namespace Bazario.Core.Services.Inventory
                 _logger.LogDebug("Setting low stock threshold for product {ProductId} to {Threshold}", productId, threshold);
 
                 var product = await _unitOfWork.Products.GetProductByIdAsync(productId, cancellationToken);
-                if (product == null)
+                if (product == null || product.IsDeleted)
                 {
-                    _logger.LogWarning("Product {ProductId} not found for threshold update", productId);
+                    _logger.LogWarning("Product {ProductId} not found or deleted for threshold update", productId);
                     return false;
                 }
 
@@ -660,16 +687,24 @@ namespace Bazario.Core.Services.Inventory
                 // Restore stock and mark reservations as expired
                 foreach (var reservation in expiredReservations)
                 {
-                    // Restore stock quantity
+                    // Restore stock quantity (only if product exists and is not deleted)
                     if (productsDict.TryGetValue(reservation.ProductId, out var product))
                     {
-                        product.StockQuantity += reservation.ReservedQuantity;
-                        await _unitOfWork.Products.UpdateProductAsync(product, cancellationToken);
+                        if (!product.IsDeleted)
+                        {
+                            product.StockQuantity += reservation.ReservedQuantity;
+                            await _unitOfWork.Products.UpdateProductAsync(product, cancellationToken);
 
-                        _logger.LogDebug("Restored {Quantity} units to product {ProductId} from expired reservation {ReservationId}. New stock: {NewStock}",
-                            reservation.ReservedQuantity, reservation.ProductId, reservation.ReservationId, product.StockQuantity);
+                            _logger.LogDebug("Restored {Quantity} units to product {ProductId} from expired reservation {ReservationId}. New stock: {NewStock}",
+                                reservation.ReservedQuantity, reservation.ProductId, reservation.ReservationId, product.StockQuantity);
 
-                        restoredCount++;
+                            restoredCount++;
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Product {ProductId} is deleted, skipping stock restoration for expired reservation {ReservationId}",
+                                reservation.ProductId, reservation.ReservationId);
+                        }
                     }
                     else
                     {
