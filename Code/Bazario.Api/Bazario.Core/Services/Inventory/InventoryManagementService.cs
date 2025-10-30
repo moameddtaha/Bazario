@@ -28,6 +28,14 @@ namespace Bazario.Core.Services.Inventory
         private const int MAX_STOCK_QUANTITY = 1000000;
         private const int MIN_THRESHOLD_VALUE = 0;
         private const int MAX_THRESHOLD_VALUE = 10000;
+        private const int MAX_RESERVATION_ITEMS = 100;
+        private const int MAX_BULK_UPDATE_ITEMS = 1000;
+
+        // Constants for reservation status values (replaces magic strings)
+        private const string STATUS_PENDING = "Pending";
+        private const string STATUS_CONFIRMED = "Confirmed";
+        private const string STATUS_RELEASED = "Released";
+        private const string STATUS_EXPIRED = "Expired";
 
         public InventoryManagementService(
             IUnitOfWork unitOfWork,
@@ -179,6 +187,13 @@ namespace Bazario.Core.Services.Inventory
                     throw new ArgumentException("Reservation request must contain at least one item", nameof(reservationRequest));
                 }
 
+                if (reservationRequest.Items.Count > MAX_RESERVATION_ITEMS)
+                {
+                    _logger.LogWarning("Attempted to reserve stock with {ItemCount} items, exceeding maximum of {MaxItems}",
+                        reservationRequest.Items.Count, MAX_RESERVATION_ITEMS);
+                    throw new ArgumentException($"Reservation request cannot exceed {MAX_RESERVATION_ITEMS} items. Received {reservationRequest.Items.Count} items.", nameof(reservationRequest));
+                }
+
                 if (reservationRequest.CustomerId == Guid.Empty)
                 {
                     _logger.LogWarning("Attempted to reserve stock without valid customer ID");
@@ -296,7 +311,7 @@ namespace Bazario.Core.Services.Inventory
                         ProductId = item.ProductId,
                         CustomerId = reservationRequest.CustomerId,
                         ReservedQuantity = item.Quantity,
-                        Status = "Pending",
+                        Status = STATUS_PENDING,
                         CreatedAt = now,
                         ExpiresAt = expiresAt,
                         ExternalReference = reservationRequest.OrderReference,
@@ -387,7 +402,7 @@ namespace Bazario.Core.Services.Inventory
                 // Retrieve all reservation records for this reservation ID
                 // Note: IsDeleted filter is redundant due to HasQueryFilter in entity configuration, but kept for clarity
                 var reservations = await _unitOfWork.StockReservations.GetFilteredReservationsAsync(
-                    r => r.ReservationId == reservationId && r.Status == "Pending" && !r.IsDeleted,
+                    r => r.ReservationId == reservationId && r.Status == STATUS_PENDING && !r.IsDeleted,
                     cancellationToken);
 
                 if (reservations == null || reservations.Count == 0)
@@ -431,7 +446,7 @@ namespace Bazario.Core.Services.Inventory
                     }
 
                     // Update reservation status
-                    reservation.Status = "Released";
+                    reservation.Status = STATUS_RELEASED;
                     reservation.ReleasedAt = now;
                     await _unitOfWork.StockReservations.UpdateReservationAsync(reservation, cancellationToken);
                 }
@@ -503,7 +518,7 @@ namespace Bazario.Core.Services.Inventory
                 // Retrieve all pending reservation records for this reservation ID
                 // Note: IsDeleted filter is redundant due to HasQueryFilter in entity configuration, but kept for clarity
                 var reservations = await _unitOfWork.StockReservations.GetFilteredReservationsAsync(
-                    r => r.ReservationId == reservationId && r.Status == "Pending" && !r.IsDeleted,
+                    r => r.ReservationId == reservationId && r.Status == STATUS_PENDING && !r.IsDeleted,
                     cancellationToken);
 
                 if (reservations == null || reservations.Count == 0)
@@ -521,7 +536,7 @@ namespace Bazario.Core.Services.Inventory
                 foreach (var reservation in reservations)
                 {
                     // Update reservation status and link to order
-                    reservation.Status = "Confirmed";
+                    reservation.Status = STATUS_CONFIRMED;
                     reservation.ConfirmedAt = now;
                     reservation.OrderId = orderId; // Link to the order
                     await _unitOfWork.StockReservations.UpdateReservationAsync(reservation, cancellationToken);
@@ -589,6 +604,13 @@ namespace Bazario.Core.Services.Inventory
                 {
                     _logger.LogWarning("Attempted to perform bulk update with null or empty items list");
                     throw new ArgumentException("Bulk update request must contain at least one item", nameof(bulkUpdateRequest));
+                }
+
+                if (bulkUpdateRequest.Items.Count > MAX_BULK_UPDATE_ITEMS)
+                {
+                    _logger.LogWarning("Attempted to perform bulk update with {ItemCount} items, exceeding maximum of {MaxItems}",
+                        bulkUpdateRequest.Items.Count, MAX_BULK_UPDATE_ITEMS);
+                    throw new ArgumentException($"Bulk update request cannot exceed {MAX_BULK_UPDATE_ITEMS} items. Received {bulkUpdateRequest.Items.Count} items.", nameof(bulkUpdateRequest));
                 }
 
                 if (bulkUpdateRequest.UpdatedBy == Guid.Empty)
@@ -748,14 +770,22 @@ namespace Bazario.Core.Services.Inventory
                     return false;
                 }
 
-                // Add threshold field to Product entity or create separate threshold tracking
-                // For now, use a default threshold and return true as placeholder
-                // In a real implementation, this would check:
-                // - Product.LowStockThreshold (if added to Product entity)
-                // - Store.LowStockThreshold (if added to Store entity)
-                // - System configuration settings
-                _logger.LogInformation("Low stock threshold tracking not yet fully implemented - requires threshold fields");
-                return true;
+                // TODO: Implement low stock threshold tracking
+                // This feature requires adding a LowStockThreshold field to the Product entity:
+                // 1. Add "public int? LowStockThreshold { get; set; }" to Product entity
+                // 2. Create and apply EF Core migration
+                // 3. Update this method to: product.LowStockThreshold = threshold; await SaveChangesAsync();
+                // 4. Create low stock alert service that queries products where StockQuantity <= LowStockThreshold
+
+                _logger.LogWarning("SetLowStockThresholdAsync called but feature not implemented - requires Product entity schema changes");
+                throw new NotImplementedException(
+                    "Low stock threshold tracking requires Product entity schema changes. " +
+                    "Add LowStockThreshold field to Product entity and create migration before using this feature.");
+            }
+            catch (NotImplementedException)
+            {
+                // Re-throw NotImplementedException as-is (don't wrap it)
+                throw;
             }
             catch (ArgumentException ex)
             {
@@ -765,7 +795,7 @@ namespace Bazario.Core.Services.Inventory
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Unexpected error while setting low stock threshold for product: {ProductId}", productId);
-                throw new InvalidOperationException($"Unexpected error while setting low stock threshold for product {productId}: {ex.Message}", ex);
+                throw new InvalidOperationException("Unexpected error while setting low stock threshold", ex);
             }
         }
 
@@ -792,10 +822,10 @@ namespace Bazario.Core.Services.Inventory
                 var cutoffTime = now.AddMinutes(-expirationMinutes);
 
                 // Query all expired pending reservations
-                // A reservation is expired if: Status = "Pending" AND ExpiresAt < now
+                // A reservation is expired if: Status = STATUS_PENDING AND ExpiresAt < now
                 // Note: IsDeleted filter is redundant due to HasQueryFilter in entity configuration, but kept for clarity
                 var expiredReservations = await _unitOfWork.StockReservations.GetFilteredReservationsAsync(
-                    r => r.Status == "Pending" && r.ExpiresAt < now && !r.IsDeleted,
+                    r => r.Status == STATUS_PENDING && r.ExpiresAt < now && !r.IsDeleted,
                     cancellationToken);
 
                 if (expiredReservations == null || expiredReservations.Count == 0)
@@ -844,7 +874,7 @@ namespace Bazario.Core.Services.Inventory
                     }
 
                     // Update reservation status to Expired
-                    reservation.Status = "Expired";
+                    reservation.Status = STATUS_EXPIRED;
                     reservation.ReleasedAt = now; // Use ReleasedAt to track when it was cleaned up
                     await _unitOfWork.StockReservations.UpdateReservationAsync(reservation, cancellationToken);
                 }
