@@ -76,9 +76,13 @@ namespace Bazario.Core.Services.Inventory
                 _logger.LogDebug("Updating stock for product {ProductId} to {NewQuantity}. Type: {UpdateType}, Reason: {Reason}",
                     productId, newQuantity, updateType, reason);
 
+                // Start transaction to ensure atomicity
+                await _unitOfWork.BeginTransactionAsync(cancellationToken);
+
                 var product = await _unitOfWork.Products.GetProductByIdAsync(productId, cancellationToken);
                 if (product == null || product.IsDeleted)
                 {
+                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
                     _logger.LogWarning("Product {ProductId} not found or deleted for stock update", productId);
                     return new InventoryUpdateResult
                     {
@@ -97,7 +101,9 @@ namespace Bazario.Core.Services.Inventory
                     StockUpdateType.Adjustment => newQuantity,
                     StockUpdateType.Return => product.StockQuantity + newQuantity,
                     StockUpdateType.Damage => Math.Max(MIN_STOCK_QUANTITY, product.StockQuantity - newQuantity),
-                    _ => product.StockQuantity
+                    StockUpdateType.Transfer => Math.Max(MIN_STOCK_QUANTITY, product.StockQuantity - newQuantity), // Transfer out
+                    StockUpdateType.Correction => newQuantity, // Same as Adjustment - set to exact value
+                    _ => throw new ArgumentException($"Unsupported stock update type: {updateType}", nameof(updateType))
                 };
 
                 // Validate that calculated stock doesn't exceed maximum allowed
@@ -111,6 +117,7 @@ namespace Bazario.Core.Services.Inventory
 
                 await _unitOfWork.Products.UpdateProductAsync(product, cancellationToken);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
                 _logger.LogInformation("Successfully updated stock for product {ProductId} from {PreviousQuantity} to {NewQuantity}",
                     productId, previousQuantity, product.StockQuantity);
@@ -126,12 +133,30 @@ namespace Bazario.Core.Services.Inventory
             catch (ArgumentException ex)
             {
                 _logger.LogWarning(ex, "Validation error while updating stock for product: {ProductId}", productId);
+                // Rollback transaction if it was started
+                try
+                {
+                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                }
+                catch (Exception rollbackEx)
+                {
+                    _logger.LogError(rollbackEx, "Error rolling back transaction after validation failure");
+                }
                 throw; // Re-throw argument exceptions as-is
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Unexpected error while updating stock for product: {ProductId}", productId);
-                throw new InvalidOperationException($"Unexpected error while updating stock for product {productId}: {ex.Message}", ex);
+                // Rollback transaction if it was started
+                try
+                {
+                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                }
+                catch (Exception rollbackEx)
+                {
+                    _logger.LogError(rollbackEx, "Error rolling back transaction after unexpected error");
+                }
+                throw new InvalidOperationException("Unexpected error while updating stock", ex);
             }
         }
 
@@ -188,11 +213,16 @@ namespace Bazario.Core.Services.Inventory
                 var productIds = reservationRequest.Items.Select(i => i.ProductId).ToList();
                 var productsDict = await GetProductsByIdsAsync(productIds, cancellationToken);
 
+                // Use the expiration minutes from the request (defaults to 30 if not specified)
+                var expirationMinutes = reservationRequest.ExpirationMinutes > 0
+                    ? reservationRequest.ExpirationMinutes
+                    : DEFAULT_RESERVATION_EXPIRY_MINUTES;
+
                 var result = new StockReservationResult
                 {
                     ReservationId = Guid.NewGuid(),
                     IsSuccessful = true,
-                    ExpiresAt = DateTime.UtcNow.AddMinutes(DEFAULT_RESERVATION_EXPIRY_MINUTES)
+                    ExpiresAt = DateTime.UtcNow.AddMinutes(expirationMinutes)
                 };
 
                 var reservationsToCreate = new List<Domain.Entities.Inventory.StockReservation>();
@@ -246,11 +276,16 @@ namespace Bazario.Core.Services.Inventory
                 // Second pass: Create reservation entities and update product stock
                 var reservationId = result.ReservationId!.Value; // Use the same ID for all items in this reservation (safe - we just created it)
                 var now = DateTime.UtcNow;
-                var expiresAt = now.AddMinutes(DEFAULT_RESERVATION_EXPIRY_MINUTES);
+                var expiresAt = result.ExpiresAt!.Value; // Use the same expiration time calculated earlier
 
                 foreach (var item in reservationRequest.Items)
                 {
-                    var product = productsDict[item.ProductId]; // Safe - already validated
+                    // Defensive programming: Use TryGetValue even though we validated earlier
+                    if (!productsDict.TryGetValue(item.ProductId, out var product))
+                    {
+                        _logger.LogError("Product {ProductId} unexpectedly missing from dictionary during reservation creation", item.ProductId);
+                        throw new InvalidOperationException($"Product {item.ProductId} missing during reservation - data integrity issue");
+                    }
 
                     // Create StockReservation entity for database persistence
                     // Note: We create one record per product in the reservation
