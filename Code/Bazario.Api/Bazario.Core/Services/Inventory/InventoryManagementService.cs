@@ -175,6 +175,9 @@ namespace Bazario.Core.Services.Inventory
                 var productIds = reservationRequest.Items.Select(i => i.ProductId).ToList();
                 var productsDict = await GetProductsByIdsAsync(productIds, cancellationToken);
 
+                // Start transaction to ensure atomicity (all-or-nothing)
+                await _unitOfWork.BeginTransactionAsync(cancellationToken);
+
                 var result = new StockReservationResult
                 {
                     ReservationId = Guid.NewGuid(),
@@ -182,6 +185,9 @@ namespace Bazario.Core.Services.Inventory
                     ExpiresAt = DateTime.UtcNow.AddMinutes(DEFAULT_RESERVATION_EXPIRY_MINUTES)
                 };
 
+                var reservationsToCreate = new List<Domain.Entities.Inventory.StockReservation>();
+
+                // First pass: Validate all items and check stock availability
                 foreach (var item in reservationRequest.Items)
                 {
                     // O(1) dictionary lookup instead of database query
@@ -198,28 +204,75 @@ namespace Bazario.Core.Services.Inventory
                             IsFullyReserved = false,
                             ErrorMessage = product == null ? "Product not found" : "Insufficient stock"
                         });
-                        continue;
                     }
-
-                    result.ItemResults.Add(new ReservationStatus
+                    else
                     {
-                        ProductId = item.ProductId,
-                        RequestedQuantity = item.Quantity,
-                        ReservedQuantity = item.Quantity,
-                        IsFullyReserved = true
-                    });
+                        result.ItemResults.Add(new ReservationStatus
+                        {
+                            ProductId = item.ProductId,
+                            RequestedQuantity = item.Quantity,
+                            ReservedQuantity = item.Quantity,
+                            IsFullyReserved = true
+                        });
+                    }
                 }
 
+                // If any item failed validation, rollback and return
                 if (!result.IsSuccessful)
                 {
-                    _logger.LogWarning("Stock reservation partially failed. {FailedCount} items could not be reserved",
+                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                    _logger.LogWarning("Stock reservation failed validation. {FailedCount} items could not be reserved",
                         result.ItemResults.Count(r => !r.IsFullyReserved));
+                    return result;
                 }
-                else
+
+                // Second pass: Create reservation entities and update product stock
+                var reservationId = result.ReservationId!.Value; // Use the same ID for all items in this reservation (safe - we just created it)
+                var now = DateTime.UtcNow;
+                var expiresAt = now.AddMinutes(DEFAULT_RESERVATION_EXPIRY_MINUTES);
+
+                foreach (var item in reservationRequest.Items)
                 {
-                    _logger.LogInformation("Successfully reserved stock for {ItemCount} items. ReservationId: {ReservationId}",
-                        reservationRequest.Items.Count, result.ReservationId);
+                    var product = productsDict[item.ProductId]; // Safe - already validated
+
+                    // Create StockReservation entity for database persistence
+                    // Note: We create one record per product in the reservation
+                    var reservation = new Domain.Entities.Inventory.StockReservation
+                    {
+                        ReservationId = reservationId, // Same ID for all items in this reservation request
+                        ProductId = item.ProductId,
+                        CustomerId = reservationRequest.CustomerId,
+                        ReservedQuantity = item.Quantity,
+                        Status = "Pending",
+                        CreatedAt = now,
+                        ExpiresAt = expiresAt,
+                        ExternalReference = reservationRequest.OrderReference,
+                        OrderId = null, // Not linked to order yet
+                        IsDeleted = false
+                    };
+
+                    reservationsToCreate.Add(reservation);
+
+                    // Deduct stock quantity (reserve the stock)
+                    product.StockQuantity -= item.Quantity;
+                    await _unitOfWork.Products.UpdateProductAsync(product, cancellationToken);
+
+                    _logger.LogDebug("Reserved {Quantity} units of product {ProductId}. New stock: {NewStock}",
+                        item.Quantity, item.ProductId, product.StockQuantity);
                 }
+
+                // Save all reservations to database
+                foreach (var reservation in reservationsToCreate)
+                {
+                    await _unitOfWork.StockReservations.AddReservationAsync(reservation, cancellationToken);
+                }
+
+                // Commit transaction - all changes are permanent
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.CommitTransactionAsync(cancellationToken);
+
+                _logger.LogInformation("Successfully reserved stock for {ItemCount} items. ReservationId: {ReservationId}, CustomerId: {CustomerId}",
+                    reservationRequest.Items.Count, result.ReservationId, reservationRequest.CustomerId);
 
                 return result;
             }
