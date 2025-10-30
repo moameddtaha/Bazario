@@ -399,11 +399,48 @@ namespace Bazario.Core.Services.Inventory
 
                 _logger.LogDebug("Confirming reservation {ReservationId} for order {OrderId}", reservationId, orderId);
 
-                // Implement reservation confirmation logic
-                // This should convert reservation to actual sale and update stock
-                // Note: This would require a StockReservation table to track reservations
-                _logger.LogInformation("Reservation confirmation not yet fully implemented - requires StockReservation table");
-                await Task.CompletedTask;
+                // Start transaction to ensure atomicity
+                await _unitOfWork.BeginTransactionAsync(cancellationToken);
+
+                // Retrieve all pending reservation records for this reservation ID
+                var reservations = await _unitOfWork.StockReservations.GetFilteredReservationsAsync(
+                    r => r.ReservationId == reservationId && r.Status == "Pending",
+                    cancellationToken);
+
+                if (reservations == null || reservations.Count == 0)
+                {
+                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                    _logger.LogWarning("No pending reservations found with ID: {ReservationId}", reservationId);
+                    return false;
+                }
+
+                _logger.LogDebug("Found {Count} pending reservation records to confirm for order {OrderId}",
+                    reservations.Count, orderId);
+
+                // Confirm all reservation records (link to order and mark as confirmed)
+                var now = DateTime.UtcNow;
+                foreach (var reservation in reservations)
+                {
+                    // Update reservation status and link to order
+                    reservation.Status = "Confirmed";
+                    reservation.ConfirmedAt = now;
+                    reservation.OrderId = orderId; // Link to the order
+                    await _unitOfWork.StockReservations.UpdateReservationAsync(reservation, cancellationToken);
+
+                    _logger.LogDebug("Confirmed reservation for product {ProductId}, quantity {Quantity}, linked to order {OrderId}",
+                        reservation.ProductId, reservation.ReservedQuantity, orderId);
+                }
+
+                // Note: Stock quantities were already deducted during ReserveStockAsync
+                // No need to update product stock again - just mark reservation as confirmed
+
+                // Commit all changes
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.CommitTransactionAsync(cancellationToken);
+
+                _logger.LogInformation("Successfully confirmed reservation {ReservationId} for order {OrderId}. Confirmed {Count} products",
+                    reservationId, orderId, reservations.Count);
+
                 return true;
             }
             catch (ArgumentException ex)
