@@ -55,29 +55,29 @@ namespace Bazario.Core.Services.Inventory
         {
             try
             {
-                // Input validation
+                // Input validation (using LogDebug for expected user input validation errors)
                 if (productId == Guid.Empty)
                 {
-                    _logger.LogWarning("Attempted to update stock with empty product ID");
+                    _logger.LogDebug("Validation failed: Product ID cannot be empty");
                     throw new ArgumentException("Product ID cannot be empty", nameof(productId));
                 }
 
                 if (newQuantity < MIN_STOCK_QUANTITY || newQuantity > MAX_STOCK_QUANTITY)
                 {
-                    _logger.LogWarning("Invalid stock quantity: {NewQuantity}. Must be between {Min} and {Max}",
+                    _logger.LogDebug("Validation failed: Invalid stock quantity {NewQuantity}. Must be between {Min} and {Max}",
                         newQuantity, MIN_STOCK_QUANTITY, MAX_STOCK_QUANTITY);
                     throw new ArgumentException($"Stock quantity must be between {MIN_STOCK_QUANTITY} and {MAX_STOCK_QUANTITY}", nameof(newQuantity));
                 }
 
                 if (string.IsNullOrWhiteSpace(reason))
                 {
-                    _logger.LogWarning("Attempted to update stock without providing a reason");
+                    _logger.LogDebug("Validation failed: Reason cannot be null or empty");
                     throw new ArgumentException("Reason cannot be null or empty", nameof(reason));
                 }
 
                 if (updatedBy == Guid.Empty)
                 {
-                    _logger.LogWarning("Attempted to update stock without valid updater ID");
+                    _logger.LogDebug("Validation failed: UpdatedBy cannot be empty");
                     throw new ArgumentException("UpdatedBy cannot be empty", nameof(updatedBy));
                 }
 
@@ -174,29 +174,29 @@ namespace Bazario.Core.Services.Inventory
         {
             try
             {
-                // Input validation
+                // Input validation (using LogDebug for expected user input validation errors)
                 if (reservationRequest == null)
                 {
-                    _logger.LogWarning("Attempted to reserve stock with null reservation request");
+                    _logger.LogDebug("Validation failed: Reservation request cannot be null");
                     throw new ArgumentNullException(nameof(reservationRequest), "Reservation request cannot be null");
                 }
 
                 if (reservationRequest.Items == null || reservationRequest.Items.Count == 0)
                 {
-                    _logger.LogWarning("Attempted to reserve stock with null or empty items list");
+                    _logger.LogDebug("Validation failed: Reservation request must contain at least one item");
                     throw new ArgumentException("Reservation request must contain at least one item", nameof(reservationRequest));
                 }
 
                 if (reservationRequest.Items.Count > MAX_RESERVATION_ITEMS)
                 {
-                    _logger.LogWarning("Attempted to reserve stock with {ItemCount} items, exceeding maximum of {MaxItems}",
+                    _logger.LogDebug("Validation failed: Attempted to reserve {ItemCount} items, exceeding maximum of {MaxItems}",
                         reservationRequest.Items.Count, MAX_RESERVATION_ITEMS);
                     throw new ArgumentException($"Reservation request cannot exceed {MAX_RESERVATION_ITEMS} items. Received {reservationRequest.Items.Count} items.", nameof(reservationRequest));
                 }
 
                 if (reservationRequest.CustomerId == Guid.Empty)
                 {
-                    _logger.LogWarning("Attempted to reserve stock without valid customer ID");
+                    _logger.LogDebug("Validation failed: Customer ID cannot be empty");
                     throw new ArgumentException("Customer ID cannot be empty", nameof(reservationRequest));
                 }
 
@@ -289,12 +289,14 @@ namespace Bazario.Core.Services.Inventory
                 }
 
                 // Second pass: Create reservation entities and update product stock
-                var reservationId = result.ReservationId!.Value; // Use the same ID for all items in this reservation (safe - we just created it)
+                var reservationId = result.ReservationId!.Value;
                 var now = DateTime.UtcNow;
-                var expiresAt = result.ExpiresAt!.Value; // Use the same expiration time calculated earlier
+                var expiresAt = result.ExpiresAt!.Value;
 
                 foreach (var item in reservationRequest.Items)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
+
                     // Defensive programming: Use TryGetValue even though we validated earlier
                     if (!productsDict.TryGetValue(item.ProductId, out var product))
                     {
@@ -422,6 +424,8 @@ namespace Bazario.Core.Services.Inventory
                 var now = DateTime.UtcNow;
                 foreach (var reservation in reservations)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
+
                     // Restore stock quantity (only if product exists and is not deleted)
                     if (productsDict.TryGetValue(reservation.ProductId, out var product))
                     {
@@ -535,6 +539,8 @@ namespace Bazario.Core.Services.Inventory
                 var now = DateTime.UtcNow;
                 foreach (var reservation in reservations)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
+
                     // Update reservation status and link to order
                     reservation.Status = STATUS_CONFIRMED;
                     reservation.ConfirmedAt = now;
@@ -636,6 +642,8 @@ namespace Bazario.Core.Services.Inventory
 
                 foreach (var item in bulkUpdateRequest.Items)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
+
                     try
                     {
                         // O(1) dictionary lookup instead of database query
@@ -838,7 +846,8 @@ namespace Bazario.Core.Services.Inventory
                 _logger.LogInformation("Found {Count} expired reservations to cleanup", expiredReservations.Count);
 
                 // Bulk retrieve all products to avoid N+1 query
-                var productIds = expiredReservations.Select(r => r.ProductId).Distinct().ToList();
+                // Note: Distinct is handled in GetProductsByIdsAsync helper
+                var productIds = expiredReservations.Select(r => r.ProductId).ToList();
                 var productsDict = await GetProductsByIdsAsync(productIds, cancellationToken);
 
                 // Track cleanup statistics
@@ -848,6 +857,8 @@ namespace Bazario.Core.Services.Inventory
                 // Restore stock and mark reservations as expired
                 foreach (var reservation in expiredReservations)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
+
                     // Restore stock quantity (only if product exists and is not deleted)
                     if (productsDict.TryGetValue(reservation.ProductId, out var product))
                     {
