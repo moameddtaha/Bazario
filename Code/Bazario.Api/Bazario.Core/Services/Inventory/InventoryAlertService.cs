@@ -72,11 +72,17 @@ namespace Bazario.Core.Services.Inventory
             {
                 // Get product details for the alert
                 var inventoryStatus = await _inventoryQueryService.GetInventoryStatusAsync(productId, cancellationToken);
-                
+
                 // Get store preferences
                 var storeId = await _inventoryAnalyticsService.GetStoreIdForProductAsync(productId, cancellationToken);
+                if (storeId == Guid.Empty)
+                {
+                    _logger.LogError("Could not determine store for product {ProductId}. Cannot send low stock alert.", productId);
+                    return;
+                }
+
                 var preferences = GetAlertPreferences(storeId);
-                
+
                 if (!preferences.EnableLowStockAlerts)
                 {
                     _logger.LogDebug("Low stock alerts disabled for store {StoreId}", storeId);
@@ -129,11 +135,17 @@ namespace Bazario.Core.Services.Inventory
             {
                 // Get product details for the alert
                 var inventoryStatus = await _inventoryQueryService.GetInventoryStatusAsync(productId, cancellationToken);
-                
+
                 // Get store preferences
                 var storeId = await _inventoryAnalyticsService.GetStoreIdForProductAsync(productId, cancellationToken);
+                if (storeId == Guid.Empty)
+                {
+                    _logger.LogError("Could not determine store for product {ProductId}. Cannot send out of stock notification.", productId);
+                    return;
+                }
+
                 var preferences = GetAlertPreferences(storeId);
-                
+
                 if (!preferences.EnableOutOfStockAlerts)
                 {
                     _logger.LogDebug("Out of stock alerts disabled for store {StoreId}", storeId);
@@ -267,11 +279,17 @@ namespace Bazario.Core.Services.Inventory
             {
                 // Get product details for the recommendation
                 var inventoryStatus = await _inventoryQueryService.GetInventoryStatusAsync(productId, cancellationToken);
-                
+
                 // Get store preferences
                 var storeId = await _inventoryAnalyticsService.GetStoreIdForProductAsync(productId, cancellationToken);
+                if (storeId == Guid.Empty)
+                {
+                    _logger.LogError("Could not determine store for product {ProductId}. Cannot send restock recommendation.", productId);
+                    return;
+                }
+
                 var preferences = GetAlertPreferences(storeId);
-                
+
                 if (!preferences.EnableRestockRecommendations)
                 {
                     _logger.LogDebug("Restock recommendations disabled for store {StoreId}", storeId);
@@ -309,7 +327,7 @@ namespace Bazario.Core.Services.Inventory
             }
         }
 
-        public async Task<int> ProcessPendingAlertsAsync(
+        public async Task<int?> ProcessPendingAlertsAsync(
             CancellationToken cancellationToken = default)
         {
             _logger.LogInformation("Processing pending inventory alerts");
@@ -366,7 +384,7 @@ namespace Bazario.Core.Services.Inventory
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to process pending inventory alerts");
-                return 0;
+                return null; // Return null to indicate error, 0 would mean no alerts processed
             }
         }
 
@@ -379,6 +397,13 @@ namespace Bazario.Core.Services.Inventory
 
             try
             {
+                // Validate storeId
+                if (storeId == Guid.Empty)
+                {
+                    _logger.LogError("Store ID cannot be empty");
+                    return Task.FromResult(false);
+                }
+
                 // Validate preferences
                 if (preferences == null)
                 {
@@ -411,6 +436,14 @@ namespace Bazario.Core.Services.Inventory
                     _logger.LogError("Dead stock days must be positive for store {StoreId}", storeId);
                     return Task.FromResult(false);
                 }
+
+                // Ensure preferences.StoreId matches the storeId parameter for consistency
+                if (preferences.StoreId != Guid.Empty && preferences.StoreId != storeId)
+                {
+                    _logger.LogWarning("Preferences StoreId {PreferencesStoreId} doesn't match parameter {StoreId}. Using parameter value.",
+                        preferences.StoreId, storeId);
+                }
+                preferences.StoreId = storeId;
 
                 // Set timestamps
                 if (preferences.CreatedAt == default)

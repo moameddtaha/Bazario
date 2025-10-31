@@ -72,13 +72,13 @@ namespace Bazario.Core.ServiceContracts.Inventory
         /// Batch processes all pending inventory alerts for stores with configured preferences
         /// </summary>
         /// <param name="cancellationToken">Cancellation token</param>
-        /// <returns>Number of alerts successfully processed</returns>
+        /// <returns>Number of alerts successfully processed, or null if an error occurred</returns>
         /// <remarks>
         /// Processes both low stock alerts (sent in bulk) and out-of-stock notifications (sent individually).
         /// Only processes alerts for stores that have alert preferences configured.
-        /// Returns 0 if an error occurs during processing.
+        /// Returns null to indicate error, 0 to indicate no alerts processed successfully.
         /// </remarks>
-        Task<int> ProcessPendingAlertsAsync(CancellationToken cancellationToken = default);
+        Task<int?> ProcessPendingAlertsAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Configures alert preferences for a specific store
