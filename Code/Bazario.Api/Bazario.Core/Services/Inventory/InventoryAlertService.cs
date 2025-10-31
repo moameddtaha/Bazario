@@ -2,6 +2,8 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Mail;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.Models.Inventory;
@@ -84,7 +86,7 @@ namespace Bazario.Core.Services.Inventory
                 
                 // Get store preferences
                 var storeId = await _inventoryAnalyticsService.GetStoreIdForProductAsync(productId, cancellationToken);
-                var preferences = GetAlertPreferences(storeId, _alertPreferences);
+                var preferences = GetAlertPreferences(storeId);
                 
                 if (!preferences.EnableLowStockAlerts)
                 {
@@ -141,7 +143,7 @@ namespace Bazario.Core.Services.Inventory
                 
                 // Get store preferences
                 var storeId = await _inventoryAnalyticsService.GetStoreIdForProductAsync(productId, cancellationToken);
-                var preferences = GetAlertPreferences(storeId, _alertPreferences);
+                var preferences = GetAlertPreferences(storeId);
                 
                 if (!preferences.EnableOutOfStockAlerts)
                 {
@@ -208,7 +210,7 @@ namespace Bazario.Core.Services.Inventory
 
                     var storeId = storeGroup.Key;
                     var storeAlerts = storeGroup.ToList();
-                    var preferences = GetAlertPreferences(storeId, _alertPreferences);
+                    var preferences = GetAlertPreferences(storeId);
 
                     if (!preferences.EnableLowStockAlerts)
                     {
@@ -278,7 +280,7 @@ namespace Bazario.Core.Services.Inventory
                 
                 // Get store preferences
                 var storeId = await _inventoryAnalyticsService.GetStoreIdForProductAsync(productId, cancellationToken);
-                var preferences = GetAlertPreferences(storeId, _alertPreferences);
+                var preferences = GetAlertPreferences(storeId);
                 
                 if (!preferences.EnableRestockRecommendations)
                 {
@@ -405,6 +407,33 @@ namespace Bazario.Core.Services.Inventory
                     return Task.FromResult(false);
                 }
 
+                // Validate email format
+                if (!IsValidEmail(preferences.AlertEmail))
+                {
+                    _logger.LogError("Invalid alert email format for store {StoreId}: {Email}", storeId, preferences.AlertEmail);
+                    return Task.FromResult(false);
+                }
+
+                // Validate threshold values
+                if (preferences.DefaultLowStockThreshold < 0)
+                {
+                    _logger.LogError("Default low stock threshold cannot be negative for store {StoreId}", storeId);
+                    return Task.FromResult(false);
+                }
+
+                if (preferences.DeadStockDays <= 0)
+                {
+                    _logger.LogError("Dead stock days must be positive for store {StoreId}", storeId);
+                    return Task.FromResult(false);
+                }
+
+                // Set timestamps
+                if (preferences.CreatedAt == default)
+                {
+                    preferences.CreatedAt = DateTime.UtcNow;
+                }
+                preferences.UpdatedAt = DateTime.UtcNow;
+
                 // Store preferences in memory (in a real app, this would be persisted to database)
                 _alertPreferences[storeId] = preferences;
 
@@ -425,9 +454,9 @@ namespace Bazario.Core.Services.Inventory
             }
         }
 
-        private InventoryAlertPreferences GetAlertPreferences(Guid storeId, ConcurrentDictionary<Guid, InventoryAlertPreferences> alertPreferences)
+        private InventoryAlertPreferences GetAlertPreferences(Guid storeId)
         {
-            if (alertPreferences.TryGetValue(storeId, out var preferences))
+            if (_alertPreferences.TryGetValue(storeId, out var preferences))
             {
                 return preferences;
             }
@@ -447,17 +476,23 @@ namespace Bazario.Core.Services.Inventory
             };
         }
 
+        private bool IsValidEmail(string email)
+        {
+            try
+            {
+                var mailAddress = new MailAddress(email);
+                return mailAddress.Address == email;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         private string CreateBulkAlertEmailBody(List<LowStockAlert> alerts, Guid storeId)
         {
-            var alertRows = alerts.Select(alert => $@"
-                <tr>
-                    <td>{alert.ProductName ?? "Unknown"}</td>
-                    <td>{alert.CurrentStock}</td>
-                    <td>{alert.Threshold}</td>
-                    <td>{alert.AlertDate:yyyy-MM-dd HH:mm}</td>
-                </tr>").ToList();
-
-            return $@"
+            var sb = new StringBuilder();
+            sb.AppendLine($@"
                 <h2>Bulk Low Stock Alert</h2>
                 <p><strong>Store ID:</strong> {storeId}</p>
                 <p><strong>Alert Time:</strong> {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC</p>
@@ -472,13 +507,26 @@ namespace Bazario.Core.Services.Inventory
                             <th>Alert Date</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        {string.Join("", alertRows)}
+                    <tbody>");
+
+            foreach (var alert in alerts)
+            {
+                sb.AppendLine($@"
+                        <tr>
+                            <td>{alert.ProductName ?? "Unknown"}</td>
+                            <td>{alert.CurrentStock}</td>
+                            <td>{alert.Threshold}</td>
+                            <td>{alert.AlertDate:yyyy-MM-dd HH:mm}</td>
+                        </tr>");
+            }
+
+            sb.AppendLine(@"
                     </tbody>
                 </table>
 
-                <p>Please review these products and consider restocking to avoid stockouts.</p>
-            ";
+                <p>Please review these products and consider restocking to avoid stockouts.</p>");
+
+            return sb.ToString();
         }
 
     }
