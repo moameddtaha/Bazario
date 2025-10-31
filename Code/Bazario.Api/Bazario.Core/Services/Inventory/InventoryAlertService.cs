@@ -193,7 +193,8 @@ namespace Bazario.Core.Services.Inventory
                 // Group alerts by store for efficient processing
                 var alertsByStore = alerts.GroupBy(a => a.StoreId).ToList();
 
-                var tasks = alertsByStore.Select(storeGroup => Task.Run(async () =>
+                // Use direct async lambda instead of Task.Run to avoid thread pool overhead
+                var tasks = alertsByStore.Select(async storeGroup =>
                 {
                     cancellationToken.ThrowIfCancellationRequested();
 
@@ -222,7 +223,7 @@ namespace Bazario.Core.Services.Inventory
                     {
                         _logger.LogWarning("Failed to send bulk low stock alert email for store {StoreId}", storeId);
                     }
-                }, cancellationToken));
+                });
 
                 await Task.WhenAll(tasks);
                 _logger.LogInformation("Bulk low stock alerts sent successfully for {Count} products", alerts.Count);
@@ -319,11 +320,16 @@ namespace Bazario.Core.Services.Inventory
 
                 // Get all stores that have alert preferences configured
                 var storesWithAlerts = _alertPreferences.Keys.ToList();
-                
+
                 foreach (var storeId in storesWithAlerts)
                 {
-                    var preferences = _alertPreferences[storeId];
-                    
+                    // Use TryGetValue to prevent race condition if preferences are removed
+                    if (!_alertPreferences.TryGetValue(storeId, out var preferences))
+                    {
+                        _logger.LogDebug("Alert preferences removed for store {StoreId} during processing", storeId);
+                        continue;
+                    }
+
                     if (!preferences.EnableLowStockAlerts && !preferences.EnableOutOfStockAlerts)
                         continue;
 
@@ -350,7 +356,7 @@ namespace Bazario.Core.Services.Inventory
                             SendOutOfStockNotificationAsync(alert.ProductId, cancellationToken));
 
                         await Task.WhenAll(outOfStockTasks);
-                        processedCount += outOfStockProducts.Count;
+                        // Don't add to processedCount - already counted in lowStockProducts above
                     }
                 }
 
