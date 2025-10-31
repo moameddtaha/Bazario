@@ -497,13 +497,22 @@ namespace Bazario.Core.Services.Inventory
 
         private bool IsValidEmail(string email)
         {
+            if (string.IsNullOrWhiteSpace(email))
+                return false;
+
             try
             {
                 var mailAddress = new MailAddress(email);
                 return mailAddress.Address == email;
             }
-            catch
+            catch (FormatException)
             {
+                // Invalid email format
+                return false;
+            }
+            catch (ArgumentException)
+            {
+                // Invalid argument
                 return false;
             }
         }
