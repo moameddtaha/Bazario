@@ -389,13 +389,13 @@ namespace Bazario.Core.Services.Inventory
                 // Input validation
                 if (reservationId == Guid.Empty)
                 {
-                    _logger.LogWarning("Attempted to release reservation with empty reservation ID");
+                    _logger.LogDebug("Validation failed: Reservation ID cannot be empty");
                     throw new ArgumentException("Reservation ID cannot be empty", nameof(reservationId));
                 }
 
                 if (string.IsNullOrWhiteSpace(reason))
                 {
-                    _logger.LogWarning("Attempted to release reservation without providing a reason");
+                    _logger.LogDebug("Validation failed: Reason cannot be null or empty");
                     throw new ArgumentException("Reason cannot be null or empty", nameof(reason));
                 }
 
@@ -508,13 +508,13 @@ namespace Bazario.Core.Services.Inventory
                 // Input validation
                 if (reservationId == Guid.Empty)
                 {
-                    _logger.LogWarning("Attempted to confirm reservation with empty reservation ID");
+                    _logger.LogDebug("Validation failed: Reservation ID cannot be empty");
                     throw new ArgumentException("Reservation ID cannot be empty", nameof(reservationId));
                 }
 
                 if (orderId == Guid.Empty)
                 {
-                    _logger.LogWarning("Attempted to confirm reservation with empty order ID");
+                    _logger.LogDebug("Validation failed: Order ID cannot be empty");
                     throw new ArgumentException("Order ID cannot be empty", nameof(orderId));
                 }
 
@@ -606,26 +606,26 @@ namespace Bazario.Core.Services.Inventory
                 // Input validation
                 if (bulkUpdateRequest == null)
                 {
-                    _logger.LogWarning("Attempted to perform bulk update with null request");
+                    _logger.LogDebug("Validation failed: Bulk update request cannot be null");
                     throw new ArgumentNullException(nameof(bulkUpdateRequest), "Bulk update request cannot be null");
                 }
 
                 if (bulkUpdateRequest.Items == null || bulkUpdateRequest.Items.Count == 0)
                 {
-                    _logger.LogWarning("Attempted to perform bulk update with null or empty items list");
+                    _logger.LogDebug("Validation failed: Bulk update request must contain at least one item");
                     throw new ArgumentException("Bulk update request must contain at least one item", nameof(bulkUpdateRequest));
                 }
 
                 if (bulkUpdateRequest.Items.Count > MAX_BULK_UPDATE_ITEMS)
                 {
-                    _logger.LogWarning("Attempted to perform bulk update with {ItemCount} items, exceeding maximum of {MaxItems}",
+                    _logger.LogDebug("Validation failed: Attempted to bulk update {ItemCount} items, exceeding maximum of {MaxItems}",
                         bulkUpdateRequest.Items.Count, MAX_BULK_UPDATE_ITEMS);
                     throw new ArgumentException($"Bulk update request cannot exceed {MAX_BULK_UPDATE_ITEMS} items. Received {bulkUpdateRequest.Items.Count} items.", nameof(bulkUpdateRequest));
                 }
 
                 if (bulkUpdateRequest.UpdatedBy == Guid.Empty)
                 {
-                    _logger.LogWarning("Attempted to perform bulk update without valid updater ID");
+                    _logger.LogDebug("Validation failed: UpdatedBy cannot be empty");
                     throw new ArgumentException("UpdatedBy cannot be empty", nameof(bulkUpdateRequest));
                 }
 
@@ -762,13 +762,13 @@ namespace Bazario.Core.Services.Inventory
                 // Input validation
                 if (productId == Guid.Empty)
                 {
-                    _logger.LogWarning("Attempted to set low stock threshold with empty product ID");
+                    _logger.LogDebug("Validation failed: Product ID cannot be empty");
                     throw new ArgumentException("Product ID cannot be empty", nameof(productId));
                 }
 
                 if (threshold < MIN_THRESHOLD_VALUE || threshold > MAX_THRESHOLD_VALUE)
                 {
-                    _logger.LogWarning("Invalid threshold value: {Threshold}. Must be between {Min} and {Max}",
+                    _logger.LogDebug("Validation failed: Invalid threshold {Threshold}. Must be between {Min} and {Max}",
                         threshold, MIN_THRESHOLD_VALUE, MAX_THRESHOLD_VALUE);
                     throw new ArgumentException($"Threshold must be between {MIN_THRESHOLD_VALUE} and {MAX_THRESHOLD_VALUE}", nameof(threshold));
                 }
@@ -820,7 +820,7 @@ namespace Bazario.Core.Services.Inventory
                 // Input validation
                 if (expirationMinutes <= 0)
                 {
-                    _logger.LogWarning("Attempted to cleanup expired reservations with invalid expiration minutes: {Minutes}", expirationMinutes);
+                    _logger.LogDebug("Validation failed: Expiration minutes {Minutes} must be greater than 0", expirationMinutes);
                     throw new ArgumentException("Expiration minutes must be greater than 0", nameof(expirationMinutes));
                 }
 
