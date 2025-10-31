@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.Mail;
 using System.Text;
 using System.Threading;
@@ -33,6 +34,9 @@ namespace Bazario.Core.Services.Inventory
     /// </remarks>
     public class InventoryAlertService : IInventoryAlertService
     {
+        private const int DEFAULT_LOW_STOCK_THRESHOLD = 10;
+        private const int DEFAULT_DEAD_STOCK_DAYS = 90;
+
         private readonly ILogger<InventoryAlertService> _logger;
         private readonly IEmailService _emailService;
         private readonly IInventoryQueryService _inventoryQueryService;
@@ -51,6 +55,15 @@ namespace Bazario.Core.Services.Inventory
             _inventoryAnalyticsService = inventoryAnalyticsService ?? throw new ArgumentNullException(nameof(inventoryAnalyticsService));
         }
 
+        /// <summary>
+        /// Sends a low stock alert email when product inventory falls below threshold
+        /// </summary>
+        /// <param name="productId">Product ID</param>
+        /// <param name="currentStock">Current stock level</param>
+        /// <param name="threshold">Low stock threshold that was crossed</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <exception cref="ArgumentException">Thrown when productId is empty</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when currentStock or threshold is negative</exception>
         public async Task SendLowStockAlertAsync(
             Guid productId,
             int currentStock,
@@ -95,8 +108,8 @@ namespace Bazario.Core.Services.Inventory
                 }
 
                 // Send email notification
-                var productName = inventoryStatus.ProductName ?? "Unknown Product";
-                var subject = $"Low Stock Alert: {productName}";
+                var productName = WebUtility.HtmlEncode(inventoryStatus.ProductName ?? "Unknown Product");
+                var subject = $"Low Stock Alert: {inventoryStatus.ProductName ?? "Unknown Product"}";
                 var body = $@"
                     <h2>Low Stock Alert</h2>
                     <p><strong>Product:</strong> {productName}</p>
@@ -123,6 +136,12 @@ namespace Bazario.Core.Services.Inventory
             }
         }
 
+        /// <summary>
+        /// Sends an urgent out-of-stock notification email when product inventory reaches zero
+        /// </summary>
+        /// <param name="productId">Product ID</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <exception cref="ArgumentException">Thrown when productId is empty</exception>
         public async Task SendOutOfStockNotificationAsync(
             Guid productId,
             CancellationToken cancellationToken = default)
@@ -134,7 +153,7 @@ namespace Bazario.Core.Services.Inventory
                 throw new ArgumentException("Product ID cannot be empty", nameof(productId));
             }
 
-            _logger.LogError("Out of stock notification for product {ProductId}", productId);
+            _logger.LogCritical("Out of stock notification for product {ProductId}", productId);
 
             try
             {
@@ -152,8 +171,8 @@ namespace Bazario.Core.Services.Inventory
                 }
 
                 // Send urgent email notification
-                var productName = inventoryStatus.ProductName ?? "Unknown Product";
-                var subject = $"🚨 URGENT: Out of Stock - {productName}";
+                var productName = WebUtility.HtmlEncode(inventoryStatus.ProductName ?? "Unknown Product");
+                var subject = $"URGENT: Out of Stock - {inventoryStatus.ProductName ?? "Unknown Product"}";
                 var body = $@"
                     <h2 style='color: red;'>OUT OF STOCK ALERT</h2>
                     <p><strong>Product:</strong> {productName}</p>
@@ -180,6 +199,16 @@ namespace Bazario.Core.Services.Inventory
             }
         }
 
+        /// <summary>
+        /// Sends consolidated low stock alert emails grouped by store for efficient processing
+        /// </summary>
+        /// <param name="alerts">List of low stock alerts to send</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <exception cref="ArgumentNullException">Thrown when alerts list is null</exception>
+        /// <remarks>
+        /// Alerts are automatically grouped by store ID and sent in parallel for performance.
+        /// Empty lists are handled gracefully without sending emails.
+        /// </remarks>
         public async Task SendBulkLowStockAlertsAsync(
             List<LowStockAlert> alerts,
             CancellationToken cancellationToken = default)
@@ -244,6 +273,15 @@ namespace Bazario.Core.Services.Inventory
             }
         }
 
+        /// <summary>
+        /// Sends a restock recommendation email with suggested quantity and reasoning
+        /// </summary>
+        /// <param name="productId">Product ID</param>
+        /// <param name="recommendedQuantity">Recommended quantity to restock</param>
+        /// <param name="reason">Reason for the recommendation (e.g., based on sales patterns)</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <exception cref="ArgumentException">Thrown when productId is empty or reason is null/empty</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when recommendedQuantity is not positive</exception>
         public async Task SendRestockRecommendationAsync(
             Guid productId,
             int recommendedQuantity,
@@ -289,14 +327,15 @@ namespace Bazario.Core.Services.Inventory
                 }
 
                 // Send restock recommendation email
-                var productName = inventoryStatus.ProductName ?? "Unknown Product";
-                var subject = $"Restock Recommendation: {productName}";
+                var productName = WebUtility.HtmlEncode(inventoryStatus.ProductName ?? "Unknown Product");
+                var encodedReason = WebUtility.HtmlEncode(reason);
+                var subject = $"Restock Recommendation: {inventoryStatus.ProductName ?? "Unknown Product"}";
                 var body = $@"
                     <h2>Restock Recommendation</h2>
                     <p><strong>Product:</strong> {productName}</p>
                     <p><strong>Current Stock:</strong> {inventoryStatus.CurrentStock} units</p>
                     <p><strong>Recommended Quantity:</strong> {recommendedQuantity} units</p>
-                    <p><strong>Reason:</strong> {reason}</p>
+                    <p><strong>Reason:</strong> {encodedReason}</p>
                     <p><strong>Recommendation Time:</strong> {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC</p>
                     <p>This recommendation is based on sales patterns and current inventory levels.</p>
                 ";
@@ -318,6 +357,16 @@ namespace Bazario.Core.Services.Inventory
             }
         }
 
+        /// <summary>
+        /// Batch processes all pending inventory alerts for stores with configured preferences
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>Number of alerts successfully processed</returns>
+        /// <remarks>
+        /// Processes both low stock alerts (sent in bulk) and out-of-stock notifications (sent individually).
+        /// Only processes alerts for stores that have alert preferences configured.
+        /// Returns 0 if an error occurs during processing.
+        /// </remarks>
         public async Task<int> ProcessPendingAlertsAsync(
             CancellationToken cancellationToken = default)
         {
@@ -469,7 +518,8 @@ namespace Bazario.Core.Services.Inventory
                 EnableLowStockAlerts = true,
                 EnableOutOfStockAlerts = true,
                 EnableRestockRecommendations = true,
-                DefaultLowStockThreshold = 10, // Default threshold
+                DefaultLowStockThreshold = DEFAULT_LOW_STOCK_THRESHOLD,
+                DeadStockDays = DEFAULT_DEAD_STOCK_DAYS,
                 SendDailySummary = false,
                 SendWeeklySummary = true,
                 CreatedAt = DateTime.UtcNow
@@ -511,9 +561,10 @@ namespace Bazario.Core.Services.Inventory
 
             foreach (var alert in alerts)
             {
+                var encodedProductName = WebUtility.HtmlEncode(alert.ProductName ?? "Unknown");
                 sb.AppendLine($@"
                         <tr>
-                            <td>{alert.ProductName ?? "Unknown"}</td>
+                            <td>{encodedProductName}</td>
                             <td>{alert.CurrentStock}</td>
                             <td>{alert.Threshold}</td>
                             <td>{alert.AlertDate:yyyy-MM-dd HH:mm}</td>
