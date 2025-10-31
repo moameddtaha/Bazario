@@ -128,5 +128,40 @@ namespace Bazario.Core.Services.Infrastructure
                 return false;
             }
         }
+
+        /// <summary>
+        /// Sends a generic alert email with custom subject and HTML body
+        /// </summary>
+        public async Task<bool> SendGenericAlertEmailAsync(string toEmail, string subject, string htmlBody)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(toEmail) ||
+                    string.IsNullOrWhiteSpace(subject) ||
+                    string.IsNullOrWhiteSpace(htmlBody))
+                {
+                    _logger.LogWarning("Invalid parameters for SendGenericAlertEmailAsync");
+                    return false;
+                }
+
+                var result = await _emailSender.SendEmailAsync(toEmail, subject, htmlBody);
+
+                if (result)
+                {
+                    _logger.LogInformation("Generic alert email sent successfully to {Email} with subject: {Subject}", toEmail, subject);
+                }
+                else
+                {
+                    _logger.LogWarning("Failed to send generic alert email to {Email}", toEmail);
+                }
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send generic alert email to {Email}", toEmail);
+                return false;
+            }
+        }
     }
 }

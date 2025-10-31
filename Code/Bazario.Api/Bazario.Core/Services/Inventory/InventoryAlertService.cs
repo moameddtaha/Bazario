@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -20,7 +21,7 @@ namespace Bazario.Core.Services.Inventory
         private readonly IEmailService _emailService;
         private readonly IInventoryQueryService _inventoryQueryService;
         private readonly IInventoryAnalyticsService _inventoryAnalyticsService;
-        private readonly Dictionary<Guid, InventoryAlertPreferences> _alertPreferences = new();
+        private readonly ConcurrentDictionary<Guid, InventoryAlertPreferences> _alertPreferences = new();
 
         public InventoryAlertService(
             ILogger<InventoryAlertService> logger,
@@ -69,13 +70,16 @@ namespace Bazario.Core.Services.Inventory
                     <p>Please consider restocking this product to avoid stockouts.</p>
                 ";
 
-                // Note: IEmailService doesn't have a generic SendEmailAsync method
-                // This would need to be implemented or use a different email service
-                // For now, we'll just log the email content
-                _logger.LogInformation("Would send email to {Email} with subject: {Subject}", 
-                    preferences.AlertEmail, subject);
+                var emailSent = await _emailService.SendGenericAlertEmailAsync(preferences.AlertEmail, subject, body);
 
-                _logger.LogInformation("Low stock alert sent successfully for product {ProductId}", productId);
+                if (emailSent)
+                {
+                    _logger.LogInformation("Low stock alert sent successfully for product {ProductId}", productId);
+                }
+                else
+                {
+                    _logger.LogWarning("Failed to send low stock alert email for product {ProductId}", productId);
+                }
             }
             catch (Exception ex)
             {
@@ -115,13 +119,16 @@ namespace Bazario.Core.Services.Inventory
                     <p>Please restock immediately or temporarily disable the product listing.</p>
                 ";
 
-                // Note: IEmailService doesn't have a generic SendEmailAsync method
-                // This would need to be implemented or use a different email service
-                // For now, we'll just log the email content
-                _logger.LogInformation("Would send email to {Email} with subject: {Subject}", 
-                    preferences.AlertEmail, subject);
+                var emailSent = await _emailService.SendGenericAlertEmailAsync(preferences.AlertEmail, subject, body);
 
-                _logger.LogInformation("Out of stock notification sent successfully for product {ProductId}", productId);
+                if (emailSent)
+                {
+                    _logger.LogInformation("Out of stock notification sent successfully for product {ProductId}", productId);
+                }
+                else
+                {
+                    _logger.LogWarning("Failed to send out of stock notification email for product {ProductId}", productId);
+                }
             }
             catch (Exception ex)
             {
@@ -145,9 +152,11 @@ namespace Bazario.Core.Services.Inventory
             {
                 // Group alerts by store for efficient processing
                 var alertsByStore = alerts.GroupBy(a => a.StoreId).ToList();
-                
-                var tasks = alertsByStore.Select(storeGroup => Task.Run(() =>
+
+                var tasks = alertsByStore.Select(storeGroup => Task.Run(async () =>
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
+
                     var storeId = storeGroup.Key;
                     var storeAlerts = storeGroup.ToList();
                     var preferences = GetAlertPreferences(storeId, _alertPreferences);
@@ -162,15 +171,18 @@ namespace Bazario.Core.Services.Inventory
                     var subject = $"Bulk Low Stock Alert - {storeAlerts.Count} Products";
                     var body = CreateBulkAlertEmailBody(storeAlerts, storeId);
 
-                    // Note: IEmailService doesn't have a generic SendEmailAsync method
-                    // This would need to be implemented or use a different email service
-                    // For now, we'll just log the email content
-                    _logger.LogInformation("Would send bulk email to {Email} with subject: {Subject}", 
-                        preferences.AlertEmail, subject);
+                    var emailSent = await _emailService.SendGenericAlertEmailAsync(preferences.AlertEmail, subject, body);
 
-                    _logger.LogInformation("Bulk low stock alert sent for store {StoreId} with {Count} products", 
-                        storeId, storeAlerts.Count);
-                }));
+                    if (emailSent)
+                    {
+                        _logger.LogInformation("Bulk low stock alert sent for store {StoreId} with {Count} products",
+                            storeId, storeAlerts.Count);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Failed to send bulk low stock alert email for store {StoreId}", storeId);
+                    }
+                }, cancellationToken));
 
                 await Task.WhenAll(tasks);
                 _logger.LogInformation("Bulk low stock alerts sent successfully for {Count} products", alerts.Count);
@@ -217,13 +229,16 @@ namespace Bazario.Core.Services.Inventory
                     <p>This recommendation is based on sales patterns and current inventory levels.</p>
                 ";
 
-                // Note: IEmailService doesn't have a generic SendEmailAsync method
-                // This would need to be implemented or use a different email service
-                // For now, we'll just log the email content
-                _logger.LogInformation("Would send email to {Email} with subject: {Subject}", 
-                    preferences.AlertEmail, subject);
+                var emailSent = await _emailService.SendGenericAlertEmailAsync(preferences.AlertEmail, subject, body);
 
-                _logger.LogInformation("Restock recommendation sent successfully for product {ProductId}", productId);
+                if (emailSent)
+                {
+                    _logger.LogInformation("Restock recommendation sent successfully for product {ProductId}", productId);
+                }
+                else
+                {
+                    _logger.LogWarning("Failed to send restock recommendation email for product {ProductId}", productId);
+                }
             }
             catch (Exception ex)
             {
@@ -331,7 +346,7 @@ namespace Bazario.Core.Services.Inventory
             }
         }
 
-        private InventoryAlertPreferences GetAlertPreferences(Guid storeId, Dictionary<Guid, InventoryAlertPreferences> alertPreferences)
+        private InventoryAlertPreferences GetAlertPreferences(Guid storeId, ConcurrentDictionary<Guid, InventoryAlertPreferences> alertPreferences)
         {
             if (alertPreferences.TryGetValue(storeId, out var preferences))
             {
