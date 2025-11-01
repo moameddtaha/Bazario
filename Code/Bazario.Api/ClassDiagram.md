@@ -160,6 +160,21 @@ classDiagram
         +DateTime CreatedAt
     }
 
+    class InventoryAlertPreferences {
+        +Guid StoreId
+        +string AlertEmail
+        +bool EnableLowStockAlerts
+        +bool EnableOutOfStockAlerts
+        +bool EnableRestockRecommendations
+        +bool EnableDeadStockAlerts
+        +int DefaultLowStockThreshold
+        +int DeadStockDays
+        +bool SendDailySummary
+        +bool SendWeeklySummary
+        +DateTime CreatedAt
+        +DateTime? UpdatedAt
+    }
+
     %% Order Management
     class Order {
         +Guid OrderId
@@ -493,9 +508,12 @@ classDiagram
 
     class IInventoryAlertService {
         <<interface>>
-        +CheckLowStockAlertsAsync()
-        +NotifyLowStockAsync(inventoryId)
-        +CheckOutOfStockAlertsAsync()
+        +SendLowStockAlertAsync(productId, currentStock, threshold) Task~bool~
+        +SendOutOfStockNotificationAsync(productId) Task~bool~
+        +SendBulkLowStockAlertsAsync(alerts) Task
+        +SendRestockRecommendationAsync(productId, recommendedQuantity, reason) Task~bool~
+        +ProcessPendingAlertsAsync() Task~int?~
+        +ConfigureAlertPreferencesAsync(storeId, preferences) Task~bool~
     }
 
     %% ========================================
@@ -663,6 +681,7 @@ classDiagram
     Store "1" -- "0..*" Order : receives
     Store "1" -- "0..*" Review : has
     Store "1" -- "0..*" StoreGovernorateSupport : supports
+    Store "1" -- "0..1" InventoryAlertPreferences : has_alert_config
 
     Product "1" -- "0..*" OrderItem : ordered_in
     Product "1" -- "1" Inventory : has_stock
@@ -883,6 +902,14 @@ Authentication Services
 
 Order Services
   └── IOrderPaymentService (Payment processing - Paymob)
+
+InventoryAlertService
+  ├── IEmailService (email notifications)
+  ├── IInventoryQueryService (inventory data)
+  ├── IInventoryAnalyticsService (store mapping)
+  ├── IMemoryCache (performance caching)
+  ├── IConfiguration (default settings)
+  └── IUnitOfWork (database persistence)
 ```
 
 ---

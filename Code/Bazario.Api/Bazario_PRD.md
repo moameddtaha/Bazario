@@ -10,6 +10,7 @@
 ## Change Log
 | Version | Date | Changes | Author |
 |---------|------|---------|--------|
+| 2.1 | February 2025 | Enhanced inventory alert system with database persistence and cache-aside pattern | Development Team |
 | 2.0 | January 2024 | Initial comprehensive PRD creation based on codebase analysis | Development Team |
 
 ---
@@ -126,7 +127,13 @@ Bazario aims to democratize e-commerce by providing an accessible, secure, and f
 - **Product Search**: Advanced search and filtering capabilities
 - **Inventory Analytics**: Dead stock analysis, forecasting, and performance metrics
 - **Stock Reservations**: Temporary stock holding for pending orders
-- **Inventory Alerts**: Automated notifications for low stock and reorder points
+- **Inventory Alerts**:
+  - Automated email notifications for low stock, out-of-stock, and restock recommendations
+  - Per-store configurable alert preferences with database persistence
+  - Bulk alert processing for efficient notification delivery
+  - Cache-aside pattern for high-performance preference retrieval
+  - Support for daily and weekly summary emails
+  - Dead stock alerts based on configurable thresholds
 
 ### 4. Order Management
 - **Order Processing**: Complete order lifecycle management with automated total calculation
@@ -166,6 +173,7 @@ Bazario aims to democratize e-commerce by providing an accessible, secure, and f
 ### Technology Stack
 - **Backend Framework**: .NET 8 Web API
 - **Database**: SQL Server with Entity Framework Core
+- **Caching**: ASP.NET Core IMemoryCache for high-performance data retrieval
 - **Authentication**: ASP.NET Core Identity with JWT
 - **Email Service**: MailKit with SMTP support
 - **Logging**: Serilog with multiple sinks
@@ -192,6 +200,7 @@ Bazario.Email.ServiceTests/ # Email service tests
 - **Discounts**: Discount codes with usage tracking and analytics
 - **StoreShippingRates**: Store-specific shipping rates by zone
 - **Inventory**: Stock tracking with alerts and reservations
+- **InventoryAlertPreferences**: Per-store alert configuration with email preferences and thresholds
 
 ---
 
@@ -276,6 +285,17 @@ GET    /api/inventory/alerts # Get inventory alerts
 GET    /api/inventory/analytics # Get inventory analytics
 ```
 
+### Inventory Alert Endpoints
+```
+GET    /api/inventory/alerts/preferences/{storeId}  # Get store alert preferences
+POST   /api/inventory/alerts/preferences            # Configure alert preferences
+PUT    /api/inventory/alerts/preferences/{storeId}  # Update alert preferences
+POST   /api/inventory/alerts/process                # Process pending alerts (admin)
+POST   /api/inventory/alerts/low-stock              # Send low stock alert
+POST   /api/inventory/alerts/out-of-stock           # Send out-of-stock notification
+POST   /api/inventory/alerts/restock                # Send restock recommendation
+```
+
 ---
 
 ## User Stories
@@ -298,6 +318,10 @@ GET    /api/inventory/analytics # Get inventory analytics
 6. **As a seller**, I want to create discount campaigns so that I can attract more customers.
 7. **As a seller**, I want to track inventory levels and get alerts so that I can restock on time.
 8. **As a seller**, I want to analyze discount performance so that I can optimize my marketing campaigns.
+9. **As a seller**, I want to configure my inventory alert preferences so that I receive notifications for low stock and out-of-stock items.
+10. **As a seller**, I want to set custom low stock thresholds for my store so that alerts match my business needs.
+11. **As a seller**, I want to receive daily or weekly summary emails of my inventory status so that I can plan restocking efficiently.
+12. **As a seller**, I want to get restock recommendations so that I can optimize my inventory levels.
 
 ### Admin Stories
 1. **As an admin**, I want to moderate user content so that I can maintain platform quality.
@@ -307,6 +331,7 @@ GET    /api/inventory/analytics # Get inventory analytics
 5. **As an admin**, I want to configure store-specific shipping zones so that each store can customize their shipping options.
 6. **As an admin**, I want to monitor inventory levels across all stores so that I can identify issues.
 7. **As an admin**, I want to analyze discount performance and revenue impact so that I can optimize the platform.
+8. **As an admin**, I want to trigger bulk processing of pending inventory alerts so that I can ensure timely notifications across all stores.
 
 ---
 
@@ -430,7 +455,7 @@ GET    /api/inventory/analytics # Get inventory analytics
 
 ## Future Roadmap
 
-### Phase 1 (Q1 2024) - Foundation
+### Phase 1 (Q1 2024 - Q1 2025) - Foundation
 - ✅ Core authentication system
 - ✅ Basic store and product management
 - ✅ Order processing system with automated calculation
@@ -441,6 +466,9 @@ GET    /api/inventory/analytics # Get inventory analytics
 - ✅ Discount management system
 - ✅ Shipping zone management
 - ✅ Order analytics and reporting
+- ✅ Inventory alert system with database persistence (v2.1)
+- ✅ Cache-aside pattern for alert preferences (v2.1)
+- ✅ Per-store alert configuration with email preferences (v2.1)
 
 ### Phase 2 (Q2 2024) - Enhancement
 - 📋 Advanced search and filtering
@@ -477,7 +505,14 @@ GET    /api/inventory/analytics # Get inventory analytics
 
 Bazario represents a comprehensive e-commerce platform designed to meet the needs of modern online commerce. With its robust technical architecture, comprehensive feature set, and focus on user experience, the platform is positioned for success in the competitive e-commerce market.
 
-The platform's modular design, security-first approach, and scalable architecture provide a solid foundation for growth and expansion. The recent enhancements including advanced order calculation, multi-discount support, shipping zone management, and comprehensive analytics provide significant competitive advantages in the marketplace.
+The platform's modular design, security-first approach, and scalable architecture provide a solid foundation for growth and expansion. The recent enhancements including advanced order calculation, multi-discount support, shipping zone management, comprehensive analytics, and intelligent inventory alert system with database persistence and cache-aside pattern provide significant competitive advantages in the marketplace.
+
+### Key Differentiators
+- **Performance-Optimized Alerts**: Three-layer cache-aside pattern ensures sub-millisecond alert preference retrieval
+- **Seller Empowerment**: Per-store alert configuration allows sellers to customize notifications to their business needs
+- **Proactive Inventory Management**: Automated low stock, out-of-stock, and restock recommendations help prevent stockouts
+- **Thread-Safe Architecture**: Per-store locking prevents race conditions and cache stampede scenarios
+- **Persistent Configuration**: Alert preferences survive application restarts and scale across multiple instances
 
 Key differentiators include:
 - **Intelligent Order Processing**: Automated calculation with multi-discount support and location-based shipping

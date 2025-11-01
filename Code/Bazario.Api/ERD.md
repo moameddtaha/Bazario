@@ -17,6 +17,7 @@ erDiagram
     Store ||--o{ Order : "receives"
     Store ||--o{ StoreGovernorateSupport : "supports"
     Store ||--o{ Review : "has"
+    Store ||--o| InventoryAlertPreferences : "has alert config"
 
     %% Product & Catalog
     Product ||--o{ OrderItem : "ordered in"
@@ -191,6 +192,22 @@ erDiagram
         datetime CreatedAt
     }
 
+    %% Inventory Alert Preferences Entity
+    InventoryAlertPreferences {
+        guid StoreId "PK, FK"
+        string AlertEmail
+        bool EnableLowStockAlerts
+        bool EnableOutOfStockAlerts
+        bool EnableRestockRecommendations
+        bool EnableDeadStockAlerts
+        int DefaultLowStockThreshold
+        int DeadStockDays
+        bool SendDailySummary
+        bool SendWeeklySummary
+        datetime CreatedAt
+        datetime UpdatedAt
+    }
+
     %% Order Entity
     Order {
         guid OrderId PK
@@ -329,6 +346,9 @@ erDiagram
 - **Governorate → City** (1:N) - Governorate has multiple cities
 - **Inventory → InventoryMovement** (1:N) - Inventory has movement history
 
+### One-to-One Relationships
+- **Store → InventoryAlertPreferences** (1:0..1) - Store can have alert preferences configuration
+
 ### Many-to-One Relationships
 - **Store → Seller** (N:1) - Multiple stores belong to one seller
 - **Product → Category** (N:1) - Multiple products in one category
@@ -364,6 +384,7 @@ erDiagram
 - **Customer:** UserId (1:1 relationship)
 - **Admin:** UserId (1:1 relationship)
 - **Inventory:** ProductId (1:1 relationship)
+- **InventoryAlertPreferences:** StoreId (1:0..1 relationship with Store)
 
 ### Foreign Keys
 - All relationships enforce referential integrity
@@ -410,6 +431,12 @@ CREATE INDEX IX_Review_IsDeleted ON Review(IsDeleted);
 
 -- Inventory indexes
 CREATE INDEX IX_Inventory_ProductId ON Inventory(ProductId);
+
+-- InventoryAlertPreferences indexes
+CREATE INDEX IX_InventoryAlertPreferences_StoreId ON InventoryAlertPreferences(StoreId);
+CREATE INDEX IX_InventoryAlertPreferences_AlertEmail ON InventoryAlertPreferences(AlertEmail);
+CREATE INDEX IX_InventoryAlertPreferences_CreatedAt ON InventoryAlertPreferences(CreatedAt);
+CREATE INDEX IX_InventoryAlertPreferences_UpdatedAt ON InventoryAlertPreferences(UpdatedAt);
 
 -- Location indexes
 CREATE INDEX IX_Governorate_CountryId ON Governorate(CountryId);
@@ -458,7 +485,18 @@ CREATE INDEX IX_City_GovernorateId ON City(GovernorateId);
    - Low stock alerts based on ReorderLevel
    - One-to-one relationship with Product
 
-7. **Location-Based Shipping**
+7. **Inventory Alert Management**
+   - Alert preferences are per-store configuration
+   - Uses 3-layer cache-aside pattern: Memory Cache → Database → Config Defaults
+   - All alert methods return Task<bool> to indicate success/failure
+   - Preferences persist across application restarts
+   - Cache invalidation on updates prevents stale data
+   - Thread-safe with per-store locking to prevent cache stampede
+   - Email notifications for low stock, out-of-stock, and restock recommendations
+   - Supports bulk alert processing and daily/weekly summaries
+   - Configurable thresholds per store
+
+8. **Location-Based Shipping**
    - Hierarchical: Country → Governorate → City
    - Store can support specific governorates (custom rates)
    - Shipping cost = Governorate base + City modifier
