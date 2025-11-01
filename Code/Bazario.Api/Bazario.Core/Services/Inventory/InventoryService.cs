@@ -139,7 +139,7 @@ namespace Bazario.Core.Services.Inventory
         public Task SendRestockRecommendationAsync(Guid productId, int recommendedQuantity, string reason, CancellationToken cancellationToken = default)
             => _alertService.SendRestockRecommendationAsync(productId, recommendedQuantity, reason, cancellationToken);
 
-        public Task<int> ProcessPendingAlertsAsync(CancellationToken cancellationToken = default)
+        public Task<int?> ProcessPendingAlertsAsync(CancellationToken cancellationToken = default)
             => _alertService.ProcessPendingAlertsAsync(cancellationToken);
 
         public Task<bool> ConfigureAlertPreferencesAsync(Guid storeId, InventoryAlertPreferences preferences, CancellationToken cancellationToken = default)
