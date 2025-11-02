@@ -86,6 +86,12 @@ namespace Bazario.Core.Services.Catalog.Product
                     validationErrors.Add("Product store is inactive");
                 }
 
+                // Validate product name
+                if (string.IsNullOrWhiteSpace(product.Name))
+                {
+                    validationErrors.Add("Product name is missing");
+                }
+
                 // Check if product has sufficient stock
                 if (product.StockQuantity < quantity)
                 {
@@ -95,7 +101,25 @@ namespace Bazario.Core.Services.Catalog.Product
                 // Check if product price is valid
                 if (product.Price <= 0)
                 {
-                    validationErrors.Add("Product price is invalid");
+                    validationErrors.Add("Product price must be greater than zero");
+                }
+                else if (product.Price > 1000000) // Maximum reasonable price (configurable in production)
+                {
+                    validationErrors.Add("Product price exceeds maximum allowed value");
+                }
+
+                // Validate total price calculation for overflow
+                try
+                {
+                    var totalPrice = checked(product.Price * quantity);
+                    if (totalPrice > decimal.MaxValue / 2) // Reasonable threshold
+                    {
+                        validationErrors.Add("Order total exceeds maximum allowed value");
+                    }
+                }
+                catch (OverflowException)
+                {
+                    validationErrors.Add("Order total calculation resulted in overflow");
                 }
 
                 var isValid = validationErrors.Count == 0;
