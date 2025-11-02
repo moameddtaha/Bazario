@@ -12,7 +12,8 @@ Bazario is a comprehensive e-commerce solution that enables sellers to create st
 - **Multi-Store Management** - Create and manage multiple stores with individual analytics
 - **Product Management** - Full CRUD operations with inventory tracking
 - **Order Processing** - Automated order lifecycle management (Pending → Processing → Shipped → Delivered)
-- **Inventory Control** - Real-time stock tracking, low stock alerts, and forecasting
+- **Inventory Control** - Real-time stock tracking with configurable low stock alerts and forecasting
+- **Smart Alert System** - Per-store alert preferences with email notifications for low stock, out-of-stock, and restock recommendations
 - **Analytics Dashboard** - Revenue tracking, sales metrics, and performance insights
 - **Shipping Configuration** - Location-based shipping rates per governorate
 
@@ -71,6 +72,34 @@ Services are separated by responsibility:
 - **Analytics Services** - Reporting and metrics
 - **Composite Services** - Unified interface
 
+## 📐 System Architecture & Design
+
+### Entity Relationship Diagram
+
+The database schema follows a normalized relational design with clear separation of concerns:
+
+![Entity Relationship Diagram](/ERD.md)
+
+**Key Entity Relationships:**
+- Users can own multiple Stores (One-to-Many)
+- Each Store contains multiple Products (One-to-Many)
+- Products have a one-to-one relationship with Inventory
+- Orders contain multiple OrderItems linking to Products (Many-to-Many through junction)
+- Location hierarchy: Country → Governorate → City
+- Store → InventoryAlertPreferences (One-to-One optional)
+
+### Domain Class Diagram
+
+The class structure implements Clean Architecture with clear dependency flow:
+
+![Class Diagram](/ClassDiagram.md)
+
+**Architecture Highlights:**
+- **API Layer** - Controllers and DTOs
+- **Core Layer** - Domain entities, service interfaces, and business logic
+- **Infrastructure Layer** - Repository implementations and EF Core configurations
+- Dependencies point inward: Infrastructure → Core ← API
+
 ## 🛠️ Technology Stack
 
 ### Backend
@@ -78,6 +107,7 @@ Services are separated by responsibility:
 - **ASP.NET Core** - Web API framework
 - **Entity Framework Core** - ORM for database access
 - **SQL Server** - Relational database
+- **IMemoryCache** - High-performance in-memory caching
 - **AutoMapper** - Object-to-object mapping
 - **Serilog** - Structured logging
 
@@ -89,6 +119,7 @@ Services are separated by responsibility:
 ### Design Patterns
 - **Repository Pattern** - Data access abstraction
 - **Unit of Work** - Transaction management
+- **Cache-Aside Pattern** - Three-layer caching strategy (Memory → Database → Config)
 - **Dependency Injection** - Loose coupling
 - **CQRS** - Separation of reads and writes
 - **Specification Pattern** - Query logic encapsulation
@@ -196,6 +227,18 @@ GET    /api/inventory/alerts     # Get low stock alerts
 GET    /api/inventory/reports    # Get inventory reports
 ```
 
+### Inventory Alert Endpoints
+
+```
+GET    /api/inventory/alerts/preferences/{storeId}  # Get store alert preferences
+POST   /api/inventory/alerts/preferences            # Configure alert preferences
+PUT    /api/inventory/alerts/preferences/{storeId}  # Update alert preferences
+POST   /api/inventory/alerts/process                # Process pending alerts (admin)
+POST   /api/inventory/alerts/low-stock              # Send low stock alert
+POST   /api/inventory/alerts/out-of-stock           # Send out-of-stock notification
+POST   /api/inventory/alerts/restock                # Send restock recommendation
+```
+
 ### Discount Management Endpoints
 
 ```
@@ -221,6 +264,7 @@ For complete API documentation, visit the **Swagger UI** at `/swagger` when runn
 - **Orders** - Customer orders
 - **OrderItems** - Individual order line items
 - **Inventory** - Product stock levels
+- **InventoryAlertPreferences** - Per-store alert configuration with email preferences and thresholds
 - **Discounts** - Promotional codes
 - **Reviews** - Product reviews and ratings
 - **Countries** - Supported countries
@@ -283,10 +327,16 @@ Automated order total calculation with:
 - **Free Shipping Threshold** - Configurable per store
 - **Hierarchical Resolution** - Postal Code → City → Governorate → Country
 
-### Inventory Management
+### Inventory Management & Alerts (v2.1)
 
 - **Real-Time Stock Tracking** - Automatic updates on orders
-- **Low Stock Alerts** - Configurable thresholds
+- **Smart Alert System** - Configurable per-store alert preferences with database persistence
+- **Cache-Aside Pattern** - Three-layer caching (Memory → Database → Config) for sub-millisecond retrieval
+- **Email Notifications** - Low stock, out-of-stock, and restock recommendations
+- **Thread-Safe Operations** - Per-store locking prevents race conditions and cache stampede
+- **Bulk Alert Processing** - Efficient handling of pending alerts across all stores
+- **Customizable Thresholds** - Store-specific low stock and dead stock thresholds
+- **Summary Emails** - Daily and weekly inventory status reports
 - **Stock Reservations** - Temporary holds during checkout
 - **Bulk Stock Updates** - Import stock levels
 - **Stock Forecasting** - Demand prediction
@@ -354,10 +404,12 @@ SMTP__Password=your-password
 - **AsNoTracking()** - For read-only queries
 - **Database Indexing** - On frequently queried columns
 - **Pagination** - For large result sets
-- **Caching** - Redis for frequently accessed data
+- **IMemoryCache** - In-memory caching for hot data (alert preferences, configurations)
+- **Cache-Aside Pattern** - Three-layer caching strategy for optimal performance
 - **Lazy Loading** - Disabled to prevent N+1 queries
 - **Bulk Operations** - For batch updates
 - **Query Optimization** - Database-level filtering and aggregation
+- **Thread-Safe Caching** - Per-resource locking to prevent cache stampede
 
 ## 🔄 Migration Guide
 
@@ -437,11 +489,14 @@ For support, email support@bazario.com or create an issue in this repository.
 
 ## 🗺️ Roadmap
 
-### Version 1.0 (Current)
+### Version 2.1 (Current)
 - [x] Core authentication system
 - [x] Store and product management
 - [x] Order processing system
-- [x] Inventory management
+- [x] Inventory management with analytics
+- [x] Smart alert system with database persistence (v2.1)
+- [x] Cache-aside pattern for alert preferences (v2.1)
+- [x] Per-store alert configuration (v2.1)
 - [x] Discount system
 - [x] Location-based shipping
 - [ ] Review and rating system

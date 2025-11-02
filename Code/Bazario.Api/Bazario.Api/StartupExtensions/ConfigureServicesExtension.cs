@@ -64,6 +64,9 @@ namespace Bazario.Api.StartupExtensions
 
             // Add services to the container.
 
+            // Add Memory Cache
+            services.AddMemoryCache();
+
             services.AddDbContext<ApplicationDbContext>(options =>
             {
                 options.UseSqlServer(configuration.GetConnectionString("DefaultConnection"));
@@ -97,6 +100,7 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<ICityRepository, CityRepository>(); // Location-based shipping (city-governorate resolution)
             services.AddScoped<IStoreGovernorateSupportRepository, StoreGovernorateSupportRepository>(); // Store-governorate junction table
             services.AddScoped<IStockReservationRepository, StockReservationRepository>(); // Stock reservation system
+            services.AddScoped<IInventoryAlertPreferencesRepository, InventoryAlertPreferencesRepository>(); // Inventory alert preferences persistence
 
             // ========================================
             // LOCATION MANAGEMENT SERVICES

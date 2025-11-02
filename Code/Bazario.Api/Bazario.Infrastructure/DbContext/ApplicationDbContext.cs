@@ -6,7 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.Entities.Authentication;
 using Bazario.Core.Domain.Entities.Catalog;
-using Bazario.Core.Domain.Entities.Inventory;
+using InventoryAlertPreferencesEntity = Bazario.Core.Domain.Entities.Inventory.InventoryAlertPreferences;
 using Bazario.Core.Domain.Entities.Location;
 using Bazario.Core.Domain.Entities.Order;
 using Bazario.Core.Domain.Entities.Review;
@@ -15,6 +15,7 @@ using Bazario.Core.Domain.IdentityEntities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using StockReservationEntity = Bazario.Core.Domain.Entities.Inventory.StockReservation;
 
 namespace Bazario.Infrastructure.DbContext
 {
@@ -36,7 +37,8 @@ namespace Bazario.Infrastructure.DbContext
         public DbSet<Governorate> Governorates { get; set; }
         public DbSet<City> Cities { get; set; }
         public DbSet<StoreGovernorateSupport> StoreGovernorateSupports { get; set; }
-        public DbSet<StockReservation> StockReservations { get; set; }
+        public DbSet<StockReservationEntity> StockReservations { get; set; }
+        public DbSet<InventoryAlertPreferencesEntity> InventoryAlertPreferences { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {

@@ -45,6 +45,7 @@ namespace Bazario.Core.Domain.RepositoryContracts
 
         // Inventory
         IStockReservationRepository StockReservations { get; }
+        IInventoryAlertPreferencesRepository InventoryAlertPreferences { get; }
 
         /// <summary>
         /// Saves all changes made in this unit of work to the database

@@ -41,6 +41,7 @@ namespace Bazario.Infrastructure.Repositories
         private readonly IOrderItemRepository _orderItems;
         private readonly IReviewRepository _reviews;
         private readonly IStockReservationRepository _stockReservations;
+        private readonly IInventoryAlertPreferencesRepository _inventoryAlertPreferences;
 
         public UnitOfWork(
             ApplicationDbContext context,
@@ -60,7 +61,8 @@ namespace Bazario.Infrastructure.Repositories
             IOrderRepository orders,
             IOrderItemRepository orderItems,
             IReviewRepository reviews,
-            IStockReservationRepository stockReservations)
+            IStockReservationRepository stockReservations,
+            IInventoryAlertPreferencesRepository inventoryAlertPreferences)
         {
             _context = context ?? throw new ArgumentNullException(nameof(context));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -80,6 +82,7 @@ namespace Bazario.Infrastructure.Repositories
             _orderItems = orderItems ?? throw new ArgumentNullException(nameof(orderItems));
             _reviews = reviews ?? throw new ArgumentNullException(nameof(reviews));
             _stockReservations = stockReservations ?? throw new ArgumentNullException(nameof(stockReservations));
+            _inventoryAlertPreferences = inventoryAlertPreferences ?? throw new ArgumentNullException(nameof(inventoryAlertPreferences));
         }
 
         // Repository properties - expose injected repositories
@@ -99,6 +102,7 @@ namespace Bazario.Infrastructure.Repositories
         public IOrderItemRepository OrderItems => _orderItems;
         public IReviewRepository Reviews => _reviews;
         public IStockReservationRepository StockReservations => _stockReservations;
+        public IInventoryAlertPreferencesRepository InventoryAlertPreferences => _inventoryAlertPreferences;
 
         /// <summary>
         /// Saves all changes made in this unit of work to the database

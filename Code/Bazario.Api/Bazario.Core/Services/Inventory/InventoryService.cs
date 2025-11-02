@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using InventoryAlertPreferencesEntity = Bazario.Core.Domain.Entities.Inventory.InventoryAlertPreferences;
 using Bazario.Core.Models.Inventory;
 using Bazario.Core.Models.Shared;
 using Bazario.Core.ServiceContracts.Inventory;
@@ -127,22 +128,22 @@ namespace Bazario.Core.Services.Inventory
             => _analyticsService.GetProductRevenueAsync(productId, startDate, endDate, cancellationToken);
 
         // IInventoryAlertService methods
-        public Task SendLowStockAlertAsync(Guid productId, int currentStock, int threshold, CancellationToken cancellationToken = default)
+        public Task<bool> SendLowStockAlertAsync(Guid productId, int currentStock, int threshold, CancellationToken cancellationToken = default)
             => _alertService.SendLowStockAlertAsync(productId, currentStock, threshold, cancellationToken);
 
-        public Task SendOutOfStockNotificationAsync(Guid productId, CancellationToken cancellationToken = default)
+        public Task<bool> SendOutOfStockNotificationAsync(Guid productId, CancellationToken cancellationToken = default)
             => _alertService.SendOutOfStockNotificationAsync(productId, cancellationToken);
 
         public Task SendBulkLowStockAlertsAsync(List<LowStockAlert> alerts, CancellationToken cancellationToken = default)
             => _alertService.SendBulkLowStockAlertsAsync(alerts, cancellationToken);
 
-        public Task SendRestockRecommendationAsync(Guid productId, int recommendedQuantity, string reason, CancellationToken cancellationToken = default)
+        public Task<bool> SendRestockRecommendationAsync(Guid productId, int recommendedQuantity, string reason, CancellationToken cancellationToken = default)
             => _alertService.SendRestockRecommendationAsync(productId, recommendedQuantity, reason, cancellationToken);
 
         public Task<int?> ProcessPendingAlertsAsync(CancellationToken cancellationToken = default)
             => _alertService.ProcessPendingAlertsAsync(cancellationToken);
 
-        public Task<bool> ConfigureAlertPreferencesAsync(Guid storeId, InventoryAlertPreferences preferences, CancellationToken cancellationToken = default)
+        public Task<bool> ConfigureAlertPreferencesAsync(Guid storeId, Bazario.Core.Domain.Entities.Inventory.InventoryAlertPreferences preferences, CancellationToken cancellationToken = default)
             => _alertService.ConfigureAlertPreferencesAsync(storeId, preferences, cancellationToken);
     }
 }

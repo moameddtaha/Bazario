@@ -197,6 +197,58 @@ namespace Bazario.Infrastructure.Migrations
                     b.ToTable("Products");
                 });
 
+            modelBuilder.Entity("Bazario.Core.Domain.Entities.Inventory.InventoryAlertPreferences", b =>
+                {
+                    b.Property<Guid>("StoreId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AlertEmail")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("nvarchar(254)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DeadStockDays")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DefaultLowStockThreshold")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("EnableDeadStockAlerts")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("EnableLowStockAlerts")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("EnableOutOfStockAlerts")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("EnableRestockRecommendations")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("SendDailySummary")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("SendWeeklySummary")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("StoreId");
+
+                    b.HasIndex("AlertEmail");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("UpdatedAt");
+
+                    b.ToTable("InventoryAlertPreferences", (string)null);
+                });
+
             modelBuilder.Entity("Bazario.Core.Domain.Entities.Inventory.StockReservation", b =>
                 {
                     b.Property<Guid>("Id")

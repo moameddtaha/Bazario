@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Bazario.Core.Domain.Entities.Inventory;
 using Bazario.Core.Models.Inventory;
 
 namespace Bazario.Core.ServiceContracts.Inventory
@@ -18,10 +19,11 @@ namespace Bazario.Core.ServiceContracts.Inventory
     /// - ProcessPendingAlertsAsync: Batch processes alerts for all configured stores
     /// - ConfigureAlertPreferencesAsync: Configures alert preferences per store
     ///
-    /// IMPORTANT: Alert preferences are stored IN-MEMORY ONLY and will be lost on application restart.
-    /// For production use, implement IAlertPreferencesRepository for database persistence.
+    /// PERSISTENCE: Alert preferences are persisted to the database and cached in memory for performance.
+    /// Uses a 3-layer cache-aside pattern: Memory Cache -> Database -> Configuration Defaults.
+    /// Cache invalidation is handled automatically on updates. Preferences survive application restarts.
     ///
-    /// Thread-safety: Uses ConcurrentDictionary for safe concurrent access to alert preferences.
+    /// Thread-safety: Uses double-check locking with per-store semaphores to prevent cache stampede.
     /// All methods log exceptions but do not rethrow - callers should check email send success.
     /// </remarks>
     public interface IInventoryAlertService
@@ -33,17 +35,19 @@ namespace Bazario.Core.ServiceContracts.Inventory
         /// <param name="currentStock">Current stock level</param>
         /// <param name="threshold">Low stock threshold that was crossed</param>
         /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>True if alert was sent successfully, false otherwise</returns>
         /// <exception cref="ArgumentException">Thrown when productId is empty</exception>
         /// <exception cref="ArgumentOutOfRangeException">Thrown when currentStock or threshold is negative</exception>
-        Task SendLowStockAlertAsync(Guid productId, int currentStock, int threshold, CancellationToken cancellationToken = default);
+        Task<bool> SendLowStockAlertAsync(Guid productId, int currentStock, int threshold, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Sends an urgent out-of-stock notification email when product inventory reaches zero
         /// </summary>
         /// <param name="productId">Product ID</param>
         /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>True if notification was sent successfully, false otherwise</returns>
         /// <exception cref="ArgumentException">Thrown when productId is empty</exception>
-        Task SendOutOfStockNotificationAsync(Guid productId, CancellationToken cancellationToken = default);
+        Task<bool> SendOutOfStockNotificationAsync(Guid productId, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Sends consolidated low stock alert emails grouped by store for efficient processing
@@ -64,9 +68,10 @@ namespace Bazario.Core.ServiceContracts.Inventory
         /// <param name="recommendedQuantity">Recommended quantity to restock</param>
         /// <param name="reason">Reason for the recommendation (e.g., based on sales patterns)</param>
         /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>True if recommendation was sent successfully, false otherwise</returns>
         /// <exception cref="ArgumentException">Thrown when productId is empty or reason is null/empty</exception>
         /// <exception cref="ArgumentOutOfRangeException">Thrown when recommendedQuantity is not positive</exception>
-        Task SendRestockRecommendationAsync(Guid productId, int recommendedQuantity, string reason, CancellationToken cancellationToken = default);
+        Task<bool> SendRestockRecommendationAsync(Guid productId, int recommendedQuantity, string reason, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Batch processes all pending inventory alerts for stores with configured preferences
@@ -88,9 +93,10 @@ namespace Bazario.Core.ServiceContracts.Inventory
         /// <param name="cancellationToken">Cancellation token</param>
         /// <returns>True if configuration succeeded, false otherwise</returns>
         /// <remarks>
-        /// WARNING: Preferences are stored in-memory only and will be lost on application restart.
-        /// For production use, implement database persistence via IAlertPreferencesRepository.
+        /// Preferences are persisted to the database and cached for performance.
+        /// Cache is invalidated before database write to prevent stale data race conditions.
+        /// Preferences will survive application restarts.
         /// </remarks>
-        Task<bool> ConfigureAlertPreferencesAsync(Guid storeId, InventoryAlertPreferences preferences, CancellationToken cancellationToken = default);
+        Task<bool> ConfigureAlertPreferencesAsync(Guid storeId, Bazario.Core.Domain.Entities.Inventory.InventoryAlertPreferences preferences, CancellationToken cancellationToken = default);
     }
 }
