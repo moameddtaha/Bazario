@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.RepositoryContracts;
+using Bazario.Core.Enums.Order;
 using Bazario.Core.Models.Catalog.Product;
 using Bazario.Core.ServiceContracts.Catalog.Product;
 using Microsoft.Extensions.Logging;
@@ -45,25 +47,25 @@ namespace Bazario.Core.Services.Catalog.Product
 
                 // Get product details
                 var product = await _unitOfWork.Products.GetProductByIdAsync(productId, cancellationToken);
-                if (product == null)
+                if (product == null || product.IsDeleted)
                 {
-                    _logger.LogDebug("Product validation failed: Product not found. ProductId: {ProductId}", productId);
+                    _logger.LogDebug("Product validation failed: Product not found or deleted. ProductId: {ProductId}", productId);
                     return new ProductOrderValidation
                     {
                         IsValid = false,
                         ProductId = productId,
                         RequestedQuantity = quantity,
                         AvailableQuantity = 0,
-                        ValidationErrors = new List<string> { "Product not found" },
+                        ValidationErrors = new List<string> { product == null ? "Product not found" : "Product has been deleted" },
                         ValidationTimestamp = DateTime.UtcNow
                     };
                 }
 
                 // Get store details
                 var store = await _unitOfWork.Stores.GetStoreByIdAsync(product.StoreId, cancellationToken);
-                if (store == null)
+                if (store == null || store.IsDeleted)
                 {
-                    _logger.LogDebug("Product validation failed: Store not found. ProductId: {ProductId}, StoreId: {StoreId}", 
+                    _logger.LogDebug("Product validation failed: Store not found or deleted. ProductId: {ProductId}, StoreId: {StoreId}",
                         productId, product.StoreId);
                     return new ProductOrderValidation
                     {
@@ -71,7 +73,7 @@ namespace Bazario.Core.Services.Catalog.Product
                         ProductId = productId,
                         RequestedQuantity = quantity,
                         AvailableQuantity = product.StockQuantity,
-                        ValidationErrors = new List<string> { "Product store not found" },
+                        ValidationErrors = new List<string> { store == null ? "Product store not found" : "Product store has been deleted" },
                         ValidationTimestamp = DateTime.UtcNow
                     };
                 }
@@ -110,7 +112,9 @@ namespace Bazario.Core.Services.Catalog.Product
                     UnitPrice = product.Price,
                     TotalPrice = product.Price * quantity,
                     ValidationErrors = validationErrors,
-                    ValidationTimestamp = DateTime.UtcNow
+                    ValidationTimestamp = DateTime.UtcNow,
+                    IsInStock = product.StockQuantity > 0,
+                    IsActive = store.IsActive
                 };
 
                 _logger.LogDebug("Product validation completed: ProductId: {ProductId}, IsValid: {IsValid}, Errors: {ErrorCount}", 
@@ -127,6 +131,12 @@ namespace Bazario.Core.Services.Catalog.Product
 
         public async Task<bool> CanProductBeSafelyDeletedAsync(Guid productId, CancellationToken cancellationToken = default)
         {
+            if (productId == Guid.Empty)
+            {
+                _logger.LogWarning("CanProductBeSafelyDeletedAsync called with empty product ID");
+                return false; // Can't safely delete an invalid product
+            }
+
             try
             {
                 // Check if product has any active orders
@@ -164,98 +174,133 @@ namespace Bazario.Core.Services.Catalog.Product
 
         public async Task<bool> HasProductActiveOrdersAsync(Guid productId, CancellationToken cancellationToken = default)
         {
+            if (productId == Guid.Empty)
+            {
+                _logger.LogWarning("HasProductActiveOrdersAsync called with empty product ID");
+                return false;
+            }
+
             try
             {
-                // Check if product has any orders in pending, processing, or shipped status
-                var orders = await _unitOfWork.Orders.GetAllOrdersAsync(cancellationToken);
-                var activeOrders = orders.Where(o =>
-                    o.Status == "Pending" ||
-                    o.Status == "Processing" ||
-                    o.Status == "Shipped" ||
-                    o.Status == "Confirmed")
-                    .ToList();
+                _logger.LogDebug("Checking active orders for product {ProductId}", productId);
 
-                foreach (var order in activeOrders)
+                // Define active order statuses
+                var activeStatuses = new[]
                 {
-                    if (order.OrderItems != null)
-                    {
-                        if (order.OrderItems.Any(oi => oi.ProductId == productId))
-                        {
-                            return true;
-                        }
-                    }
+                    OrderStatus.Pending.ToString(),
+                    OrderStatus.Processing.ToString(),
+                    OrderStatus.Shipped.ToString()
+                };
+
+                // Use database-level filtering to avoid loading all orders into memory
+                var activeOrders = await _unitOfWork.Orders.GetFilteredOrdersAsync(
+                    o => activeStatuses.Contains(o.Status) &&
+                         o.OrderItems != null &&
+                         o.OrderItems.Any(oi => oi.ProductId == productId),
+                    cancellationToken);
+
+                var hasActiveOrders = activeOrders.Any();
+
+                if (hasActiveOrders)
+                {
+                    _logger.LogInformation("Product {ProductId} has {Count} active orders", productId, activeOrders.Count);
+                }
+                else
+                {
+                    _logger.LogDebug("No active orders found for product {ProductId}", productId);
                 }
 
-                return false;
+                return hasActiveOrders;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error checking active orders for product {ProductId}", productId);
-                return true; // Assume it has active orders to be safe
+                return true; // Fail-safe: assume it has active orders to prevent deletion
             }
         }
 
         public async Task<bool> HasProductPendingReservationsAsync(Guid productId, CancellationToken cancellationToken = default)
         {
+            if (productId == Guid.Empty)
+            {
+                _logger.LogWarning("HasProductPendingReservationsAsync called with empty product ID");
+                return false;
+            }
+
             try
             {
                 _logger.LogDebug("Checking pending reservations for product {ProductId}", productId);
 
-                // Check if there are any recent orders that might indicate reservations
-                var recentOrders = await _unitOfWork.Orders.GetAllOrdersAsync(cancellationToken);
-                var recentProductOrders = recentOrders
-                    .Where(o => o.Date > DateTime.UtcNow.AddDays(-7)) // Last 7 days
-                    .Where(o => o.OrderItems != null && o.OrderItems.Any(oi => oi.ProductId == productId))
-                    .Where(o => o.Status == "Pending" || o.Status == "Processing")
-                    .ToList();
+                // Define reservation statuses (pending/processing orders in the last 7 days)
+                var reservationStatuses = new[]
+                {
+                    OrderStatus.Pending.ToString(),
+                    OrderStatus.Processing.ToString()
+                };
 
-                var hasActiveReservations = recentProductOrders.Any();
+                var sevenDaysAgo = DateTime.UtcNow.AddDays(-7);
+
+                // Use database-level filtering to avoid loading all orders into memory
+                var recentOrders = await _unitOfWork.Orders.GetFilteredOrdersAsync(
+                    o => o.Date > sevenDaysAgo &&
+                         reservationStatuses.Contains(o.Status) &&
+                         o.OrderItems != null &&
+                         o.OrderItems.Any(oi => oi.ProductId == productId),
+                    cancellationToken);
+
+                var hasActiveReservations = recentOrders.Count > 0;
 
                 if (hasActiveReservations)
                 {
-                    _logger.LogWarning("Product {ProductId} has recent orders that might indicate active reservations", productId);
-                    return true;
+                    _logger.LogWarning("Product {ProductId} has {Count} recent orders that might indicate active reservations",
+                        productId, recentOrders.Count);
+                }
+                else
+                {
+                    _logger.LogDebug("No pending reservations found for product {ProductId}", productId);
                 }
 
-                _logger.LogDebug("No pending reservations found for product {ProductId}", productId);
-                return false;
+                return hasActiveReservations;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error checking pending reservations for product {ProductId}", productId);
-                return true; // Assume it has reservations to be safe
+                return true; // Fail-safe: assume it has reservations to prevent deletion
             }
         }
 
         public async Task<bool> HasProductReviewsAsync(Guid productId, CancellationToken cancellationToken = default)
         {
+            if (productId == Guid.Empty)
+            {
+                _logger.LogWarning("HasProductReviewsAsync called with empty product ID");
+                return false;
+            }
+
             try
             {
                 _logger.LogDebug("Checking reviews for product {ProductId}", productId);
 
-                // Check if there are any orders that might have generated reviews
-                var allOrders = await _unitOfWork.Orders.GetAllOrdersAsync(cancellationToken);
-                var productOrders = allOrders
-                    .Where(o => o.OrderItems != null && o.OrderItems.Any(oi => oi.ProductId == productId))
-                    .Where(o => o.Status == "Delivered") // Only delivered orders can have reviews
-                    .ToList();
+                // Get the actual review count from the Reviews repository
+                var reviewCount = await _unitOfWork.Reviews.GetReviewCountByProductIdAsync(productId, cancellationToken);
 
-                // Simulate that delivered orders might have reviews
-                var hasPotentialReviews = productOrders.Any();
+                var hasReviews = reviewCount > 0;
 
-                if (hasPotentialReviews)
+                if (hasReviews)
                 {
-                    _logger.LogInformation("Product {ProductId} has delivered orders that might have generated reviews", productId);
-                    return true;
+                    _logger.LogInformation("Product {ProductId} has {ReviewCount} reviews", productId, reviewCount);
+                }
+                else
+                {
+                    _logger.LogDebug("No reviews found for product {ProductId}", productId);
                 }
 
-                _logger.LogDebug("No reviews found for product {ProductId}", productId);
-                return false;
+                return hasReviews;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error checking reviews for product {ProductId}", productId);
-                return false; // Assume no reviews on error
+                return false; // Fail-safe: assume no reviews on error (allows operation to proceed)
             }
         }
     }
