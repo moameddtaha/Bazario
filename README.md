@@ -78,7 +78,7 @@ Services are separated by responsibility:
 
 The database schema follows a normalized relational design with clear separation of concerns:
 
-![Entity Relationship Diagram](/ERD.md)
+![Entity Relationship Diagram](/ERD.png)
 
 **Key Entity Relationships:**
 - Users can own multiple Stores (One-to-Many)
@@ -92,7 +92,7 @@ The database schema follows a normalized relational design with clear separation
 
 The class structure implements Clean Architecture with clear dependency flow:
 
-![Class Diagram](/ClassDiagram.md)
+![Class Diagram](/ClassDiagram.png)
 
 **Architecture Highlights:**
 - **API Layer** - Controllers and DTOs
