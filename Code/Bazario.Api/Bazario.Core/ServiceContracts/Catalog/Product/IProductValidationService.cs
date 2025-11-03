@@ -14,10 +14,27 @@ namespace Bazario.Core.ServiceContracts.Catalog.Product
         /// <summary>
         /// Validates if a product can be ordered (stock, active status, etc.)
         /// </summary>
+        /// <remarks>
+        /// Performs comprehensive validation including:
+        /// - Product existence and soft-delete status
+        /// - Store existence, soft-delete status, and active state
+        /// - Product name validation
+        /// - Stock availability check
+        /// - Price validation (min/max limits, overflow protection)
+        /// - Total price calculation with overflow protection
+        ///
+        /// CONCURRENCY NOTE:
+        /// This is a pre-validation check only. Stock quantity validation is NOT atomic.
+        /// Between validation and actual order placement, stock could be depleted by concurrent requests.
+        /// For production use, this should be combined with:
+        /// 1. Stock reservation system (pessimistic locking)
+        /// 2. Transaction-level stock updates with optimistic concurrency (RowVersion)
+        /// 3. Database-level constraints
+        /// </remarks>
         /// <param name="productId">Product ID</param>
         /// <param name="quantity">Desired quantity</param>
         /// <param name="cancellationToken">Cancellation token</param>
-        /// <returns>Validation result</returns>
+        /// <returns>Validation result with detailed error messages</returns>
         Task<ProductOrderValidation> ValidateForOrderAsync(Guid productId, int quantity, CancellationToken cancellationToken = default);
 
         /// <summary>

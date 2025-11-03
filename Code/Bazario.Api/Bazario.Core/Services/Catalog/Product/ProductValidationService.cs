@@ -1,13 +1,16 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Enums.Order;
 using Bazario.Core.Models.Catalog.Product;
+using Bazario.Core.Options;
 using Bazario.Core.ServiceContracts.Catalog.Product;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Bazario.Core.Services.Catalog.Product
 {
@@ -19,17 +22,21 @@ namespace Bazario.Core.Services.Catalog.Product
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<ProductValidationService> _logger;
+        private readonly ProductValidationOptions _options;
 
         public ProductValidationService(
             IUnitOfWork unitOfWork,
-            ILogger<ProductValidationService> logger)
+            ILogger<ProductValidationService> logger,
+            IOptions<ProductValidationOptions> options)
         {
             _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _options = options?.Value ?? new ProductValidationOptions();
         }
 
         public async Task<ProductOrderValidation> ValidateForOrderAsync(Guid productId, int quantity, CancellationToken cancellationToken = default)
         {
+            var stopwatch = Stopwatch.StartNew();
             _logger.LogDebug("Validating product for order: ProductId: {ProductId}, Quantity: {Quantity}", productId, quantity);
 
             try
@@ -80,41 +87,48 @@ namespace Bazario.Core.Services.Catalog.Product
 
                 var validationErrors = new List<string>();
 
-                // Check if store is active
+                // Business Rule 1: Store must be active for orders to be placed
+                // Inactive stores cannot process orders (business decision to prevent orders during maintenance/suspension)
                 if (!store.IsActive)
                 {
                     validationErrors.Add("Product store is inactive");
                 }
 
-                // Validate product name
+                // Business Rule 2: Product must have a valid name for order processing
+                // This ensures proper order display and fulfillment tracking
                 if (string.IsNullOrWhiteSpace(product.Name))
                 {
                     validationErrors.Add("Product name is missing");
                 }
 
-                // Check if product has sufficient stock
+                // Business Rule 3: Stock availability check
+                // NOTE: This is NOT atomic - use with stock reservation system for production
+                // Multiple concurrent requests can pass this check but exceed actual stock
                 if (product.StockQuantity < quantity)
                 {
                     validationErrors.Add($"Insufficient stock. Available: {product.StockQuantity}, Requested: {quantity}");
                 }
 
-                // Check if product price is valid
+                // Business Rule 4: Price validation with configurable limits
+                // Prevents invalid prices (zero/negative) and unreasonably high prices (potential fraud/data errors)
                 if (product.Price <= 0)
                 {
                     validationErrors.Add("Product price must be greater than zero");
                 }
-                else if (product.Price > 1000000) // Maximum reasonable price (configurable in production)
+                else if (product.Price > _options.MaximumProductPrice)
                 {
-                    validationErrors.Add("Product price exceeds maximum allowed value");
+                    validationErrors.Add($"Product price exceeds maximum allowed value of {_options.MaximumProductPrice:N0}");
                 }
 
-                // Validate total price calculation for overflow
+                // Business Rule 5: Order total overflow protection
+                // Uses checked arithmetic to detect overflow and validates against configurable maximum
+                // This prevents decimal overflow in payment processing and database storage
                 try
                 {
                     var totalPrice = checked(product.Price * quantity);
-                    if (totalPrice > decimal.MaxValue / 2) // Reasonable threshold
+                    if (totalPrice > _options.MaximumOrderTotal)
                     {
-                        validationErrors.Add("Order total exceeds maximum allowed value");
+                        validationErrors.Add($"Order total exceeds maximum allowed value of {_options.MaximumOrderTotal:N0}");
                     }
                 }
                 catch (OverflowException)
@@ -141,8 +155,10 @@ namespace Bazario.Core.Services.Catalog.Product
                     IsActive = store.IsActive
                 };
 
-                _logger.LogDebug("Product validation completed: ProductId: {ProductId}, IsValid: {IsValid}, Errors: {ErrorCount}", 
-                    productId, isValid, validationErrors.Count);
+                stopwatch.Stop();
+                _logger.LogInformation(
+                    "Product validation completed in {ElapsedMs}ms: ProductId: {ProductId}, IsValid: {IsValid}, ErrorCount: {ErrorCount}",
+                    stopwatch.ElapsedMilliseconds, productId, isValid, validationErrors.Count);
 
                 return validation;
             }
@@ -255,18 +271,18 @@ namespace Bazario.Core.Services.Catalog.Product
             {
                 _logger.LogDebug("Checking pending reservations for product {ProductId}", productId);
 
-                // Define reservation statuses (pending/processing orders in the last 7 days)
+                // Define reservation statuses (pending/processing orders within the lookback period)
                 var reservationStatuses = new[]
                 {
                     OrderStatus.Pending.ToString(),
                     OrderStatus.Processing.ToString()
                 };
 
-                var sevenDaysAgo = DateTime.UtcNow.AddDays(-7);
+                var lookbackDate = DateTime.UtcNow.AddDays(-_options.ReservationLookbackDays);
 
                 // Use database-level filtering to avoid loading all orders into memory
                 var recentOrders = await _unitOfWork.Orders.GetFilteredOrdersAsync(
-                    o => o.Date > sevenDaysAgo &&
+                    o => o.Date > lookbackDate &&
                          reservationStatuses.Contains(o.Status) &&
                          o.OrderItems != null &&
                          o.OrderItems.Any(oi => oi.ProductId == productId),
