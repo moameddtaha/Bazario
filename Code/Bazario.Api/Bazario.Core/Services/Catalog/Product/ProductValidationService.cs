@@ -8,6 +8,7 @@ using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Enums.Order;
 using Bazario.Core.Models.Catalog.Product;
 using Bazario.Core.ServiceContracts.Catalog.Product;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace Bazario.Core.Services.Catalog.Product
@@ -15,23 +16,48 @@ namespace Bazario.Core.Services.Catalog.Product
     /// <summary>
     /// Service implementation for product validation operations
     /// Handles product validation logic and business rules including deletion safety
+    ///
+    /// Fail-Safe Strategy:
+    /// - Active orders/reservations: Returns TRUE on error (blocks deletion - safe choice)
+    /// - Reviews: Returns FALSE on error (allows deletion - reviews are informational only)
+    /// This asymmetry is intentional to protect referential integrity while being permissive for non-critical data
     /// </summary>
     public class ProductValidationService : IProductValidationService
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<ProductValidationService> _logger;
+        private readonly decimal _maximumProductPrice;
+        private readonly int _maximumOrderQuantity;
+        private readonly int _reservationLookbackDays;
+        private readonly decimal _maximumOrderTotal;
 
-        // Configuration constants
-        private const decimal MaximumProductPrice = 1_000_000m;
-        private const int ReservationLookbackDays = 7;
-        private const decimal MaximumOrderTotal = decimal.MaxValue / 2;
+        // Static arrays for order status filtering (created once, reused for performance)
+        private static readonly string[] ActiveOrderStatuses = new[]
+        {
+            OrderStatus.Pending.ToString(),
+            OrderStatus.Processing.ToString(),
+            OrderStatus.Shipped.ToString()
+        };
+
+        private static readonly string[] ReservationStatuses = new[]
+        {
+            OrderStatus.Pending.ToString(),
+            OrderStatus.Processing.ToString()
+        };
 
         public ProductValidationService(
             IUnitOfWork unitOfWork,
-            ILogger<ProductValidationService> logger)
+            ILogger<ProductValidationService> logger,
+            IConfiguration configuration)
         {
             _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
+            // Load configurable thresholds with defaults (aligned with InventoryAlertService pattern)
+            _maximumProductPrice = GetConfigurationValue(configuration, "Validation:MaximumProductPrice", 1_000_000m);
+            _maximumOrderQuantity = GetConfigurationValue(configuration, "Validation:MaximumOrderQuantity", 10_000);
+            _reservationLookbackDays = GetConfigurationValue(configuration, "Validation:ReservationLookbackDays", 7);
+            _maximumOrderTotal = GetConfigurationValue(configuration, "Validation:MaximumOrderTotal", decimal.MaxValue / 2);
         }
 
         public async Task<ProductOrderValidation> ValidateForOrderAsync(Guid productId, int quantity, CancellationToken cancellationToken = default)
@@ -52,6 +78,11 @@ namespace Bazario.Core.Services.Catalog.Product
                     throw new ArgumentException("Order quantity must be greater than 0", nameof(quantity));
                 }
 
+                if (quantity > _maximumOrderQuantity)
+                {
+                    throw new ArgumentException($"Order quantity exceeds maximum allowed value of {_maximumOrderQuantity}", nameof(quantity));
+                }
+
                 // Get product details
                 var product = await _unitOfWork.Products.GetProductByIdAsync(productId, cancellationToken);
                 if (product == null || product.IsDeleted)
@@ -67,6 +98,9 @@ namespace Bazario.Core.Services.Catalog.Product
                         ValidationTimestamp = DateTime.UtcNow
                     };
                 }
+
+                // Check for cancellation before next async operation
+                cancellationToken.ThrowIfCancellationRequested();
 
                 // Get store details
                 var store = await _unitOfWork.Stores.GetStoreByIdAsync(product.StoreId, cancellationToken);
@@ -115,32 +149,32 @@ namespace Bazario.Core.Services.Catalog.Product
                 {
                     validationErrors.Add("Product price must be greater than zero");
                 }
-                else if (product.Price > MaximumProductPrice)
+                else if (product.Price > _maximumProductPrice)
                 {
-                    validationErrors.Add($"Product price exceeds maximum allowed value of {MaximumProductPrice:N0}");
+                    validationErrors.Add($"Product price exceeds maximum allowed value of {_maximumProductPrice:N0}");
                 }
 
                 // Business Rule 5: Order total overflow protection
                 // Uses checked arithmetic to detect overflow and validates against configurable maximum
                 // This prevents decimal overflow in payment processing and database storage
+                decimal totalPrice;
                 try
                 {
-                    var totalPrice = checked(product.Price * quantity);
-                    if (totalPrice > MaximumOrderTotal)
+                    totalPrice = checked(product.Price * quantity);
+                    if (totalPrice > _maximumOrderTotal)
                     {
-                        validationErrors.Add($"Order total exceeds maximum allowed value of {MaximumOrderTotal:N0}");
+                        validationErrors.Add($"Order total exceeds maximum allowed value of {_maximumOrderTotal:N0}");
                     }
                 }
                 catch (OverflowException)
                 {
                     validationErrors.Add("Order total calculation resulted in overflow");
+                    totalPrice = 0; // Safe default for overflow cases
                 }
-
-                var isValid = validationErrors.Count == 0;
 
                 var validation = new ProductOrderValidation
                 {
-                    IsValid = isValid,
+                    IsValid = validationErrors.Count == 0,
                     ProductId = productId,
                     ProductName = product.Name ?? "Unknown",
                     StoreId = product.StoreId,
@@ -148,7 +182,7 @@ namespace Bazario.Core.Services.Catalog.Product
                     RequestedQuantity = quantity,
                     AvailableQuantity = product.StockQuantity,
                     UnitPrice = product.Price,
-                    TotalPrice = product.Price * quantity,
+                    TotalPrice = totalPrice, // Use the validated value
                     ValidationErrors = validationErrors,
                     ValidationTimestamp = DateTime.UtcNow,
                     IsInStock = product.StockQuantity > 0,
@@ -158,7 +192,7 @@ namespace Bazario.Core.Services.Catalog.Product
                 stopwatch.Stop();
                 _logger.LogInformation(
                     "Product validation completed in {ElapsedMs}ms: ProductId: {ProductId}, IsValid: {IsValid}, ErrorCount: {ErrorCount}",
-                    stopwatch.ElapsedMilliseconds, productId, isValid, validationErrors.Count);
+                    stopwatch.ElapsedMilliseconds, productId, validation.IsValid, validationErrors.Count);
 
                 return validation;
             }
@@ -224,17 +258,9 @@ namespace Bazario.Core.Services.Catalog.Product
             {
                 _logger.LogDebug("Checking active orders for product {ProductId}", productId);
 
-                // Define active order statuses
-                var activeStatuses = new[]
-                {
-                    OrderStatus.Pending.ToString(),
-                    OrderStatus.Processing.ToString(),
-                    OrderStatus.Shipped.ToString()
-                };
-
                 // Use database-level filtering to avoid loading all orders into memory
                 var activeOrders = await _unitOfWork.Orders.GetFilteredOrdersAsync(
-                    o => activeStatuses.Contains(o.Status) &&
+                    o => ActiveOrderStatuses.Contains(o.Status) &&
                          o.OrderItems != null &&
                          o.OrderItems.Any(oi => oi.ProductId == productId),
                     cancellationToken);
@@ -243,7 +269,7 @@ namespace Bazario.Core.Services.Catalog.Product
 
                 if (hasActiveOrders)
                 {
-                    _logger.LogInformation("Product {ProductId} has {Count} active orders", productId, activeOrders.Count);
+                    _logger.LogWarning("Product {ProductId} has {Count} active orders - deletion blocked", productId, activeOrders.Count);
                 }
                 else
                 {
@@ -271,19 +297,12 @@ namespace Bazario.Core.Services.Catalog.Product
             {
                 _logger.LogDebug("Checking pending reservations for product {ProductId}", productId);
 
-                // Define reservation statuses (pending/processing orders within the lookback period)
-                var reservationStatuses = new[]
-                {
-                    OrderStatus.Pending.ToString(),
-                    OrderStatus.Processing.ToString()
-                };
-
-                var lookbackDate = DateTime.UtcNow.AddDays(-ReservationLookbackDays);
+                var lookbackDate = DateTime.UtcNow.AddDays(-_reservationLookbackDays);
 
                 // Use database-level filtering to avoid loading all orders into memory
                 var recentOrders = await _unitOfWork.Orders.GetFilteredOrdersAsync(
                     o => o.Date > lookbackDate &&
-                         reservationStatuses.Contains(o.Status) &&
+                         ReservationStatuses.Contains(o.Status) &&
                          o.OrderItems != null &&
                          o.OrderItems.Any(oi => oi.ProductId == productId),
                     cancellationToken);
@@ -328,7 +347,7 @@ namespace Bazario.Core.Services.Catalog.Product
 
                 if (hasReviews)
                 {
-                    _logger.LogInformation("Product {ProductId} has {ReviewCount} reviews", productId, reviewCount);
+                    _logger.LogInformation("Product {ProductId} has {ReviewCount} reviews - consider soft delete", productId, reviewCount);
                 }
                 else
                 {
@@ -341,6 +360,28 @@ namespace Bazario.Core.Services.Catalog.Product
             {
                 _logger.LogError(ex, "Error checking reviews for product {ProductId}", productId);
                 return false; // Fail-safe: assume no reviews on error (allows operation to proceed)
+            }
+        }
+
+        /// <summary>
+        /// Helper method to safely retrieve configuration values with defaults
+        /// </summary>
+        private static T GetConfigurationValue<T>(IConfiguration configuration, string key, T defaultValue)
+        {
+            if (configuration == null)
+                return defaultValue;
+
+            var value = configuration[key];
+            if (string.IsNullOrWhiteSpace(value))
+                return defaultValue;
+
+            try
+            {
+                return (T)Convert.ChangeType(value, typeof(T));
+            }
+            catch
+            {
+                return defaultValue;
             }
         }
     }
