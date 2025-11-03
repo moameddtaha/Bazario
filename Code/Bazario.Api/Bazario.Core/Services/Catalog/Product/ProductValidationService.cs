@@ -7,10 +7,8 @@ using System.Threading.Tasks;
 using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Enums.Order;
 using Bazario.Core.Models.Catalog.Product;
-using Bazario.Core.Options;
 using Bazario.Core.ServiceContracts.Catalog.Product;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Bazario.Core.Services.Catalog.Product
 {
@@ -22,16 +20,18 @@ namespace Bazario.Core.Services.Catalog.Product
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<ProductValidationService> _logger;
-        private readonly ProductValidationOptions _options;
+
+        // Configuration constants
+        private const decimal MaximumProductPrice = 1_000_000m;
+        private const int ReservationLookbackDays = 7;
+        private const decimal MaximumOrderTotal = decimal.MaxValue / 2;
 
         public ProductValidationService(
             IUnitOfWork unitOfWork,
-            ILogger<ProductValidationService> logger,
-            IOptions<ProductValidationOptions> options)
+            ILogger<ProductValidationService> logger)
         {
             _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _options = options?.Value ?? new ProductValidationOptions();
         }
 
         public async Task<ProductOrderValidation> ValidateForOrderAsync(Guid productId, int quantity, CancellationToken cancellationToken = default)
@@ -115,9 +115,9 @@ namespace Bazario.Core.Services.Catalog.Product
                 {
                     validationErrors.Add("Product price must be greater than zero");
                 }
-                else if (product.Price > _options.MaximumProductPrice)
+                else if (product.Price > MaximumProductPrice)
                 {
-                    validationErrors.Add($"Product price exceeds maximum allowed value of {_options.MaximumProductPrice:N0}");
+                    validationErrors.Add($"Product price exceeds maximum allowed value of {MaximumProductPrice:N0}");
                 }
 
                 // Business Rule 5: Order total overflow protection
@@ -126,9 +126,9 @@ namespace Bazario.Core.Services.Catalog.Product
                 try
                 {
                     var totalPrice = checked(product.Price * quantity);
-                    if (totalPrice > _options.MaximumOrderTotal)
+                    if (totalPrice > MaximumOrderTotal)
                     {
-                        validationErrors.Add($"Order total exceeds maximum allowed value of {_options.MaximumOrderTotal:N0}");
+                        validationErrors.Add($"Order total exceeds maximum allowed value of {MaximumOrderTotal:N0}");
                     }
                 }
                 catch (OverflowException)
@@ -278,7 +278,7 @@ namespace Bazario.Core.Services.Catalog.Product
                     OrderStatus.Processing.ToString()
                 };
 
-                var lookbackDate = DateTime.UtcNow.AddDays(-_options.ReservationLookbackDays);
+                var lookbackDate = DateTime.UtcNow.AddDays(-ReservationLookbackDays);
 
                 // Use database-level filtering to avoid loading all orders into memory
                 var recentOrders = await _unitOfWork.Orders.GetFilteredOrdersAsync(
