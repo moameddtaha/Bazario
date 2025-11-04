@@ -22,6 +22,13 @@ namespace Bazario.Core.Services.Catalog.Product
         private readonly IProductRepository _productRepository;
         private readonly ILogger<ProductQueryService> _logger;
 
+        // Pagination constants for input validation
+        private const int MINIMUM_PAGE_NUMBER = 1;
+        private const int MINIMUM_PAGE_SIZE = 1;
+        private const int MAXIMUM_PAGE_SIZE = 100;
+        private const int DEFAULT_LOW_STOCK_THRESHOLD = 10;
+        private const int MAXIMUM_STOCK_THRESHOLD = 10000;
+
         public ProductQueryService(
             IProductRepository productRepository,
             ILogger<ProductQueryService> logger)
@@ -32,6 +39,11 @@ namespace Bazario.Core.Services.Catalog.Product
 
         public async Task<ProductResponse?> GetProductByIdAsync(Guid productId, CancellationToken cancellationToken = default)
         {
+            if (productId == Guid.Empty)
+            {
+                throw new ArgumentException("Product ID cannot be empty", nameof(productId));
+            }
+
             _logger.LogDebug("Retrieving product by ID: {ProductId}", productId);
 
             try
@@ -58,6 +70,11 @@ namespace Bazario.Core.Services.Catalog.Product
 
         public async Task<List<ProductResponse>> GetProductsByStoreIdAsync(Guid storeId, CancellationToken cancellationToken = default)
         {
+            if (storeId == Guid.Empty)
+            {
+                throw new ArgumentException("Store ID cannot be empty", nameof(storeId));
+            }
+
             _logger.LogDebug("Retrieving products for store: {StoreId}", storeId);
 
             try
@@ -78,11 +95,44 @@ namespace Bazario.Core.Services.Catalog.Product
 
         public async Task<PagedResponse<ProductResponse>> SearchProductsAsync(ProductSearchCriteria searchCriteria, CancellationToken cancellationToken = default)
         {
-            _logger.LogDebug("Searching products with criteria: {SearchTerm}, Category: {Category}, MinPrice: {MinPrice}, MaxPrice: {MaxPrice}", 
+            if (searchCriteria == null)
+            {
+                throw new ArgumentNullException(nameof(searchCriteria));
+            }
+
+            _logger.LogDebug("Searching products with criteria: {SearchTerm}, Category: {Category}, MinPrice: {MinPrice}, MaxPrice: {MaxPrice}",
                 searchCriteria.SearchTerm, searchCriteria.Category, searchCriteria.MinPrice, searchCriteria.MaxPrice);
 
             try
             {
+                // Validate pagination parameters to prevent DoS attacks and invalid queries
+                if (searchCriteria.PageNumber < MINIMUM_PAGE_NUMBER)
+                {
+                    throw new ArgumentException($"Page number must be at least {MINIMUM_PAGE_NUMBER}", nameof(searchCriteria));
+                }
+
+                if (searchCriteria.PageSize < MINIMUM_PAGE_SIZE || searchCriteria.PageSize > MAXIMUM_PAGE_SIZE)
+                {
+                    throw new ArgumentException($"Page size must be between {MINIMUM_PAGE_SIZE} and {MAXIMUM_PAGE_SIZE}", nameof(searchCriteria));
+                }
+
+                // Validate price range to prevent invalid queries
+                if (searchCriteria.MinPrice.HasValue && searchCriteria.MinPrice.Value < 0)
+                {
+                    throw new ArgumentException("Minimum price cannot be negative", nameof(searchCriteria));
+                }
+
+                if (searchCriteria.MaxPrice.HasValue && searchCriteria.MaxPrice.Value < 0)
+                {
+                    throw new ArgumentException("Maximum price cannot be negative", nameof(searchCriteria));
+                }
+
+                if (searchCriteria.MinPrice.HasValue && searchCriteria.MaxPrice.HasValue &&
+                    searchCriteria.MinPrice.Value > searchCriteria.MaxPrice.Value)
+                {
+                    throw new ArgumentException("Minimum price cannot be greater than maximum price", nameof(searchCriteria));
+                }
+
                 // Validate that at least one search criterion is provided
                 if (string.IsNullOrWhiteSpace(searchCriteria.SearchTerm) && 
                     !searchCriteria.StoreId.HasValue &&
@@ -144,20 +194,23 @@ namespace Bazario.Core.Services.Catalog.Product
                 }
 
                 // Apply sorting (this becomes SQL ORDER BY)
+                // NOTE: Rating sort is disabled due to N+1 query performance issues
+                // Computing Average(r => r.Rating) in ORDER BY can load all reviews into memory
                 query = searchCriteria.SortBy?.ToLower() switch
                 {
-                    "name" => searchCriteria.SortDescending ? 
-                        query.OrderByDescending(p => p.Name) : 
+                    "name" => searchCriteria.SortDescending ?
+                        query.OrderByDescending(p => p.Name) :
                         query.OrderBy(p => p.Name),
-                    "price" => searchCriteria.SortDescending ? 
-                        query.OrderByDescending(p => p.Price) : 
+                    "price" => searchCriteria.SortDescending ?
+                        query.OrderByDescending(p => p.Price) :
                         query.OrderBy(p => p.Price),
-                    "createdat" => searchCriteria.SortDescending ? 
-                        query.OrderByDescending(p => p.CreatedAt) : 
+                    "createdat" => searchCriteria.SortDescending ?
+                        query.OrderByDescending(p => p.CreatedAt) :
                         query.OrderBy(p => p.CreatedAt),
-                    "rating" => searchCriteria.SortDescending ? 
-                        query.OrderByDescending(p => p.Reviews != null ? p.Reviews.Average(r => r.Rating) : 0) : 
-                        query.OrderBy(p => p.Reviews != null ? p.Reviews.Average(r => r.Rating) : 0),
+                    "rating" => throw new NotSupportedException(
+                        "Rating sort is temporarily disabled due to performance concerns. " +
+                        "To enable rating sort, add an AverageRating computed column to the Product entity. " +
+                        "Please use 'name', 'price', or 'createdat' for sorting."),
                     _ => query.OrderBy(p => p.Name)
                 };
 
@@ -189,8 +242,18 @@ namespace Bazario.Core.Services.Catalog.Product
             }
         }
 
-        public async Task<List<ProductResponse>> GetLowStockProductsAsync(int threshold = 10, CancellationToken cancellationToken = default)
+        public async Task<List<ProductResponse>> GetLowStockProductsAsync(int threshold = DEFAULT_LOW_STOCK_THRESHOLD, CancellationToken cancellationToken = default)
         {
+            if (threshold < 0)
+            {
+                throw new ArgumentException("Threshold must be non-negative", nameof(threshold));
+            }
+
+            if (threshold > MAXIMUM_STOCK_THRESHOLD)
+            {
+                throw new ArgumentException($"Threshold cannot exceed {MAXIMUM_STOCK_THRESHOLD}", nameof(threshold));
+            }
+
             _logger.LogDebug("Retrieving products with low stock (threshold: {Threshold})", threshold);
 
             try
