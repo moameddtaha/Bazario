@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -31,6 +32,18 @@ namespace Bazario.Core.Services.Catalog.Product
         private readonly int _reservationLookbackDays;
         private readonly decimal _maximumOrderTotal;
 
+        // Default configuration values
+        private const int DEFAULT_RESERVATION_LOOKBACK_DAYS = 7; // Based on typical payment processing window
+
+        // Configuration keys
+        private static class ConfigurationKeys
+        {
+            public const string MaximumProductPrice = "Validation:MaximumProductPrice";
+            public const string MaximumOrderQuantity = "Validation:MaximumOrderQuantity";
+            public const string ReservationLookbackDays = "Validation:ReservationLookbackDays";
+            public const string MaximumOrderTotal = "Validation:MaximumOrderTotal";
+        }
+
         // Static arrays for order status filtering (created once, reused for performance)
         private static readonly string[] ActiveOrderStatuses = new[]
         {
@@ -45,6 +58,13 @@ namespace Bazario.Core.Services.Catalog.Product
             OrderStatus.Processing.ToString()
         };
 
+        /// <summary>
+        /// Initializes a new instance of the ProductValidationService
+        /// </summary>
+        /// <param name="unitOfWork">Unit of work for data access operations</param>
+        /// <param name="logger">Logger instance for diagnostic logging</param>
+        /// <param name="configuration">Application configuration for loading validation thresholds</param>
+        /// <exception cref="ArgumentNullException">Thrown when unitOfWork or logger is null</exception>
         public ProductValidationService(
             IUnitOfWork unitOfWork,
             ILogger<ProductValidationService> logger,
@@ -54,10 +74,10 @@ namespace Bazario.Core.Services.Catalog.Product
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
             // Load configurable thresholds with defaults (aligned with InventoryAlertService pattern)
-            _maximumProductPrice = GetConfigurationValue(configuration, "Validation:MaximumProductPrice", 1_000_000m);
-            _maximumOrderQuantity = GetConfigurationValue(configuration, "Validation:MaximumOrderQuantity", 10_000);
-            _reservationLookbackDays = GetConfigurationValue(configuration, "Validation:ReservationLookbackDays", 7);
-            _maximumOrderTotal = GetConfigurationValue(configuration, "Validation:MaximumOrderTotal", decimal.MaxValue / 2);
+            _maximumProductPrice = GetConfigurationValue(configuration, ConfigurationKeys.MaximumProductPrice, 1_000_000m);
+            _maximumOrderQuantity = GetConfigurationValue(configuration, ConfigurationKeys.MaximumOrderQuantity, 10_000);
+            _reservationLookbackDays = GetConfigurationValue(configuration, ConfigurationKeys.ReservationLookbackDays, DEFAULT_RESERVATION_LOOKBACK_DAYS);
+            _maximumOrderTotal = GetConfigurationValue(configuration, ConfigurationKeys.MaximumOrderTotal, decimal.MaxValue / 2);
         }
 
         public async Task<ProductOrderValidation> ValidateForOrderAsync(Guid productId, int quantity, CancellationToken cancellationToken = default)
@@ -119,7 +139,10 @@ namespace Bazario.Core.Services.Catalog.Product
                     };
                 }
 
-                var validationErrors = new List<string>();
+                var validationErrors = new List<string>(capacity: 5); // Pre-allocate for typical validation error count
+
+                // Check for cancellation before starting validation logic
+                cancellationToken.ThrowIfCancellationRequested();
 
                 // Business Rule 1: Store must be active for orders to be placed
                 // Inactive stores cannot process orders (business decision to prevent orders during maintenance/suspension)
@@ -136,8 +159,15 @@ namespace Bazario.Core.Services.Catalog.Product
                 }
 
                 // Business Rule 3: Stock availability check
-                // NOTE: This is NOT atomic - use with stock reservation system for production
-                // Multiple concurrent requests can pass this check but exceed actual stock
+                // WARNING: This validation is NOT atomic and is susceptible to race conditions
+                // Multiple concurrent requests can all pass this check simultaneously, leading to overselling
+                //
+                // For production use, implement one of these solutions:
+                // 1. Use IInventoryManagementService.CreateStockReservationAsync() for pessimistic locking
+                // 2. Add RowVersion column to Product entity for optimistic concurrency control
+                // 3. Use database row-level locking: WITH (UPDLOCK, ROWLOCK) in SQL queries
+                //
+                // Current implementation is suitable for PRE-VALIDATION only, not final stock commitment
                 if (product.StockQuantity < quantity)
                 {
                     validationErrors.Add($"Insufficient stock. Available: {product.StockQuantity}, Requested: {quantity}");
@@ -151,7 +181,7 @@ namespace Bazario.Core.Services.Catalog.Product
                 }
                 else if (product.Price > _maximumProductPrice)
                 {
-                    validationErrors.Add($"Product price exceeds maximum allowed value of {_maximumProductPrice:N0}");
+                    validationErrors.Add($"Product price exceeds maximum allowed value of {_maximumProductPrice.ToString("N0", CultureInfo.InvariantCulture)}");
                 }
 
                 // Business Rule 5: Order total overflow protection
@@ -163,7 +193,7 @@ namespace Bazario.Core.Services.Catalog.Product
                     totalPrice = checked(product.Price * quantity);
                     if (totalPrice > _maximumOrderTotal)
                     {
-                        validationErrors.Add($"Order total exceeds maximum allowed value of {_maximumOrderTotal:N0}");
+                        validationErrors.Add($"Order total exceeds maximum allowed value of {_maximumOrderTotal.ToString("N0", CultureInfo.InvariantCulture)}");
                     }
                 }
                 catch (OverflowException)
@@ -233,7 +263,7 @@ namespace Bazario.Core.Services.Catalog.Product
                 var hasReviews = await HasProductReviewsAsync(productId, cancellationToken);
                 if (hasReviews)
                 {
-                    _logger.LogInformation("Product {ProductId} has reviews - consider soft delete instead", productId);
+                    _logger.LogWarning("Product {ProductId} has reviews - consider soft delete instead", productId);
                     // This is a warning, not a blocker
                 }
 
@@ -340,7 +370,7 @@ namespace Bazario.Core.Services.Catalog.Product
 
                 if (hasReviews)
                 {
-                    _logger.LogInformation("Product {ProductId} has {ReviewCount} reviews - consider soft delete", productId, reviewCount);
+                    _logger.LogWarning("Product {ProductId} has {ReviewCount} reviews - consider soft delete", productId, reviewCount);
                 }
                 else
                 {
@@ -358,6 +388,7 @@ namespace Bazario.Core.Services.Catalog.Product
 
         /// <summary>
         /// Helper method to safely retrieve configuration values with defaults
+        /// Supports nullable types and uses culture-invariant parsing
         /// </summary>
         private static T GetConfigurationValue<T>(IConfiguration configuration, string key, T defaultValue)
         {
@@ -370,10 +401,17 @@ namespace Bazario.Core.Services.Catalog.Product
 
             try
             {
-                return (T)Convert.ChangeType(value, typeof(T));
+                var targetType = typeof(T);
+                // Handle nullable types by getting the underlying type
+                var underlyingType = Nullable.GetUnderlyingType(targetType) ?? targetType;
+
+                // Use InvariantCulture for consistent parsing across different locales
+                return (T)Convert.ChangeType(value, underlyingType, CultureInfo.InvariantCulture);
             }
-            catch
+            catch (Exception ex)
             {
+                // Log parsing failures for debugging (using Debug.WriteLine to avoid circular dependency)
+                Debug.WriteLine($"Failed to parse configuration value '{key}' = '{value}': {ex.Message}");
                 return defaultValue;
             }
         }
