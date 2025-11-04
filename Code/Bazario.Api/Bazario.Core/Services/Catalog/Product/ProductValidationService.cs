@@ -83,8 +83,8 @@ namespace Bazario.Core.Services.Catalog.Product
                     throw new ArgumentException($"Order quantity exceeds maximum allowed value of {_maximumOrderQuantity}", nameof(quantity));
                 }
 
-                // Get product details
-                var product = await _unitOfWork.Products.GetProductByIdAsync(productId, cancellationToken);
+                // Get product with store in single query (performance optimization)
+                var product = await _unitOfWork.Products.GetProductWithStoreByIdAsync(productId, cancellationToken);
                 if (product == null || product.IsDeleted)
                 {
                     _logger.LogDebug("Product validation failed: Product not found or deleted. ProductId: {ProductId}", productId);
@@ -99,11 +99,11 @@ namespace Bazario.Core.Services.Catalog.Product
                     };
                 }
 
-                // Check for cancellation before next async operation
+                // Check for cancellation
                 cancellationToken.ThrowIfCancellationRequested();
 
-                // Get store details
-                var store = await _unitOfWork.Stores.GetStoreByIdAsync(product.StoreId, cancellationToken);
+                // Store is already loaded via single query
+                var store = product.Store;
                 if (store == null || store.IsDeleted)
                 {
                     _logger.LogDebug("Product validation failed: Store not found or deleted. ProductId: {ProductId}, StoreId: {StoreId}",
@@ -258,18 +258,15 @@ namespace Bazario.Core.Services.Catalog.Product
             {
                 _logger.LogDebug("Checking active orders for product {ProductId}", productId);
 
-                // Use database-level filtering to avoid loading all orders into memory
-                var activeOrders = await _unitOfWork.Orders.GetFilteredOrdersAsync(
-                    o => ActiveOrderStatuses.Contains(o.Status) &&
-                         o.OrderItems != null &&
-                         o.OrderItems.Any(oi => oi.ProductId == productId),
+                // Use optimized EXISTS query - no data loaded into memory, just returns boolean
+                var hasActiveOrders = await _unitOfWork.Orders.HasProductInOrdersWithStatusAsync(
+                    productId,
+                    ActiveOrderStatuses,
                     cancellationToken);
-
-                var hasActiveOrders = activeOrders.Any();
 
                 if (hasActiveOrders)
                 {
-                    _logger.LogWarning("Product {ProductId} has {Count} active orders - deletion blocked", productId, activeOrders.Count);
+                    _logger.LogWarning("Product {ProductId} has active orders - deletion blocked", productId);
                 }
                 else
                 {
@@ -299,20 +296,16 @@ namespace Bazario.Core.Services.Catalog.Product
 
                 var lookbackDate = DateTime.UtcNow.AddDays(-_reservationLookbackDays);
 
-                // Use database-level filtering to avoid loading all orders into memory
-                var recentOrders = await _unitOfWork.Orders.GetFilteredOrdersAsync(
-                    o => o.Date > lookbackDate &&
-                         ReservationStatuses.Contains(o.Status) &&
-                         o.OrderItems != null &&
-                         o.OrderItems.Any(oi => oi.ProductId == productId),
+                // Use optimized EXISTS query with date filtering - no data loaded into memory
+                var hasActiveReservations = await _unitOfWork.Orders.HasProductInOrdersWithStatusAndDateAsync(
+                    productId,
+                    ReservationStatuses,
+                    lookbackDate,
                     cancellationToken);
-
-                var hasActiveReservations = recentOrders.Count > 0;
 
                 if (hasActiveReservations)
                 {
-                    _logger.LogWarning("Product {ProductId} has {Count} recent orders that might indicate active reservations",
-                        productId, recentOrders.Count);
+                    _logger.LogWarning("Product {ProductId} has recent pending/processing orders - deletion blocked", productId);
                 }
                 else
                 {

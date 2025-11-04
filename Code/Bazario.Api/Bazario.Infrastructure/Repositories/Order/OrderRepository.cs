@@ -1076,5 +1076,50 @@ namespace Bazario.Infrastructure.Repositories.Order
                 throw new InvalidOperationException($"Failed to get order count by date range: {ex.Message}", ex);
             }
         }
+
+        public async Task<bool> HasProductInOrdersWithStatusAsync(Guid productId, string[] statuses, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Checking if product {ProductId} exists in orders with statuses: {Statuses}", productId, string.Join(", ", statuses));
+
+            try
+            {
+                // Use Any() which translates to SQL EXISTS - extremely efficient
+                // Does NOT load orders into memory, just returns boolean
+                var exists = await _context.Orders
+                    .Where(o => statuses.Contains(o.Status))
+                    .AnyAsync(o => o.OrderItems.Any(oi => oi.ProductId == productId), cancellationToken);
+
+                _logger.LogDebug("Product {ProductId} exists in active orders: {Exists}", productId, exists);
+                return exists;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to check if product {ProductId} exists in orders with statuses", productId);
+                throw new InvalidOperationException($"Failed to check product in orders: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<bool> HasProductInOrdersWithStatusAndDateAsync(Guid productId, string[] statuses, DateTime startDate, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Checking if product {ProductId} exists in orders with statuses: {Statuses} since {StartDate}",
+                productId, string.Join(", ", statuses), startDate);
+
+            try
+            {
+                // Use Any() which translates to SQL EXISTS - extremely efficient
+                // Filters by date range before checking order items
+                var exists = await _context.Orders
+                    .Where(o => o.Date > startDate && statuses.Contains(o.Status))
+                    .AnyAsync(o => o.OrderItems.Any(oi => oi.ProductId == productId), cancellationToken);
+
+                _logger.LogDebug("Product {ProductId} exists in orders since {StartDate}: {Exists}", productId, startDate, exists);
+                return exists;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to check if product {ProductId} exists in orders with statuses and date", productId);
+                throw new InvalidOperationException($"Failed to check product in orders with date: {ex.Message}", ex);
+            }
+        }
     }
 }

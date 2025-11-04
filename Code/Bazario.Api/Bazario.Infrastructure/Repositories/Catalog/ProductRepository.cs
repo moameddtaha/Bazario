@@ -185,6 +185,43 @@ namespace Bazario.Infrastructure.Repositories.Catalog
             }
         }
 
+        public async Task<Product?> GetProductWithStoreByIdAsync(Guid productId, CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Retrieving product with store by ID: {ProductId}", productId);
+
+            try
+            {
+                // Validate input
+                if (productId == Guid.Empty)
+                {
+                    _logger.LogWarning("Attempted to retrieve product with empty ID");
+                    return null;
+                }
+
+                // Find product with ONLY Store navigation property (lightweight query for validation)
+                // More efficient than GetProductByIdAsync which loads Reviews and OrderItems
+                var product = await _context.Products
+                    .Include(p => p.Store)
+                    .FirstOrDefaultAsync(p => p.ProductId == productId, cancellationToken);
+
+                if (product != null)
+                {
+                    _logger.LogDebug("Product with store found: {ProductName} (Store: {StoreName})",
+                        product.Name, product.Store?.Name);
+                }
+                else
+                {
+                    _logger.LogDebug("Product not found with ID: {ProductId}", productId);
+                }
+
+                return product;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to retrieve product with store for ID: {ProductId}", productId);
+                throw new InvalidOperationException($"Failed to retrieve product with store for ID {productId}: {ex.Message}", ex);
+            }
+        }
 
         public async Task<List<Product>> GetProductsByStoreIdAsync(Guid storeId, bool includeDeleted = false, CancellationToken cancellationToken = default)
         {

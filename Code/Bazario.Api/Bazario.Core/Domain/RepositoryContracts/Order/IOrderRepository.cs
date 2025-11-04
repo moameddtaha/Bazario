@@ -101,5 +101,26 @@ namespace Bazario.Core.Domain.RepositoryContracts.Order
         /// Gets total count of orders within a date range
         /// </summary>
         Task<int> GetOrdersCountByDateRangeAsync(DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Checks if a product exists in any orders with the specified statuses (optimized for performance)
+        /// Uses EXISTS query instead of loading all orders into memory
+        /// </summary>
+        /// <param name="productId">Product ID to check</param>
+        /// <param name="statuses">Order statuses to check (e.g., Pending, Processing, Shipped)</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>True if product exists in any order with specified statuses, false otherwise</returns>
+        Task<bool> HasProductInOrdersWithStatusAsync(Guid productId, string[] statuses, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Checks if a product exists in any orders with the specified statuses and date range (optimized for performance)
+        /// Uses EXISTS query instead of loading all orders into memory
+        /// </summary>
+        /// <param name="productId">Product ID to check</param>
+        /// <param name="statuses">Order statuses to check</param>
+        /// <param name="startDate">Start date for filtering orders</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>True if product exists in orders matching criteria, false otherwise</returns>
+        Task<bool> HasProductInOrdersWithStatusAndDateAsync(Guid productId, string[] statuses, DateTime startDate, CancellationToken cancellationToken = default);
     }
 }

@@ -18,6 +18,11 @@ namespace Bazario.Core.Domain.RepositoryContracts.Catalog
 
         Task<Product?> GetProductByIdAsync(Guid productId, CancellationToken cancellationToken = default);
 
+        /// <summary>
+        /// Gets a product by ID with its Store navigation property eagerly loaded (single query optimization)
+        /// </summary>
+        Task<Product?> GetProductWithStoreByIdAsync(Guid productId, CancellationToken cancellationToken = default);
+
         Task<List<Product>> GetProductsByStoreIdAsync(Guid storeId, bool includeDeleted = false, CancellationToken cancellationToken = default);
 
         Task<List<Product>> GetAllProductsAsync(CancellationToken cancellationToken = default);
