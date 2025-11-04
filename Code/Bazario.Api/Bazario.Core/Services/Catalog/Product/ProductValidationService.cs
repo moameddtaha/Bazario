@@ -209,7 +209,7 @@ namespace Bazario.Core.Services.Catalog.Product
                 {
                     IsValid = validationErrors.Count == 0,
                     ProductId = productId,
-                    ProductName = product.Name, // Already validated as non-null/whitespace at line 136
+                    ProductName = product.Name!, // Already validated as non-null/whitespace at line 159
                     StoreId = product.StoreId,
                     StoreName = store.Name ?? "Unknown", // Store name not validated, keep defensive coalescing
                     RequestedQuantity = quantity,
