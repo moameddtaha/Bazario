@@ -16,12 +16,6 @@ namespace Bazario.Core.Services.Catalog.Product
 {
     /// <summary>
     /// Service implementation for product validation operations
-    /// Handles product validation logic and business rules including deletion safety
-    ///
-    /// Fail-Safe Strategy:
-    /// - Active orders/reservations: Returns TRUE on error (blocks deletion - safe choice)
-    /// - Reviews: Returns FALSE on error (allows deletion - reviews are informational only)
-    /// This asymmetry is intentional to protect referential integrity while being permissive for non-critical data
     /// </summary>
     public class ProductValidationService : IProductValidationService
     {
@@ -44,6 +38,22 @@ namespace Bazario.Core.Services.Catalog.Product
             public const string MaximumOrderTotal = "Validation:MaximumOrderTotal";
         }
 
+        // Error message constants for consistency and potential localization
+        private static class ErrorMessages
+        {
+            public const string ProductNotFound = "Product not found";
+            public const string ProductDeleted = "Product has been deleted";
+            public const string StoreNotFound = "Product store not found";
+            public const string StoreDeleted = "Product store has been deleted";
+            public const string StoreInactive = "Product store is inactive";
+            public const string ProductNameMissing = "Product name is missing";
+            public const string InsufficientStock = "Insufficient stock. Available: {0}, Requested: {1}";
+            public const string PriceMustBePositive = "Product price must be greater than zero";
+            public const string PriceExceedsMaximum = "Product price exceeds maximum allowed value of {0}";
+            public const string OrderTotalExceedsMaximum = "Order total exceeds maximum allowed value of {0}";
+            public const string OrderTotalOverflow = "Order total calculation resulted in overflow";
+        }
+
         // Static arrays for order status filtering (created once, reused for performance)
         private static readonly string[] ActiveOrderStatuses = new[]
         {
@@ -58,13 +68,6 @@ namespace Bazario.Core.Services.Catalog.Product
             OrderStatus.Processing.ToString()
         };
 
-        /// <summary>
-        /// Initializes a new instance of the ProductValidationService
-        /// </summary>
-        /// <param name="unitOfWork">Unit of work for data access operations</param>
-        /// <param name="logger">Logger instance for diagnostic logging</param>
-        /// <param name="configuration">Application configuration for loading validation thresholds</param>
-        /// <exception cref="ArgumentNullException">Thrown when unitOfWork or logger is null</exception>
         public ProductValidationService(
             IUnitOfWork unitOfWork,
             ILogger<ProductValidationService> logger,
@@ -114,7 +117,7 @@ namespace Bazario.Core.Services.Catalog.Product
                         ProductId = productId,
                         RequestedQuantity = quantity,
                         AvailableQuantity = 0,
-                        ValidationErrors = new List<string> { product == null ? "Product not found" : "Product has been deleted" },
+                        ValidationErrors = new List<string> { product == null ? ErrorMessages.ProductNotFound : ErrorMessages.ProductDeleted },
                         ValidationTimestamp = DateTime.UtcNow
                     };
                 }
@@ -134,7 +137,7 @@ namespace Bazario.Core.Services.Catalog.Product
                         ProductId = productId,
                         RequestedQuantity = quantity,
                         AvailableQuantity = product.StockQuantity,
-                        ValidationErrors = new List<string> { store == null ? "Product store not found" : "Product store has been deleted" },
+                        ValidationErrors = new List<string> { store == null ? ErrorMessages.StoreNotFound : ErrorMessages.StoreDeleted },
                         ValidationTimestamp = DateTime.UtcNow
                     };
                 }
@@ -148,14 +151,14 @@ namespace Bazario.Core.Services.Catalog.Product
                 // Inactive stores cannot process orders (business decision to prevent orders during maintenance/suspension)
                 if (!store.IsActive)
                 {
-                    validationErrors.Add("Product store is inactive");
+                    validationErrors.Add(ErrorMessages.StoreInactive);
                 }
 
                 // Business Rule 2: Product must have a valid name for order processing
                 // This ensures proper order display and fulfillment tracking
                 if (string.IsNullOrWhiteSpace(product.Name))
                 {
-                    validationErrors.Add("Product name is missing");
+                    validationErrors.Add(ErrorMessages.ProductNameMissing);
                 }
 
                 // Business Rule 3: Stock availability check
@@ -170,18 +173,18 @@ namespace Bazario.Core.Services.Catalog.Product
                 // Current implementation is suitable for PRE-VALIDATION only, not final stock commitment
                 if (product.StockQuantity < quantity)
                 {
-                    validationErrors.Add($"Insufficient stock. Available: {product.StockQuantity}, Requested: {quantity}");
+                    validationErrors.Add(string.Format(ErrorMessages.InsufficientStock, product.StockQuantity, quantity));
                 }
 
                 // Business Rule 4: Price validation with configurable limits
                 // Prevents invalid prices (zero/negative) and unreasonably high prices (potential fraud/data errors)
                 if (product.Price <= 0)
                 {
-                    validationErrors.Add("Product price must be greater than zero");
+                    validationErrors.Add(ErrorMessages.PriceMustBePositive);
                 }
                 else if (product.Price > _maximumProductPrice)
                 {
-                    validationErrors.Add($"Product price exceeds maximum allowed value of {_maximumProductPrice.ToString("N0", CultureInfo.InvariantCulture)}");
+                    validationErrors.Add(string.Format(ErrorMessages.PriceExceedsMaximum, _maximumProductPrice.ToString("N0", CultureInfo.InvariantCulture)));
                 }
 
                 // Business Rule 5: Order total overflow protection
@@ -193,12 +196,12 @@ namespace Bazario.Core.Services.Catalog.Product
                     totalPrice = checked(product.Price * quantity);
                     if (totalPrice > _maximumOrderTotal)
                     {
-                        validationErrors.Add($"Order total exceeds maximum allowed value of {_maximumOrderTotal.ToString("N0", CultureInfo.InvariantCulture)}");
+                        validationErrors.Add(string.Format(ErrorMessages.OrderTotalExceedsMaximum, _maximumOrderTotal.ToString("N0", CultureInfo.InvariantCulture)));
                     }
                 }
                 catch (OverflowException)
                 {
-                    validationErrors.Add("Order total calculation resulted in overflow");
+                    validationErrors.Add(ErrorMessages.OrderTotalOverflow);
                     totalPrice = 0; // Safe default for overflow cases
                 }
 
@@ -206,9 +209,9 @@ namespace Bazario.Core.Services.Catalog.Product
                 {
                     IsValid = validationErrors.Count == 0,
                     ProductId = productId,
-                    ProductName = product.Name ?? "Unknown",
+                    ProductName = product.Name, // Already validated as non-null/whitespace at line 136
                     StoreId = product.StoreId,
-                    StoreName = store.Name ?? "Unknown",
+                    StoreName = store.Name ?? "Unknown", // Store name not validated, keep defensive coalescing
                     RequestedQuantity = quantity,
                     AvailableQuantity = product.StockQuantity,
                     UnitPrice = product.Price,
@@ -386,10 +389,8 @@ namespace Bazario.Core.Services.Catalog.Product
             }
         }
 
-        /// <summary>
-        /// Helper method to safely retrieve configuration values with defaults
-        /// Supports nullable types and uses culture-invariant parsing
-        /// </summary>
+        // Helper method to safely retrieve configuration values with defaults
+        // Supports nullable types and uses culture-invariant parsing
         private static T GetConfigurationValue<T>(IConfiguration configuration, string key, T defaultValue)
         {
             if (configuration == null)
