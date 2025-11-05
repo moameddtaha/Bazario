@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -29,6 +30,31 @@ namespace Bazario.Core.Services.Catalog.Product
         private const int MINIMUM_DELETION_REASON_LENGTH = 10;
         private const int MAXIMUM_DELETION_REASON_LENGTH = 500;
 
+        // Error message constants for consistency and potential localization
+        private static class ErrorMessages
+        {
+            public const string ProductAddRequestNull = "Product creation attempted with null request";
+            public const string StoreNotFound = "Store with ID {0} not found";
+            public const string StoreInactive = "Cannot create product for inactive store {0}";
+            public const string ConcurrencyConflictCreate = "The product was modified by another process. Please try again.";
+            public const string DatabaseErrorCreate = "Failed to create product due to database error. Please check product data and try again.";
+            public const string ProductUpdateRequestNull = "Product update attempted with null request";
+            public const string ProductNotFound = "Product with ID {0} not found";
+            public const string ConcurrencyConflictUpdate = "The product was modified by another user. Please refresh and try again.";
+            public const string DatabaseErrorUpdate = "Failed to update product due to database error. Please check product data and try again.";
+            public const string ProductIdEmpty = "Product ID cannot be empty";
+            public const string DeletedByEmpty = "DeletedBy user ID cannot be empty";
+            public const string RestoredByEmpty = "RestoredBy user ID cannot be empty";
+            public const string ReasonRequired = "Reason is required for hard deletion";
+            public const string ReasonTooShort = "Reason must be at least {0} characters long";
+            public const string ReasonTooLong = "Reason cannot exceed {0} characters";
+            public const string ProductCannotBeDeleted = "Product cannot be safely deleted due to active orders or dependencies";
+            public const string ProductHasOrders = "Cannot hard delete product with {0} existing orders. Orders are permanent business records and cannot be deleted.";
+            public const string ProductNotDeleted = "Product with ID {0} is not deleted and cannot be restored";
+            public const string ProductRestorationFailed = "Failed to restore product with ID {0}";
+            public const string ProductRestoredButNotRetrieved = "Product restoration succeeded but product could not be retrieved: {0}";
+        }
+
         public ProductManagementService(
             IUnitOfWork unitOfWork,
             IProductValidationService validationService,
@@ -43,6 +69,7 @@ namespace Bazario.Core.Services.Catalog.Product
 
         public async Task<ProductResponse> CreateProductAsync(ProductAddRequest productAddRequest, CancellationToken cancellationToken = default)
         {
+            var stopwatch = Stopwatch.StartNew();
             _logger.LogInformation("Starting product creation for store: {StoreId}", productAddRequest?.StoreId);
 
             try
@@ -50,7 +77,7 @@ namespace Bazario.Core.Services.Catalog.Product
                 // Validate input
                 if (productAddRequest == null)
                 {
-                    _logger.LogWarning("Product creation attempted with null request");
+                    _logger.LogWarning(ErrorMessages.ProductAddRequestNull);
                     throw new ArgumentNullException(nameof(productAddRequest));
                 }
 
@@ -59,14 +86,14 @@ namespace Bazario.Core.Services.Catalog.Product
                 if (store == null)
                 {
                     _logger.LogWarning("Product creation failed: Store not found. StoreId: {StoreId}", productAddRequest.StoreId);
-                    throw new InvalidOperationException($"Store with ID {productAddRequest.StoreId} not found");
+                    throw new InvalidOperationException(string.Format(ErrorMessages.StoreNotFound, productAddRequest.StoreId));
                 }
 
                 // Validate store is active
                 if (!store.IsActive)
                 {
                     _logger.LogWarning("Product creation failed: Store is inactive. StoreId: {StoreId}", productAddRequest.StoreId);
-                    throw new InvalidOperationException($"Cannot create product for inactive store {productAddRequest.StoreId}");
+                    throw new InvalidOperationException(string.Format(ErrorMessages.StoreInactive, productAddRequest.StoreId));
                 }
 
                 // Create product entity
@@ -86,30 +113,38 @@ namespace Bazario.Core.Services.Catalog.Product
                 catch (Exception ex) when (ex.GetType().Name == "DbUpdateConcurrencyException")
                 {
                     // Handle EF Core concurrency exception without direct reference
-                    _logger.LogError(ex, "Concurrency conflict creating product. ProductId: {ProductId}", product.ProductId);
-                    throw new InvalidOperationException("The product was modified by another process. Please try again.", ex);
+                    stopwatch.Stop();
+                    _logger.LogError(ex, "Concurrency conflict creating product. ProductId: {ProductId} (failed after {ElapsedMs}ms)",
+                        product.ProductId, stopwatch.ElapsedMilliseconds);
+                    throw new InvalidOperationException(ErrorMessages.ConcurrencyConflictCreate, ex);
                 }
                 catch (Exception ex) when (ex.GetType().Name == "DbUpdateException")
                 {
                     // Handle EF Core database update exception without direct reference
-                    _logger.LogError(ex, "Database error creating product. ProductId: {ProductId}", product.ProductId);
-                    throw new InvalidOperationException("Failed to create product due to database error. Please check product data and try again.", ex);
+                    stopwatch.Stop();
+                    _logger.LogError(ex, "Database error creating product. ProductId: {ProductId} (failed after {ElapsedMs}ms)",
+                        product.ProductId, stopwatch.ElapsedMilliseconds);
+                    throw new InvalidOperationException(ErrorMessages.DatabaseErrorCreate, ex);
                 }
 
-                _logger.LogInformation("Successfully created product. ProductId: {ProductId}, Name: {ProductName}, StoreId: {StoreId}",
-                    createdProduct.ProductId, createdProduct.Name, createdProduct.StoreId);
+                stopwatch.Stop();
+                _logger.LogInformation("Successfully created product. ProductId: {ProductId}, Name: {ProductName}, StoreId: {StoreId} (completed in {ElapsedMs}ms)",
+                    createdProduct.ProductId, createdProduct.Name, createdProduct.StoreId, stopwatch.ElapsedMilliseconds);
 
                 return createdProduct.ToProductResponse();
             }
             catch (Exception ex) when (ex is not (InvalidOperationException or ArgumentException or ArgumentNullException))
             {
-                _logger.LogError(ex, "Unexpected error creating product for store: {StoreId}", productAddRequest?.StoreId);
+                stopwatch.Stop();
+                _logger.LogError(ex, "Unexpected error creating product for store: {StoreId} (failed after {ElapsedMs}ms)",
+                    productAddRequest?.StoreId, stopwatch.ElapsedMilliseconds);
                 throw;
             }
         }
 
         public async Task<ProductResponse> UpdateProductAsync(ProductUpdateRequest productUpdateRequest, CancellationToken cancellationToken = default)
         {
+            var stopwatch = Stopwatch.StartNew();
             _logger.LogInformation("Starting product update for product: {ProductId}", productUpdateRequest?.ProductId);
 
             try
@@ -117,7 +152,7 @@ namespace Bazario.Core.Services.Catalog.Product
                 // Validate input
                 if (productUpdateRequest == null)
                 {
-                    _logger.LogWarning("Product update attempted with null request");
+                    _logger.LogWarning(ErrorMessages.ProductUpdateRequestNull);
                     throw new ArgumentNullException(nameof(productUpdateRequest));
                 }
 
@@ -126,7 +161,7 @@ namespace Bazario.Core.Services.Catalog.Product
                 if (existingProduct == null)
                 {
                     _logger.LogWarning("Product update failed: Product not found. ProductId: {ProductId}", productUpdateRequest.ProductId);
-                    throw new InvalidOperationException($"Product with ID {productUpdateRequest.ProductId} not found");
+                    throw new InvalidOperationException(string.Format(ErrorMessages.ProductNotFound, productUpdateRequest.ProductId));
                 }
 
                 // Convert DTO to entity for update
@@ -145,31 +180,39 @@ namespace Bazario.Core.Services.Catalog.Product
                 catch (Exception ex) when (ex.GetType().Name == "DbUpdateConcurrencyException")
                 {
                     // Handle EF Core concurrency exception - product was modified by another user
-                    _logger.LogWarning(ex, "Concurrency conflict updating product. ProductId: {ProductId}. Product was modified by another user.", productUpdateRequest.ProductId);
-                    throw new InvalidOperationException("The product was modified by another user. Please refresh and try again.", ex);
+                    stopwatch.Stop();
+                    _logger.LogWarning(ex, "Concurrency conflict updating product. ProductId: {ProductId}. Product was modified by another user (failed after {ElapsedMs}ms)",
+                        productUpdateRequest.ProductId, stopwatch.ElapsedMilliseconds);
+                    throw new InvalidOperationException(ErrorMessages.ConcurrencyConflictUpdate, ex);
                 }
                 catch (Exception ex) when (ex.GetType().Name == "DbUpdateException")
                 {
                     // Handle EF Core database update exception
-                    _logger.LogError(ex, "Database error updating product. ProductId: {ProductId}", productUpdateRequest.ProductId);
-                    throw new InvalidOperationException("Failed to update product due to database error. Please check product data and try again.", ex);
+                    stopwatch.Stop();
+                    _logger.LogError(ex, "Database error updating product. ProductId: {ProductId} (failed after {ElapsedMs}ms)",
+                        productUpdateRequest.ProductId, stopwatch.ElapsedMilliseconds);
+                    throw new InvalidOperationException(ErrorMessages.DatabaseErrorUpdate, ex);
                 }
 
-                _logger.LogInformation("Successfully updated product. ProductId: {ProductId}, Name: {ProductName}",
-                    updatedProduct.ProductId, updatedProduct.Name);
+                stopwatch.Stop();
+                _logger.LogInformation("Successfully updated product. ProductId: {ProductId}, Name: {ProductName} (completed in {ElapsedMs}ms)",
+                    updatedProduct.ProductId, updatedProduct.Name, stopwatch.ElapsedMilliseconds);
 
                 return updatedProduct.ToProductResponse();
             }
             catch (Exception ex) when (ex is not (InvalidOperationException or ArgumentException or ArgumentNullException))
             {
-                _logger.LogError(ex, "Unexpected error updating product: {ProductId}", productUpdateRequest?.ProductId);
+                stopwatch.Stop();
+                _logger.LogError(ex, "Unexpected error updating product: {ProductId} (failed after {ElapsedMs}ms)",
+                    productUpdateRequest?.ProductId, stopwatch.ElapsedMilliseconds);
                 throw;
             }
         }
 
         public async Task<bool> DeleteProductAsync(Guid productId, Guid deletedBy, string? reason = null, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Starting soft deletion for product: {ProductId}, DeletedBy: {DeletedBy}, Reason: {Reason}", 
+            var stopwatch = Stopwatch.StartNew();
+            _logger.LogInformation("Starting soft deletion for product: {ProductId}, DeletedBy: {DeletedBy}, Reason: {Reason}",
                 productId, deletedBy, reason);
 
             try
@@ -177,12 +220,12 @@ namespace Bazario.Core.Services.Catalog.Product
                 // Validate inputs
                 if (productId == Guid.Empty)
                 {
-                    throw new ArgumentException("Product ID cannot be empty", nameof(productId));
+                    throw new ArgumentException(ErrorMessages.ProductIdEmpty, nameof(productId));
                 }
 
                 if (deletedBy == Guid.Empty)
                 {
-                    throw new ArgumentException("DeletedBy user ID cannot be empty", nameof(deletedBy));
+                    throw new ArgumentException(ErrorMessages.DeletedByEmpty, nameof(deletedBy));
                 }
 
                 // Validate product exists
@@ -190,7 +233,7 @@ namespace Bazario.Core.Services.Catalog.Product
                 if (product == null)
                 {
                     _logger.LogWarning("Product deletion failed: Product not found. ProductId: {ProductId}", productId);
-                    throw new InvalidOperationException($"Product with ID {productId} not found");
+                    throw new InvalidOperationException(string.Format(ErrorMessages.ProductNotFound, productId));
                 }
 
                 // For soft deletion, we don't need to check for active orders
@@ -203,28 +246,33 @@ namespace Bazario.Core.Services.Catalog.Product
                 var result = await _unitOfWork.Products.SoftDeleteProductAsync(productId, deletedBy, reason, cancellationToken);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+                stopwatch.Stop();
                 if (result)
                 {
-                    _logger.LogInformation("Successfully soft deleted product. ProductId: {ProductId}, Name: {ProductName}, DeletedBy: {DeletedBy}", 
-                        productId, product.Name, deletedBy);
+                    _logger.LogInformation("Successfully soft deleted product. ProductId: {ProductId}, Name: {ProductName}, DeletedBy: {DeletedBy} (completed in {ElapsedMs}ms)",
+                        productId, product.Name, deletedBy, stopwatch.ElapsedMilliseconds);
                 }
                 else
                 {
-                    _logger.LogWarning("Product soft deletion returned false. ProductId: {ProductId}", productId);
+                    _logger.LogWarning("Product soft deletion returned false. ProductId: {ProductId} (completed in {ElapsedMs}ms)",
+                        productId, stopwatch.ElapsedMilliseconds);
                 }
 
                 return result;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to soft delete product: {ProductId}, DeletedBy: {DeletedBy}", productId, deletedBy);
+                stopwatch.Stop();
+                _logger.LogError(ex, "Failed to soft delete product: {ProductId}, DeletedBy: {DeletedBy} (failed after {ElapsedMs}ms)",
+                    productId, deletedBy, stopwatch.ElapsedMilliseconds);
                 throw;
             }
         }
 
         public async Task<bool> HardDeleteProductAsync(Guid productId, Guid deletedBy, string reason, CancellationToken cancellationToken = default)
         {
-            _logger.LogWarning("HARD DELETE requested for product: {ProductId}, RequestedBy: {DeletedBy}, Reason: {Reason}", 
+            var stopwatch = Stopwatch.StartNew();
+            _logger.LogWarning("HARD DELETE requested for product: {ProductId}, RequestedBy: {DeletedBy}, Reason: {Reason}",
                 productId, deletedBy, reason);
 
             try
@@ -232,30 +280,30 @@ namespace Bazario.Core.Services.Catalog.Product
                 // Validate inputs
                 if (productId == Guid.Empty)
                 {
-                    throw new ArgumentException("Product ID cannot be empty", nameof(productId));
+                    throw new ArgumentException(ErrorMessages.ProductIdEmpty, nameof(productId));
                 }
 
                 if (deletedBy == Guid.Empty)
                 {
-                    throw new ArgumentException("DeletedBy user ID cannot be empty", nameof(deletedBy));
+                    throw new ArgumentException(ErrorMessages.DeletedByEmpty, nameof(deletedBy));
                 }
 
                 // Validate and sanitize reason parameter
                 if (string.IsNullOrWhiteSpace(reason))
                 {
-                    throw new ArgumentException("Reason is required for hard deletion", nameof(reason));
+                    throw new ArgumentException(ErrorMessages.ReasonRequired, nameof(reason));
                 }
 
                 reason = reason.Trim();
 
                 if (reason.Length < MINIMUM_DELETION_REASON_LENGTH)
                 {
-                    throw new ArgumentException($"Reason must be at least {MINIMUM_DELETION_REASON_LENGTH} characters long", nameof(reason));
+                    throw new ArgumentException(string.Format(ErrorMessages.ReasonTooShort, MINIMUM_DELETION_REASON_LENGTH), nameof(reason));
                 }
 
                 if (reason.Length > MAXIMUM_DELETION_REASON_LENGTH)
                 {
-                    throw new ArgumentException($"Reason cannot exceed {MAXIMUM_DELETION_REASON_LENGTH} characters", nameof(reason));
+                    throw new ArgumentException(string.Format(ErrorMessages.ReasonTooLong, MAXIMUM_DELETION_REASON_LENGTH), nameof(reason));
                 }
 
                 // Validate admin privileges
@@ -265,12 +313,12 @@ namespace Bazario.Core.Services.Catalog.Product
                 if (!await _validationService.CanProductBeSafelyDeletedAsync(productId, cancellationToken))
                 {
                     _logger.LogWarning("Product {ProductId} cannot be safely deleted - has active orders or dependencies", productId);
-                    throw new InvalidOperationException("Product cannot be safely deleted due to active orders or dependencies");
+                    throw new InvalidOperationException(ErrorMessages.ProductCannotBeDeleted);
                 }
 
                 _logger.LogInformation("Admin user {UserId} performing hard delete of product {ProductId}", deletedBy, productId);
 
-                _logger.LogCritical("PERFORMING HARD DELETE - This action is IRREVERSIBLE. ProductId: {ProductId}, DeletedBy: {DeletedBy}, Reason: {Reason}", 
+                _logger.LogCritical("PERFORMING HARD DELETE - This action is IRREVERSIBLE. ProductId: {ProductId}, DeletedBy: {DeletedBy}, Reason: {Reason}",
                     productId, deletedBy, reason);
 
                 // Check if product exists (including soft-deleted)
@@ -278,7 +326,7 @@ namespace Bazario.Core.Services.Catalog.Product
                 if (product == null)
                 {
                     _logger.LogWarning("Hard delete failed: Product not found. ProductId: {ProductId}", productId);
-                    throw new InvalidOperationException($"Product with ID {productId} not found");
+                    throw new InvalidOperationException(string.Format(ErrorMessages.ProductNotFound, productId));
                 }
 
                 // Check if product has any orders (hard delete NEVER allowed with orders)
@@ -286,9 +334,9 @@ namespace Bazario.Core.Services.Catalog.Product
                 var productOrderCount = await _unitOfWork.Orders.GetOrderCountByProductIdAsync(productId, cancellationToken);
                 if (productOrderCount > 0)
                 {
-                    _logger.LogError("Hard delete BLOCKED: Product has existing orders. ProductId: {ProductId}, OrderCount: {OrderCount}", 
+                    _logger.LogError("Hard delete BLOCKED: Product has existing orders. ProductId: {ProductId}, OrderCount: {OrderCount}",
                         productId, productOrderCount);
-                    throw new InvalidOperationException($"Cannot hard delete product with {productOrderCount} existing orders. Orders are permanent business records and cannot be deleted.");
+                    throw new InvalidOperationException(string.Format(ErrorMessages.ProductHasOrders, productOrderCount));
                 }
 
                 // Log product details before permanent deletion for audit
@@ -299,27 +347,32 @@ namespace Bazario.Core.Services.Catalog.Product
                 var result = await _unitOfWork.Products.HardDeleteProductAsync(productId, cancellationToken);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+                stopwatch.Stop();
                 if (result)
                 {
-                    _logger.LogCritical("HARD DELETE COMPLETED. Product permanently removed. ProductId: {ProductId}, DeletedBy: {DeletedBy}", 
-                        productId, deletedBy);
+                    _logger.LogCritical("HARD DELETE COMPLETED. Product permanently removed. ProductId: {ProductId}, DeletedBy: {DeletedBy} (completed in {ElapsedMs}ms)",
+                        productId, deletedBy, stopwatch.ElapsedMilliseconds);
                 }
                 else
                 {
-                    _logger.LogError("Hard delete returned false. ProductId: {ProductId}", productId);
+                    _logger.LogError("Hard delete returned false. ProductId: {ProductId} (completed in {ElapsedMs}ms)",
+                        productId, stopwatch.ElapsedMilliseconds);
                 }
 
                 return result;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to hard delete product: {ProductId}, DeletedBy: {DeletedBy}", productId, deletedBy);
+                stopwatch.Stop();
+                _logger.LogError(ex, "Failed to hard delete product: {ProductId}, DeletedBy: {DeletedBy} (failed after {ElapsedMs}ms)",
+                    productId, deletedBy, stopwatch.ElapsedMilliseconds);
                 throw;
             }
         }
 
         public async Task<ProductResponse> RestoreProductAsync(Guid productId, Guid restoredBy, CancellationToken cancellationToken = default)
         {
+            var stopwatch = Stopwatch.StartNew();
             _logger.LogInformation("Starting product restoration. ProductId: {ProductId}, RestoredBy: {RestoredBy}", productId, restoredBy);
 
             try
@@ -327,12 +380,12 @@ namespace Bazario.Core.Services.Catalog.Product
                 // Validate inputs
                 if (productId == Guid.Empty)
                 {
-                    throw new ArgumentException("Product ID cannot be empty", nameof(productId));
+                    throw new ArgumentException(ErrorMessages.ProductIdEmpty, nameof(productId));
                 }
 
                 if (restoredBy == Guid.Empty)
                 {
-                    throw new ArgumentException("RestoredBy user ID cannot be empty", nameof(restoredBy));
+                    throw new ArgumentException(ErrorMessages.RestoredByEmpty, nameof(restoredBy));
                 }
 
                 // Check if product exists (including soft-deleted)
@@ -340,13 +393,13 @@ namespace Bazario.Core.Services.Catalog.Product
                 if (product == null)
                 {
                     _logger.LogWarning("Product restoration failed: Product not found. ProductId: {ProductId}", productId);
-                    throw new InvalidOperationException($"Product with ID {productId} not found");
+                    throw new InvalidOperationException(string.Format(ErrorMessages.ProductNotFound, productId));
                 }
 
                 if (!product.IsDeleted)
                 {
                     _logger.LogWarning("Product restoration failed: Product is not deleted. ProductId: {ProductId}", productId);
-                    throw new InvalidOperationException($"Product with ID {productId} is not deleted and cannot be restored");
+                    throw new InvalidOperationException(string.Format(ErrorMessages.ProductNotDeleted, productId));
                 }
 
                 _logger.LogDebug("Restoring product. ProductId: {ProductId}, Name: {ProductName}", productId, product.Name);
@@ -357,27 +410,35 @@ namespace Bazario.Core.Services.Catalog.Product
 
                 if (result)
                 {
-                    _logger.LogInformation("Successfully restored product. ProductId: {ProductId}, RestoredBy: {RestoredBy}", productId, restoredBy);
-
                     // Get the restored product with proper null check
                     var restoredProduct = await _unitOfWork.Products.GetProductByIdAsync(productId, cancellationToken);
                     if (restoredProduct == null)
                     {
-                        _logger.LogError("Product restoration succeeded but product could not be retrieved. ProductId: {ProductId}", productId);
-                        throw new InvalidOperationException($"Product restoration succeeded but product could not be retrieved: {productId}");
+                        stopwatch.Stop();
+                        _logger.LogError("Product restoration succeeded but product could not be retrieved. ProductId: {ProductId} (failed after {ElapsedMs}ms)",
+                            productId, stopwatch.ElapsedMilliseconds);
+                        throw new InvalidOperationException(string.Format(ErrorMessages.ProductRestoredButNotRetrieved, productId));
                     }
+
+                    stopwatch.Stop();
+                    _logger.LogInformation("Successfully restored product. ProductId: {ProductId}, RestoredBy: {RestoredBy} (completed in {ElapsedMs}ms)",
+                        productId, restoredBy, stopwatch.ElapsedMilliseconds);
 
                     return restoredProduct.ToProductResponse();
                 }
                 else
                 {
-                    _logger.LogError("Product restoration failed. ProductId: {ProductId}", productId);
-                    throw new InvalidOperationException($"Failed to restore product with ID {productId}");
+                    stopwatch.Stop();
+                    _logger.LogError("Product restoration failed. ProductId: {ProductId} (failed after {ElapsedMs}ms)",
+                        productId, stopwatch.ElapsedMilliseconds);
+                    throw new InvalidOperationException(string.Format(ErrorMessages.ProductRestorationFailed, productId));
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to restore product: {ProductId}, RestoredBy: {RestoredBy}", productId, restoredBy);
+                stopwatch.Stop();
+                _logger.LogError(ex, "Failed to restore product: {ProductId}, RestoredBy: {RestoredBy} (failed after {ElapsedMs}ms)",
+                    productId, restoredBy, stopwatch.ElapsedMilliseconds);
                 throw;
             }
         }
