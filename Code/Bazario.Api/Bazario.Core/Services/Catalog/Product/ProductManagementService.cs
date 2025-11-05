@@ -89,7 +89,11 @@ namespace Bazario.Core.Services.Catalog.Product
                     throw new InvalidOperationException(string.Format(ErrorMessages.StoreNotFound, productAddRequest.StoreId));
                 }
 
-                // Validate store is active
+                // Check for cancellation before continuing with validation
+                cancellationToken.ThrowIfCancellationRequested();
+
+                // Business Rule: Only active stores can create new products
+                // Inactive stores are typically under maintenance or suspended
                 if (!store.IsActive)
                 {
                     _logger.LogWarning("Product creation failed: Store is inactive. StoreId: {StoreId}", productAddRequest.StoreId);
@@ -106,6 +110,9 @@ namespace Bazario.Core.Services.Catalog.Product
                 // Save to repository
                 var createdProduct = await _unitOfWork.Products.AddProductAsync(product, cancellationToken);
 
+                // Transaction Handling: Persist changes with proper exception handling
+                // DbUpdateConcurrencyException: Another process modified the product between read and write
+                // DbUpdateException: Database constraint violation (e.g., duplicate key, FK violation)
                 try
                 {
                     await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -164,6 +171,9 @@ namespace Bazario.Core.Services.Catalog.Product
                     throw new InvalidOperationException(string.Format(ErrorMessages.ProductNotFound, productUpdateRequest.ProductId));
                 }
 
+                // Check for cancellation before processing update
+                cancellationToken.ThrowIfCancellationRequested();
+
                 // Convert DTO to entity for update
                 var product = productUpdateRequest.ToProduct();
 
@@ -173,6 +183,9 @@ namespace Bazario.Core.Services.Catalog.Product
                 // Save to repository (repository handles null checks)
                 var updatedProduct = await _unitOfWork.Products.UpdateProductAsync(product, cancellationToken);
 
+                // Transaction Handling: Critical for preventing lost updates in concurrent scenarios
+                // WARNING: Without RowVersion or optimistic locking, updates are susceptible to lost update problem
+                // If two users update simultaneously, last write wins without detection
                 try
                 {
                     await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -236,8 +249,12 @@ namespace Bazario.Core.Services.Catalog.Product
                     throw new InvalidOperationException(string.Format(ErrorMessages.ProductNotFound, productId));
                 }
 
-                // For soft deletion, we don't need to check for active orders
-                // because the data is preserved and can still be accessed
+                // Business Rule: Soft deletion preserves all data and relationships
+                // Products with active orders CAN be soft deleted because:
+                // 1. Order history is preserved for auditing and analytics
+                // 2. Customer order details remain accessible
+                // 3. Data can be restored if deletion was accidental
+                // 4. Referential integrity is maintained
                 _logger.LogDebug("Soft deletion allows product with active orders. ProductId: {ProductId}", productId);
 
                 _logger.LogDebug("Performing soft delete for product: {ProductId}, Name: {ProductName}", productId, product.Name);
@@ -309,6 +326,9 @@ namespace Bazario.Core.Services.Catalog.Product
                 // Validate admin privileges
                 await _adminAuthService.ValidateAdminPrivilegesAsync(deletedBy, cancellationToken);
 
+                // Check for cancellation before proceeding with deletion checks
+                cancellationToken.ThrowIfCancellationRequested();
+
                 // Check if product can be safely deleted
                 if (!await _validationService.CanProductBeSafelyDeletedAsync(productId, cancellationToken))
                 {
@@ -329,8 +349,17 @@ namespace Bazario.Core.Services.Catalog.Product
                     throw new InvalidOperationException(string.Format(ErrorMessages.ProductNotFound, productId));
                 }
 
-                // Check if product has any orders (hard delete NEVER allowed with orders)
-                // Orders are critical business records that must be preserved permanently
+                // Check for cancellation before order validation
+                cancellationToken.ThrowIfCancellationRequested();
+
+                // Business Rule: Hard delete is NEVER allowed for products with orders
+                // Orders are permanent business records that must be retained for:
+                // 1. Legal compliance (tax records, receipts)
+                // 2. Financial auditing and reconciliation
+                // 3. Customer service and dispute resolution
+                // 4. Business analytics and reporting
+                // WARNING: This check is NOT atomic - race condition possible between check and delete
+                // Consider adding database constraint for additional safety
                 var productOrderCount = await _unitOfWork.Orders.GetOrderCountByProductIdAsync(productId, cancellationToken);
                 if (productOrderCount > 0)
                 {
@@ -401,6 +430,9 @@ namespace Bazario.Core.Services.Catalog.Product
                     _logger.LogWarning("Product restoration failed: Product is not deleted. ProductId: {ProductId}", productId);
                     throw new InvalidOperationException(string.Format(ErrorMessages.ProductNotDeleted, productId));
                 }
+
+                // Check for cancellation before restoring
+                cancellationToken.ThrowIfCancellationRequested();
 
                 _logger.LogDebug("Restoring product. ProductId: {ProductId}, Name: {ProductName}", productId, product.Name);
 
