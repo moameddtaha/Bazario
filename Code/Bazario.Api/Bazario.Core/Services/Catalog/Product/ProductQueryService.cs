@@ -223,9 +223,11 @@ namespace Bazario.Core.Services.Catalog.Product
                 // Apply filters (these become SQL WHERE clauses)
                 if (!string.IsNullOrWhiteSpace(searchCriteria.SearchTerm))
                 {
-                    query = query.Where(p => 
-                        p.Name != null && p.Name.Contains(searchCriteria.SearchTerm) ||
-                        p.Description != null && p.Description.Contains(searchCriteria.SearchTerm));
+                    // Trim search term and use case-insensitive comparison (EF Core 9.0+ translates this to SQL COLLATE)
+                    var searchTerm = searchCriteria.SearchTerm.Trim();
+                    query = query.Where(p =>
+                        (p.Name != null && p.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)) ||
+                        (p.Description != null && p.Description.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)));
                 }
 
                 if (searchCriteria.StoreId.HasValue)
@@ -235,7 +237,9 @@ namespace Bazario.Core.Services.Catalog.Product
 
                 if (searchCriteria.Category.HasValue)
                 {
-                    query = query.Where(p => p.Category == searchCriteria.Category.Value.ToString());
+                    // Case-insensitive category comparison for better UX (EF Core 9.0+ translates this to SQL COLLATE)
+                    var categoryString = searchCriteria.Category.Value.ToString();
+                    query = query.Where(p => p.Category != null && p.Category.Equals(categoryString, StringComparison.OrdinalIgnoreCase));
                 }
 
                 if (searchCriteria.MinPrice.HasValue)
