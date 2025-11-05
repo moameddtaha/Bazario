@@ -25,15 +25,19 @@ namespace Bazario.Core.Services.Catalog.Product
         private readonly IAdminAuthorizationService _adminAuthService;
         private readonly ILogger<ProductManagementService> _logger;
 
+        // Input validation constants
+        private const int MINIMUM_DELETION_REASON_LENGTH = 10;
+        private const int MAXIMUM_DELETION_REASON_LENGTH = 500;
+
         public ProductManagementService(
             IUnitOfWork unitOfWork,
             IProductValidationService validationService,
-            IAdminAuthorizationService adminAuthHelper,
+            IAdminAuthorizationService adminAuthService,
             ILogger<ProductManagementService> logger)
         {
             _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
-            _adminAuthService = adminAuthHelper ?? throw new ArgumentNullException(nameof(adminAuthHelper));
+            _adminAuthService = adminAuthService ?? throw new ArgumentNullException(nameof(adminAuthService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -74,16 +78,32 @@ namespace Bazario.Core.Services.Catalog.Product
 
                 // Save to repository
                 var createdProduct = await _unitOfWork.Products.AddProductAsync(product, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                try
+                {
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+                }
+                catch (Exception ex) when (ex.GetType().Name == "DbUpdateConcurrencyException")
+                {
+                    // Handle EF Core concurrency exception without direct reference
+                    _logger.LogError(ex, "Concurrency conflict creating product. ProductId: {ProductId}", product.ProductId);
+                    throw new InvalidOperationException("The product was modified by another process. Please try again.", ex);
+                }
+                catch (Exception ex) when (ex.GetType().Name == "DbUpdateException")
+                {
+                    // Handle EF Core database update exception without direct reference
+                    _logger.LogError(ex, "Database error creating product. ProductId: {ProductId}", product.ProductId);
+                    throw new InvalidOperationException("Failed to create product due to database error. Please check product data and try again.", ex);
+                }
 
                 _logger.LogInformation("Successfully created product. ProductId: {ProductId}, Name: {ProductName}, StoreId: {StoreId}",
                     createdProduct.ProductId, createdProduct.Name, createdProduct.StoreId);
 
                 return createdProduct.ToProductResponse();
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not (InvalidOperationException or ArgumentException or ArgumentNullException))
             {
-                _logger.LogError(ex, "Failed to create product for store: {StoreId}", productAddRequest?.StoreId);
+                _logger.LogError(ex, "Unexpected error creating product for store: {StoreId}", productAddRequest?.StoreId);
                 throw;
             }
         }
@@ -117,16 +137,32 @@ namespace Bazario.Core.Services.Catalog.Product
 
                 // Save to repository (repository handles null checks)
                 var updatedProduct = await _unitOfWork.Products.UpdateProductAsync(product, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                try
+                {
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+                }
+                catch (Exception ex) when (ex.GetType().Name == "DbUpdateConcurrencyException")
+                {
+                    // Handle EF Core concurrency exception - product was modified by another user
+                    _logger.LogWarning(ex, "Concurrency conflict updating product. ProductId: {ProductId}. Product was modified by another user.", productUpdateRequest.ProductId);
+                    throw new InvalidOperationException("The product was modified by another user. Please refresh and try again.", ex);
+                }
+                catch (Exception ex) when (ex.GetType().Name == "DbUpdateException")
+                {
+                    // Handle EF Core database update exception
+                    _logger.LogError(ex, "Database error updating product. ProductId: {ProductId}", productUpdateRequest.ProductId);
+                    throw new InvalidOperationException("Failed to update product due to database error. Please check product data and try again.", ex);
+                }
 
                 _logger.LogInformation("Successfully updated product. ProductId: {ProductId}, Name: {ProductName}",
                     updatedProduct.ProductId, updatedProduct.Name);
 
                 return updatedProduct.ToProductResponse();
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not (InvalidOperationException or ArgumentException or ArgumentNullException))
             {
-                _logger.LogError(ex, "Failed to update product: {ProductId}", productUpdateRequest?.ProductId);
+                _logger.LogError(ex, "Unexpected error updating product: {ProductId}", productUpdateRequest?.ProductId);
                 throw;
             }
         }
@@ -204,9 +240,22 @@ namespace Bazario.Core.Services.Catalog.Product
                     throw new ArgumentException("DeletedBy user ID cannot be empty", nameof(deletedBy));
                 }
 
+                // Validate and sanitize reason parameter
                 if (string.IsNullOrWhiteSpace(reason))
                 {
                     throw new ArgumentException("Reason is required for hard deletion", nameof(reason));
+                }
+
+                reason = reason.Trim();
+
+                if (reason.Length < MINIMUM_DELETION_REASON_LENGTH)
+                {
+                    throw new ArgumentException($"Reason must be at least {MINIMUM_DELETION_REASON_LENGTH} characters long", nameof(reason));
+                }
+
+                if (reason.Length > MAXIMUM_DELETION_REASON_LENGTH)
+                {
+                    throw new ArgumentException($"Reason cannot exceed {MAXIMUM_DELETION_REASON_LENGTH} characters", nameof(reason));
                 }
 
                 // Validate admin privileges
@@ -309,10 +358,16 @@ namespace Bazario.Core.Services.Catalog.Product
                 if (result)
                 {
                     _logger.LogInformation("Successfully restored product. ProductId: {ProductId}, RestoredBy: {RestoredBy}", productId, restoredBy);
-                    
-                    // Get the restored product
+
+                    // Get the restored product with proper null check
                     var restoredProduct = await _unitOfWork.Products.GetProductByIdAsync(productId, cancellationToken);
-                    return restoredProduct!.ToProductResponse();
+                    if (restoredProduct == null)
+                    {
+                        _logger.LogError("Product restoration succeeded but product could not be retrieved. ProductId: {ProductId}", productId);
+                        throw new InvalidOperationException($"Product restoration succeeded but product could not be retrieved: {productId}");
+                    }
+
+                    return restoredProduct.ToProductResponse();
                 }
                 else
                 {
