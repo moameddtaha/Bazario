@@ -36,6 +36,21 @@ namespace Bazario.Core.DTO.Catalog.Product
         [Display(Name = "Category")]
         public Category? Category { get; set; }
 
+        /// <summary>
+        /// Row version for optimistic concurrency control
+        /// Must be provided for updates to prevent lost updates
+        /// </summary>
+        [Display(Name = "Row Version")]
+        public byte[]? RowVersion { get; set; }
+
+        /// <summary>
+        /// Converts this DTO to a Product entity for partial updates
+        /// NOTE: This uses sentinel values (-1) to indicate "not provided" fields
+        /// - Price: -1 means "don't update" (repository checks > 0)
+        /// - StockQuantity: -1 means "don't update" (repository checks >= 0)
+        /// This pattern is maintained for consistency with existing repository implementation
+        /// Consider refactoring to use a proper partial update pattern in future versions
+        /// </summary>
         public ProductEntity ToProduct()
         {
             return new ProductEntity
@@ -43,10 +58,11 @@ namespace Bazario.Core.DTO.Catalog.Product
                 ProductId = ProductId,
                 Name = Name,
                 Description = Description,
-                Price = Price ?? -1, // Use -1 to indicate not provided (repository will check for > 0)
-                StockQuantity = StockQuantity ?? -1, // Use -1 to indicate not provided (repository will check for >= 0)
+                Price = Price ?? -1, // Sentinel: -1 indicates not provided (repository checks > 0)
+                StockQuantity = StockQuantity ?? -1, // Sentinel: -1 indicates not provided (repository checks >= 0)
                 Image = Image,
-                Category = Category?.ToString()
+                Category = Category?.ToString(),
+                RowVersion = RowVersion // Required for optimistic concurrency control
             };
         }
     }

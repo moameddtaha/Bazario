@@ -7,9 +7,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Enums.Order;
+using Bazario.Core.Helpers.Infrastructure;
 using Bazario.Core.Models.Catalog.Product;
 using Bazario.Core.ServiceContracts.Catalog.Product;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace Bazario.Core.Services.Catalog.Product
@@ -21,6 +21,7 @@ namespace Bazario.Core.Services.Catalog.Product
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<ProductValidationService> _logger;
+        private readonly IConfigurationHelper _configHelper;
         private readonly decimal _maximumProductPrice;
         private readonly int _maximumOrderQuantity;
         private readonly int _reservationLookbackDays;
@@ -71,16 +72,17 @@ namespace Bazario.Core.Services.Catalog.Product
         public ProductValidationService(
             IUnitOfWork unitOfWork,
             ILogger<ProductValidationService> logger,
-            IConfiguration configuration)
+            IConfigurationHelper configHelper)
         {
             _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _configHelper = configHelper ?? throw new ArgumentNullException(nameof(configHelper));
 
             // Load configurable thresholds with defaults (aligned with InventoryAlertService pattern)
-            _maximumProductPrice = GetConfigurationValue(configuration, ConfigurationKeys.MaximumProductPrice, 1_000_000m);
-            _maximumOrderQuantity = GetConfigurationValue(configuration, ConfigurationKeys.MaximumOrderQuantity, 10_000);
-            _reservationLookbackDays = GetConfigurationValue(configuration, ConfigurationKeys.ReservationLookbackDays, DEFAULT_RESERVATION_LOOKBACK_DAYS);
-            _maximumOrderTotal = GetConfigurationValue(configuration, ConfigurationKeys.MaximumOrderTotal, decimal.MaxValue / 2);
+            _maximumProductPrice = _configHelper.GetValue(ConfigurationKeys.MaximumProductPrice, 1_000_000m);
+            _maximumOrderQuantity = _configHelper.GetValue(ConfigurationKeys.MaximumOrderQuantity, 10_000);
+            _reservationLookbackDays = _configHelper.GetValue(ConfigurationKeys.ReservationLookbackDays, DEFAULT_RESERVATION_LOOKBACK_DAYS);
+            _maximumOrderTotal = _configHelper.GetValue(ConfigurationKeys.MaximumOrderTotal, decimal.MaxValue / 2);
         }
 
         public async Task<ProductOrderValidation> ValidateForOrderAsync(Guid productId, int quantity, CancellationToken cancellationToken = default)
@@ -386,34 +388,6 @@ namespace Bazario.Core.Services.Catalog.Product
             {
                 _logger.LogError(ex, "Error checking reviews for product {ProductId}", productId);
                 return false; // Fail-safe: assume no reviews on error (allows operation to proceed)
-            }
-        }
-
-        // Helper method to safely retrieve configuration values with defaults
-        // Supports nullable types and uses culture-invariant parsing
-        private static T GetConfigurationValue<T>(IConfiguration configuration, string key, T defaultValue)
-        {
-            if (configuration == null)
-                return defaultValue;
-
-            var value = configuration[key];
-            if (string.IsNullOrWhiteSpace(value))
-                return defaultValue;
-
-            try
-            {
-                var targetType = typeof(T);
-                // Handle nullable types by getting the underlying type
-                var underlyingType = Nullable.GetUnderlyingType(targetType) ?? targetType;
-
-                // Use InvariantCulture for consistent parsing across different locales
-                return (T)Convert.ChangeType(value, underlyingType, CultureInfo.InvariantCulture);
-            }
-            catch (Exception ex)
-            {
-                // Log parsing failures for debugging (using Debug.WriteLine to avoid circular dependency)
-                Debug.WriteLine($"Failed to parse configuration value '{key}' = '{value}': {ex.Message}");
-                return defaultValue;
             }
         }
     }

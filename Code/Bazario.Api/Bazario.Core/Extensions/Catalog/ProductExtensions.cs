@@ -25,6 +25,8 @@ namespace Bazario.Core.Extensions.Catalog
                 Image = product.Image,
                 Category = Enum.TryParse<Category>(product.Category, out var category) ? category : Category.uncategorized,
                 CreatedAt = product.CreatedAt,
+                // Concurrency Control
+                RowVersion = product.RowVersion,
                 // Soft Deletion Properties
                 IsDeleted = product.IsDeleted,
                 DeletedAt = product.DeletedAt,

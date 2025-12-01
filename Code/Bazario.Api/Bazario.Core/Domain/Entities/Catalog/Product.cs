@@ -39,6 +39,14 @@ namespace Bazario.Core.Domain.Entities.Catalog
         [DataType(DataType.DateTime)]
         public DateTime? CreatedAt { get; set; }
 
+        // ---------- Concurrency Control ----------
+        /// <summary>
+        /// Row version for optimistic concurrency control
+        /// Automatically managed by EF Core to prevent lost updates
+        /// </summary>
+        [Timestamp]
+        public byte[]? RowVersion { get; set; }
+
         // ---------- Soft Deletion Properties ----------
         [DefaultValue(false)]
         public bool IsDeleted { get; set; } = false;

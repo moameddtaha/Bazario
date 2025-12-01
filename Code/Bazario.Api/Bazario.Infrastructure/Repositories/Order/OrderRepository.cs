@@ -1087,7 +1087,7 @@ namespace Bazario.Infrastructure.Repositories.Order
                 // Does NOT load orders into memory, just returns boolean
                 var exists = await _context.Orders
                     .Where(o => statuses.Contains(o.Status))
-                    .AnyAsync(o => o.OrderItems.Any(oi => oi.ProductId == productId), cancellationToken);
+                    .AnyAsync(o => o.OrderItems != null && o.OrderItems.Any(oi => oi.ProductId == productId), cancellationToken);
 
                 _logger.LogDebug("Product {ProductId} exists in active orders: {Exists}", productId, exists);
                 return exists;
@@ -1110,7 +1110,7 @@ namespace Bazario.Infrastructure.Repositories.Order
                 // Filters by date range before checking order items
                 var exists = await _context.Orders
                     .Where(o => o.Date > startDate && statuses.Contains(o.Status))
-                    .AnyAsync(o => o.OrderItems.Any(oi => oi.ProductId == productId), cancellationToken);
+                    .AnyAsync(o => o.OrderItems != null && o.OrderItems.Any(oi => oi.ProductId == productId), cancellationToken);
 
                 _logger.LogDebug("Product {ProductId} exists in orders since {StartDate}: {Exists}", productId, startDate, exists);
                 return exists;

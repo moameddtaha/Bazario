@@ -37,6 +37,10 @@ namespace Bazario.Core.DTO.Catalog.Product
         [DataType(DataType.DateTime)]
         public DateTime? CreatedAt { get; set; }
 
+        // ---------- Concurrency Control ----------
+        [Display(Name = "Row Version")]
+        public byte[]? RowVersion { get; set; }
+
         // ---------- Soft Deletion Properties ----------
         [Display(Name = "Is Deleted")]
         public bool IsDeleted { get; set; }
@@ -56,8 +60,15 @@ namespace Bazario.Core.DTO.Catalog.Product
 
         public override bool Equals(object? obj)
         {
-            return obj is ProductResponse response &&
-                   ProductId.Equals(response.ProductId) &&
+            if (obj is not ProductResponse response)
+                return false;
+
+            // Compare RowVersion byte arrays
+            bool rowVersionEquals = (RowVersion == null && response.RowVersion == null) ||
+                                   (RowVersion != null && response.RowVersion != null &&
+                                    RowVersion.SequenceEqual(response.RowVersion));
+
+            return ProductId.Equals(response.ProductId) &&
                    StoreId.Equals(response.StoreId) &&
                    Name == response.Name &&
                    Description == response.Description &&
@@ -66,6 +77,7 @@ namespace Bazario.Core.DTO.Catalog.Product
                    Image == response.Image &&
                    Category == response.Category &&
                    CreatedAt == response.CreatedAt &&
+                   rowVersionEquals &&
                    IsDeleted == response.IsDeleted &&
                    DeletedAt == response.DeletedAt &&
                    DeletedBy == response.DeletedBy &&
@@ -84,6 +96,7 @@ namespace Bazario.Core.DTO.Catalog.Product
             hash.Add(Image);
             hash.Add(Category);
             hash.Add(CreatedAt);
+            // RowVersion not included in hash - concurrency tokens typically excluded
             hash.Add(IsDeleted);
             hash.Add(DeletedAt);
             hash.Add(DeletedBy);
@@ -106,7 +119,8 @@ namespace Bazario.Core.DTO.Catalog.Product
                 Price = Price,
                 StockQuantity = StockQuantity,
                 Image = Image,
-                Category = Category
+                Category = Category,
+                RowVersion = RowVersion
             };
         }
     }

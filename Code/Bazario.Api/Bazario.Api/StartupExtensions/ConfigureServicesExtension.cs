@@ -21,6 +21,7 @@ using Bazario.Core.Services.Location;
 using Bazario.Core.Services.Auth;
 using Bazario.Core.Helpers.Order;
 using Bazario.Core.Helpers.Store;
+using Bazario.Core.Helpers.Catalog;
 using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Domain.RepositoryContracts.Authentication;
 using Bazario.Core.Domain.RepositoryContracts.Catalog;
@@ -148,7 +149,6 @@ namespace Bazario.Api.StartupExtensions
             // ========================================
             services.AddScoped<IProductManagementService, ProductManagementService>();
             services.AddScoped<IProductQueryService, ProductQueryService>();
-            services.AddScoped<IProductInventoryService, ProductInventoryService>();
             services.AddScoped<IProductAnalyticsService, ProductAnalyticsService>();
             services.AddScoped<IProductValidationService, ProductValidationService>();
             services.AddScoped<IProductService, ProductService>(); // Composite interface
@@ -208,6 +208,9 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<IEmailHelper, EmailHelper>();
             services.AddScoped<IOrderMetricsHelper, OrderMetricsHelper>();
             services.AddScoped<IStoreShippingConfigurationHelper, StoreShippingConfigurationHelper>();
+            services.AddScoped<IConfigurationHelper, ConfigurationHelper>();
+            services.AddScoped<IConcurrencyHelper, ConcurrencyHelper>();
+            services.AddScoped<IProductValidationHelper, ProductValidationHelper>();
 
             // ========================================
             // JWT AUTHENTICATION CONFIGURATION

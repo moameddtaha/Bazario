@@ -8,10 +8,10 @@ using System.Threading.Tasks;
 using Bazario.Core.Domain.RepositoryContracts.Catalog;
 using Bazario.Core.DTO.Catalog.Product;
 using Bazario.Core.Extensions.Catalog;
+using Bazario.Core.Helpers.Infrastructure;
 using Bazario.Core.Models.Catalog.Product;
 using Bazario.Core.Models.Shared;
 using Bazario.Core.ServiceContracts.Catalog.Product;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace Bazario.Core.Services.Catalog.Product
@@ -23,6 +23,7 @@ namespace Bazario.Core.Services.Catalog.Product
     {
         private readonly IProductRepository _productRepository;
         private readonly ILogger<ProductQueryService> _logger;
+        private readonly IConfigurationHelper _configHelper;
         private readonly int _maximumPageSize;
         private readonly int _maximumStockThreshold;
 
@@ -71,14 +72,15 @@ namespace Bazario.Core.Services.Catalog.Product
         public ProductQueryService(
             IProductRepository productRepository,
             ILogger<ProductQueryService> logger,
-            IConfiguration configuration)
+            IConfigurationHelper configHelper)
         {
             _productRepository = productRepository ?? throw new ArgumentNullException(nameof(productRepository));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _configHelper = configHelper ?? throw new ArgumentNullException(nameof(configHelper));
 
             // Load configurable thresholds with defaults (aligned with ProductValidationService pattern)
-            _maximumPageSize = GetConfigurationValue(configuration, ConfigurationKeys.MaximumPageSize, DEFAULT_MAXIMUM_PAGE_SIZE);
-            _maximumStockThreshold = GetConfigurationValue(configuration, ConfigurationKeys.MaximumStockThreshold, DEFAULT_MAXIMUM_STOCK_THRESHOLD);
+            _maximumPageSize = _configHelper.GetValue(ConfigurationKeys.MaximumPageSize, DEFAULT_MAXIMUM_PAGE_SIZE);
+            _maximumStockThreshold = _configHelper.GetValue(ConfigurationKeys.MaximumStockThreshold, DEFAULT_MAXIMUM_STOCK_THRESHOLD);
         }
 
         public async Task<ProductResponse?> GetProductByIdAsync(Guid productId, CancellationToken cancellationToken = default)
@@ -341,34 +343,6 @@ namespace Bazario.Core.Services.Catalog.Product
                 _logger.LogError(ex, "Failed to retrieve low stock products with threshold: {Threshold} (failed after {ElapsedMs}ms)",
                     threshold, stopwatch.ElapsedMilliseconds);
                 throw;
-            }
-        }
-
-        // Helper method to safely retrieve configuration values with defaults
-        // Supports nullable types and uses culture-invariant parsing
-        private static T GetConfigurationValue<T>(IConfiguration configuration, string key, T defaultValue)
-        {
-            if (configuration == null)
-                return defaultValue;
-
-            var value = configuration[key];
-            if (string.IsNullOrWhiteSpace(value))
-                return defaultValue;
-
-            try
-            {
-                var targetType = typeof(T);
-                // Handle nullable types by getting the underlying type
-                var underlyingType = Nullable.GetUnderlyingType(targetType) ?? targetType;
-
-                // Use InvariantCulture for consistent parsing across different locales
-                return (T)Convert.ChangeType(value, underlyingType, CultureInfo.InvariantCulture);
-            }
-            catch (Exception ex)
-            {
-                // Log parsing failures for debugging (using Debug.WriteLine to avoid circular dependency)
-                Debug.WriteLine($"Failed to parse configuration value '{key}' = '{value}': {ex.Message}");
-                return defaultValue;
             }
         }
     }

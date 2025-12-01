@@ -15,12 +15,11 @@ namespace Bazario.Core.ServiceContracts.Catalog.Product
     /// Combines all specialized product services into a single interface
     /// Follows Interface Segregation Principle by inheriting from specialized interfaces
     /// </summary>
-    public interface IProductService : IProductManagementService, IProductQueryService, IProductInventoryService, IProductAnalyticsService, IProductValidationService
+    public interface IProductService : IProductManagementService, IProductQueryService, IProductAnalyticsService, IProductValidationService
     {
         // This interface inherits all methods from the specialized interfaces:
         // - IProductManagementService: CreateProductAsync, UpdateProductAsync, DeleteProductAsync
         // - IProductQueryService: GetProductByIdAsync, GetProductsByStoreIdAsync, SearchProductsAsync, GetLowStockProductsAsync
-        // - IProductInventoryService: UpdateStockAsync, ReserveStockAsync, ReleaseStockAsync
         // - IProductAnalyticsService: GetProductAnalyticsAsync
         // - IProductValidationService: ValidateForOrderAsync
     }

@@ -20,7 +20,6 @@ namespace Bazario.Core.Services.Catalog.Product
     {
         private readonly IProductManagementService _managementService;
         private readonly IProductQueryService _queryService;
-        private readonly IProductInventoryService _inventoryService;
         private readonly IProductAnalyticsService _analyticsService;
         private readonly IProductValidationService _validationService;
         private readonly ILogger<ProductService> _logger;
@@ -28,14 +27,12 @@ namespace Bazario.Core.Services.Catalog.Product
         public ProductService(
             IProductManagementService managementService,
             IProductQueryService queryService,
-            IProductInventoryService inventoryService,
             IProductAnalyticsService analyticsService,
             IProductValidationService validationService,
             ILogger<ProductService> logger)
         {
             _managementService = managementService ?? throw new ArgumentNullException(nameof(managementService));
             _queryService = queryService ?? throw new ArgumentNullException(nameof(queryService));
-            _inventoryService = inventoryService ?? throw new ArgumentNullException(nameof(inventoryService));
             _analyticsService = analyticsService ?? throw new ArgumentNullException(nameof(analyticsService));
             _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -97,24 +94,8 @@ namespace Bazario.Core.Services.Catalog.Product
             return await _queryService.GetLowStockProductsAsync(threshold, cancellationToken);
         }
 
-        // IProductInventoryService methods
-        public async Task<ProductResponse> UpdateStockAsync(Guid productId, int newQuantity, string reason, CancellationToken cancellationToken = default)
-        {
-            _logger.LogDebug("Delegating UpdateStockAsync to ProductInventoryService");
-            return await _inventoryService.UpdateStockAsync(productId, newQuantity, reason, cancellationToken);
-        }
-
-        public async Task<bool> ReserveStockAsync(Guid productId, int quantity, Guid orderId, CancellationToken cancellationToken = default)
-        {
-            _logger.LogDebug("Delegating ReserveStockAsync to ProductInventoryService");
-            return await _inventoryService.ReserveStockAsync(productId, quantity, orderId, cancellationToken);
-        }
-
-        public async Task<bool> ReleaseStockAsync(Guid productId, int quantity, Guid orderId, CancellationToken cancellationToken = default)
-        {
-            _logger.LogDebug("Delegating ReleaseStockAsync to ProductInventoryService");
-            return await _inventoryService.ReleaseStockAsync(productId, quantity, orderId, cancellationToken);
-        }
+        // IProductInventoryService methods - Removed (service no longer exists)
+        // TODO: Re-implement inventory methods if needed
 
         // IProductAnalyticsService methods
         public async Task<ProductAnalytics> GetProductAnalyticsAsync(Guid productId, CancellationToken cancellationToken = default)
