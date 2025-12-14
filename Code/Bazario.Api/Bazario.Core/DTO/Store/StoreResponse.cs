@@ -34,7 +34,7 @@ namespace Bazario.Core.DTO.Store
         public bool IsActive { get; set; }
 
         // ---------- Soft Deletion Properties ----------
-        
+
         [Display(Name = "Is Deleted")]
         public bool IsDeleted { get; set; }
 
@@ -47,6 +47,11 @@ namespace Bazario.Core.DTO.Store
 
         [Display(Name = "Deleted Reason")]
         public string? DeletedReason { get; set; }
+
+        /// <summary>
+        /// Row version for optimistic concurrency control
+        /// </summary>
+        public byte[]? RowVersion { get; set; }
 
         public override bool Equals(object? obj)
         {
@@ -97,7 +102,8 @@ namespace Bazario.Core.DTO.Store
                 Name = Name,
                 Description = Description,
                 Category = Category,
-                Logo = Logo
+                Logo = Logo,
+                RowVersion = RowVersion
             };
         }
     }

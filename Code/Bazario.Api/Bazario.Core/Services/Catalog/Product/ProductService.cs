@@ -94,9 +94,6 @@ namespace Bazario.Core.Services.Catalog.Product
             return await _queryService.GetLowStockProductsAsync(threshold, cancellationToken);
         }
 
-        // IProductInventoryService methods - Removed (service no longer exists)
-        // TODO: Re-implement inventory methods if needed
-
         // IProductAnalyticsService methods
         public async Task<ProductAnalytics> GetProductAnalyticsAsync(Guid productId, CancellationToken cancellationToken = default)
         {

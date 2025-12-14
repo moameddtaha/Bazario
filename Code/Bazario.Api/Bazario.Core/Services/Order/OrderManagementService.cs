@@ -6,6 +6,7 @@ using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.DTO.Order;
 using Bazario.Core.Enums.Order;
 using Bazario.Core.Extensions.Order;
+using Bazario.Core.Helpers.Catalog;
 using Bazario.Core.ServiceContracts.Authorization;
 using Bazario.Core.ServiceContracts.Order;
 using Microsoft.Extensions.Logging;
@@ -22,17 +23,20 @@ namespace Bazario.Core.Services.Order
         private readonly IUnitOfWork _unitOfWork;
         private readonly IOrderValidationService _validationService;
         private readonly IAdminAuthorizationService _adminAuthService;
+        private readonly IConcurrencyHelper _concurrencyHelper;
         private readonly ILogger<OrderManagementService> _logger;
 
         public OrderManagementService(
             IUnitOfWork unitOfWork,
             IOrderValidationService validationService,
             IAdminAuthorizationService adminAuthHelper,
+            IConcurrencyHelper concurrencyHelper,
             ILogger<OrderManagementService> logger)
         {
             _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
             _adminAuthService = adminAuthHelper ?? throw new ArgumentNullException(nameof(adminAuthHelper));
+            _concurrencyHelper = concurrencyHelper ?? throw new ArgumentNullException(nameof(concurrencyHelper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -76,7 +80,7 @@ namespace Bazario.Core.Services.Order
                 if (orderAddRequest.ShouldCalculateOrder())
                 {
                     _logger.LogDebug("Calculating order total for customer order: {OrderId}", order.OrderId);
-                    
+
                     // Calculate order total including shipping and discounts
                     var calculation = await _validationService.CalculateOrderTotalAsync(
                         orderAddRequest.OrderItems,
@@ -90,7 +94,7 @@ namespace Bazario.Core.Services.Order
                     order.DiscountAmount = calculation.DiscountAmount;
                     order.ShippingCost = calculation.ShippingCost;
                     order.TotalAmount = calculation.Total;
-                    
+
                     // Set applied discount types from the calculation
                     if (calculation.AppliedDiscounts.Any())
                     {
@@ -140,46 +144,56 @@ namespace Bazario.Core.Services.Order
                 throw new ArgumentException("Order ID cannot be empty", nameof(orderUpdateRequest));
             }
 
+            // Check if order can be modified (outside retry - one-time check)
+            var canModify = await _validationService.CanOrderBeModifiedAsync(orderUpdateRequest.OrderId, cancellationToken);
+            if (!canModify)
+            {
+                throw new InvalidOperationException($"Order {orderUpdateRequest.OrderId} cannot be modified in its current state");
+            }
+
             _logger.LogInformation("Updating order: {OrderId}", orderUpdateRequest.OrderId);
 
             try
             {
-                // Check if order can be modified
-                var canModify = await _validationService.CanOrderBeModifiedAsync(orderUpdateRequest.OrderId, cancellationToken);
-                if (!canModify)
+                // Wrap entire operation in retry for optimistic concurrency control
+                var updatedOrder = await _concurrencyHelper.ExecuteWithRetryAsync(async () =>
                 {
-                    throw new InvalidOperationException($"Order {orderUpdateRequest.OrderId} cannot be modified in its current state");
-                }
+                    // Get existing order (gets fresh RowVersion on each retry)
+                    var existingOrder = await _unitOfWork.Orders.GetOrderByIdAsync(orderUpdateRequest.OrderId, cancellationToken);
+                    if (existingOrder == null)
+                    {
+                        throw new InvalidOperationException($"Order with ID {orderUpdateRequest.OrderId} not found");
+                    }
 
-                // Get existing order
-                var existingOrder = await _unitOfWork.Orders.GetOrderByIdAsync(orderUpdateRequest.OrderId, cancellationToken);
-                if (existingOrder == null)
-                {
-                    throw new InvalidOperationException($"Order with ID {orderUpdateRequest.OrderId} not found");
-                }
+                    // Business validation for new properties (delegated to validation service for KISS)
+                    _validationService.ValidateOrderUpdateBusinessRules(orderUpdateRequest, existingOrder);
 
-                // Business validation for new properties (delegated to validation service for KISS)
-                _validationService.ValidateOrderUpdateBusinessRules(orderUpdateRequest, existingOrder);
+                    // Update order properties
+                    existingOrder.TotalAmount = orderUpdateRequest.TotalAmount ?? existingOrder.TotalAmount;
+                    existingOrder.Status = orderUpdateRequest.Status?.ToString() ?? existingOrder.Status;
 
-                // Update order properties
-                existingOrder.TotalAmount = orderUpdateRequest.TotalAmount ?? existingOrder.TotalAmount;
-                existingOrder.Status = orderUpdateRequest.Status?.ToString() ?? existingOrder.Status;
-                
-                // Update discount and shipping properties if provided
-                if (orderUpdateRequest.AppliedDiscountCodes != null)
-                    existingOrder.AppliedDiscountCodes = orderUpdateRequest.AppliedDiscountCodes;
-                if (orderUpdateRequest.DiscountAmount.HasValue)
-                    existingOrder.DiscountAmount = orderUpdateRequest.DiscountAmount.Value;
-                if (orderUpdateRequest.AppliedDiscountTypes != null)
-                    existingOrder.AppliedDiscountTypes = orderUpdateRequest.AppliedDiscountTypes;
-                if (orderUpdateRequest.ShippingCost.HasValue)
-                    existingOrder.ShippingCost = orderUpdateRequest.ShippingCost.Value;
-                if (orderUpdateRequest.Subtotal.HasValue)
-                    existingOrder.Subtotal = orderUpdateRequest.Subtotal.Value;
+                    // Update discount and shipping properties if provided
+                    if (orderUpdateRequest.AppliedDiscountCodes != null)
+                        existingOrder.AppliedDiscountCodes = orderUpdateRequest.AppliedDiscountCodes;
+                    if (orderUpdateRequest.DiscountAmount.HasValue)
+                        existingOrder.DiscountAmount = orderUpdateRequest.DiscountAmount.Value;
+                    if (orderUpdateRequest.AppliedDiscountTypes != null)
+                        existingOrder.AppliedDiscountTypes = orderUpdateRequest.AppliedDiscountTypes;
+                    if (orderUpdateRequest.ShippingCost.HasValue)
+                        existingOrder.ShippingCost = orderUpdateRequest.ShippingCost.Value;
+                    if (orderUpdateRequest.Subtotal.HasValue)
+                        existingOrder.Subtotal = orderUpdateRequest.Subtotal.Value;
 
-                // Save changes
-                var updatedOrder = await _unitOfWork.Orders.UpdateOrderAsync(existingOrder, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                    // Update RowVersion if provided in request
+                    if (orderUpdateRequest.RowVersion != null)
+                        existingOrder.RowVersion = orderUpdateRequest.RowVersion;
+
+                    // Save changes
+                    var updated = await _unitOfWork.Orders.UpdateOrderAsync(existingOrder, cancellationToken);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                    return updated;
+                }, "UpdateOrder", cancellationToken);
 
                 _logger.LogInformation("Successfully updated order: {OrderId}", updatedOrder.OrderId);
 
@@ -204,26 +218,32 @@ namespace Bazario.Core.Services.Order
 
             try
             {
-                // Get existing order
-                var existingOrder = await _unitOfWork.Orders.GetOrderByIdAsync(orderId, cancellationToken);
-                if (existingOrder == null)
+                // Wrap entire operation in retry for optimistic concurrency control
+                var updatedOrder = await _concurrencyHelper.ExecuteWithRetryAsync(async () =>
                 {
-                    throw new InvalidOperationException($"Order with ID {orderId} not found");
-                }
+                    // Get existing order (gets fresh RowVersion on each retry)
+                    var existingOrder = await _unitOfWork.Orders.GetOrderByIdAsync(orderId, cancellationToken);
+                    if (existingOrder == null)
+                    {
+                        throw new InvalidOperationException($"Order with ID {orderId} not found");
+                    }
 
-                // Validate status transition
-                var isValidTransition = _validationService.IsValidStatusTransition(existingOrder.Status ?? "", newStatus.ToString());
-                if (!isValidTransition)
-                {
-                    throw new InvalidOperationException($"Invalid status transition from {existingOrder.Status} to {newStatus}");
-                }
+                    // Validate status transition (MUST be inside retry to use fresh state)
+                    var isValidTransition = _validationService.IsValidStatusTransition(existingOrder.Status ?? "", newStatus.ToString());
+                    if (!isValidTransition)
+                    {
+                        throw new InvalidOperationException($"Invalid status transition from {existingOrder.Status} to {newStatus}");
+                    }
 
-                // Update status
-                existingOrder.Status = newStatus.ToString();
+                    // Update status
+                    existingOrder.Status = newStatus.ToString();
 
-                // Save changes
-                var updatedOrder = await _unitOfWork.Orders.UpdateOrderAsync(existingOrder, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                    // Save changes
+                    var updated = await _unitOfWork.Orders.UpdateOrderAsync(existingOrder, cancellationToken);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                    return updated;
+                }, "UpdateOrderStatus", cancellationToken);
 
                 _logger.LogInformation("Successfully updated order status: {OrderId} to {NewStatus}", orderId, newStatus);
 
@@ -271,42 +291,52 @@ namespace Bazario.Core.Services.Order
 
         public async Task<bool> SoftDeleteOrderAsync(Guid orderId, Guid deletedBy, string? reason = null, CancellationToken cancellationToken = default)
         {
+            // Validate inputs (outside retry)
+            if (orderId == Guid.Empty)
+            {
+                throw new ArgumentException("Order ID cannot be empty", nameof(orderId));
+            }
+
+            if (deletedBy == Guid.Empty)
+            {
+                throw new ArgumentException("DeletedBy user ID cannot be empty", nameof(deletedBy));
+            }
+
             _logger.LogInformation("Soft deleting order: {OrderId}, DeletedBy: {DeletedBy}, Reason: {Reason}", orderId, deletedBy, reason);
 
             try
             {
-                // Validate inputs
-                if (orderId == Guid.Empty)
+                // Wrap entire operation in retry for optimistic concurrency control
+                var result = await _concurrencyHelper.ExecuteWithRetryAsync(async () =>
                 {
-                    throw new ArgumentException("Order ID cannot be empty", nameof(orderId));
-                }
+                    // Check if order exists (gets fresh RowVersion on each retry)
+                    var existingOrder = await _unitOfWork.Orders.GetOrderByIdAsync(orderId, cancellationToken);
+                    if (existingOrder == null)
+                    {
+                        _logger.LogWarning("Order {OrderId} not found for soft deletion", orderId);
+                        return false;
+                    }
 
-                if (deletedBy == Guid.Empty)
-                {
-                    throw new ArgumentException("DeletedBy user ID cannot be empty", nameof(deletedBy));
-                }
+                    _logger.LogDebug("Soft deleting order {OrderId}", orderId);
 
-                // Check if order exists
-                var existingOrder = await _unitOfWork.Orders.GetOrderByIdAsync(orderId, cancellationToken);
-                if (existingOrder == null)
-                {
-                    _logger.LogWarning("Order {OrderId} not found for soft deletion", orderId);
-                    return false;
-                }
+                    // Perform soft delete
+                    var deleteResult = await _unitOfWork.Orders.SoftDeleteOrderAsync(orderId, deletedBy, reason, cancellationToken);
 
-                _logger.LogDebug("Soft deleting order {OrderId}", orderId);
+                    if (deleteResult)
+                    {
+                        await _unitOfWork.SaveChangesAsync(cancellationToken);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Failed to soft delete order: {OrderId}", orderId);
+                    }
 
-                // Perform soft delete
-                var result = await _unitOfWork.Orders.SoftDeleteOrderAsync(orderId, deletedBy, reason, cancellationToken);
+                    return deleteResult;
+                }, "SoftDeleteOrder", cancellationToken);
 
                 if (result)
                 {
-                    await _unitOfWork.SaveChangesAsync(cancellationToken);
                     _logger.LogInformation("Successfully soft deleted order: {OrderId} by user: {DeletedBy}", orderId, deletedBy);
-                }
-                else
-                {
-                    _logger.LogWarning("Failed to soft delete order: {OrderId}", orderId);
                 }
 
                 return result;
@@ -325,52 +355,62 @@ namespace Bazario.Core.Services.Order
 
         public async Task<bool> HardDeleteOrderAsync(Guid orderId, Guid deletedBy, string reason, CancellationToken cancellationToken = default)
         {
+            // Validate inputs (outside retry)
+            if (orderId == Guid.Empty)
+            {
+                throw new ArgumentException("Order ID cannot be empty", nameof(orderId));
+            }
+
+            if (deletedBy == Guid.Empty)
+            {
+                throw new ArgumentException("DeletedBy user ID cannot be empty", nameof(deletedBy));
+            }
+
+            if (string.IsNullOrWhiteSpace(reason))
+            {
+                throw new ArgumentException("Reason is required for hard deletion", nameof(reason));
+            }
+
+            // Validate admin privileges (outside retry - one-time check)
+            await _adminAuthService.ValidateAdminPrivilegesAsync(deletedBy, cancellationToken);
+
             _logger.LogInformation("Admin user {DeletedBy} attempting to delete order: {OrderId}, Reason: {Reason}", deletedBy, orderId, reason);
 
             try
             {
-                // Validate inputs
-                if (orderId == Guid.Empty)
+                // Wrap entire operation in retry for optimistic concurrency control
+                var result = await _concurrencyHelper.ExecuteWithRetryAsync(async () =>
                 {
-                    throw new ArgumentException("Order ID cannot be empty", nameof(orderId));
-                }
+                    // Check if order exists before deletion (gets fresh RowVersion on each retry)
+                    var existingOrder = await _unitOfWork.Orders.GetOrderByIdAsync(orderId, cancellationToken);
+                    if (existingOrder == null)
+                    {
+                        _logger.LogWarning("Order {OrderId} not found for deletion", orderId);
+                        return false;
+                    }
 
-                if (deletedBy == Guid.Empty)
-                {
-                    throw new ArgumentException("DeletedBy user ID cannot be empty", nameof(deletedBy));
-                }
+                    _logger.LogInformation("Admin user {UserId} performing hard delete of order {OrderId}", deletedBy, orderId);
 
-                if (string.IsNullOrWhiteSpace(reason))
-                {
-                    throw new ArgumentException("Reason is required for hard deletion", nameof(reason));
-                }
+                    _logger.LogCritical("PERFORMING HARD DELETE - This action is IRREVERSIBLE. OrderId: {OrderId}, DeletedBy: {DeletedBy}, Reason: {Reason}",
+                        orderId, deletedBy, reason);
 
-                // Validate admin privileges
-                await _adminAuthService.ValidateAdminPrivilegesAsync(deletedBy, cancellationToken);
+                    var deleteResult = await _unitOfWork.Orders.DeleteOrderByIdAsync(orderId, cancellationToken);
 
-                // Check if order exists before deletion
-                var existingOrder = await _unitOfWork.Orders.GetOrderByIdAsync(orderId, cancellationToken);
-                if (existingOrder == null)
-                {
-                    _logger.LogWarning("Order {OrderId} not found for deletion", orderId);
-                    return false;
-                }
+                    if (deleteResult)
+                    {
+                        await _unitOfWork.SaveChangesAsync(cancellationToken);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Failed to delete order: {OrderId}", orderId);
+                    }
 
-                _logger.LogInformation("Admin user {UserId} performing hard delete of order {OrderId}", deletedBy, orderId);
-
-                _logger.LogCritical("PERFORMING HARD DELETE - This action is IRREVERSIBLE. OrderId: {OrderId}, DeletedBy: {DeletedBy}, Reason: {Reason}", 
-                    orderId, deletedBy, reason);
-
-                var result = await _unitOfWork.Orders.DeleteOrderByIdAsync(orderId, cancellationToken);
+                    return deleteResult;
+                }, "HardDeleteOrder", cancellationToken);
 
                 if (result)
                 {
-                    await _unitOfWork.SaveChangesAsync(cancellationToken);
                     _logger.LogInformation("Successfully deleted order: {OrderId} by admin user: {DeletedBy}", orderId, deletedBy);
-                }
-                else
-                {
-                    _logger.LogWarning("Failed to delete order: {OrderId}", orderId);
                 }
 
                 return result;
@@ -394,52 +434,59 @@ namespace Bazario.Core.Services.Order
 
         public async Task<OrderResponse> RestoreOrderAsync(Guid orderId, Guid restoredBy, CancellationToken cancellationToken = default)
         {
+            // Validate inputs (outside retry)
+            if (orderId == Guid.Empty)
+            {
+                throw new ArgumentException("Order ID cannot be empty", nameof(orderId));
+            }
+
+            if (restoredBy == Guid.Empty)
+            {
+                throw new ArgumentException("RestoredBy user ID cannot be empty", nameof(restoredBy));
+            }
+
             _logger.LogInformation("Restoring soft deleted order: {OrderId}, RestoredBy: {RestoredBy}", orderId, restoredBy);
 
             try
             {
-                // Validate inputs
-                if (orderId == Guid.Empty)
+                // Wrap entire operation in retry for optimistic concurrency control
+                var restoredOrder = await _concurrencyHelper.ExecuteWithRetryAsync(async () =>
                 {
-                    throw new ArgumentException("Order ID cannot be empty", nameof(orderId));
-                }
+                    // Check if soft-deleted order exists (gets fresh RowVersion on each retry)
+                    var existingOrder = await _unitOfWork.Orders.GetOrderByIdIncludeDeletedAsync(orderId, cancellationToken);
+                    if (existingOrder == null)
+                    {
+                        throw new InvalidOperationException($"Order with ID {orderId} not found");
+                    }
 
-                if (restoredBy == Guid.Empty)
-                {
-                    throw new ArgumentException("RestoredBy user ID cannot be empty", nameof(restoredBy));
-                }
+                    if (!existingOrder.IsDeleted)
+                    {
+                        throw new InvalidOperationException($"Order {orderId} is not soft deleted, cannot restore");
+                    }
 
-                // Check if soft-deleted order exists
-                var existingOrder = await _unitOfWork.Orders.GetOrderByIdIncludeDeletedAsync(orderId, cancellationToken);
-                if (existingOrder == null)
-                {
-                    throw new InvalidOperationException($"Order with ID {orderId} not found");
-                }
+                    _logger.LogDebug("Restoring order {OrderId}", orderId);
 
-                if (!existingOrder.IsDeleted)
-                {
-                    throw new InvalidOperationException($"Order {orderId} is not soft deleted, cannot restore");
-                }
+                    // Perform restore
+                    var result = await _unitOfWork.Orders.RestoreOrderAsync(orderId, cancellationToken);
 
-                _logger.LogDebug("Restoring order {OrderId}", orderId);
+                    if (!result)
+                    {
+                        throw new InvalidOperationException($"Failed to restore order {orderId}");
+                    }
 
-                // Perform restore
-                var result = await _unitOfWork.Orders.RestoreOrderAsync(orderId, cancellationToken);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                if (!result)
-                {
-                    throw new InvalidOperationException($"Failed to restore order {orderId}");
-                }
+                    // Get the restored order and return (inside retry for consistency)
+                    var restored = await _unitOfWork.Orders.GetOrderByIdAsync(orderId, cancellationToken);
+                    if (restored == null)
+                    {
+                        throw new InvalidOperationException($"Failed to retrieve restored order {orderId}");
+                    }
 
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                    return restored;
+                }, "RestoreOrder", cancellationToken);
+
                 _logger.LogInformation("Successfully restored order: {OrderId} by user: {RestoredBy}", orderId, restoredBy);
-
-                // Get the restored order and return
-                var restoredOrder = await _unitOfWork.Orders.GetOrderByIdAsync(orderId, cancellationToken);
-                if (restoredOrder == null)
-                {
-                    throw new InvalidOperationException($"Failed to retrieve restored order {orderId}");
-                }
 
                 return restoredOrder.ToOrderResponse();
             }

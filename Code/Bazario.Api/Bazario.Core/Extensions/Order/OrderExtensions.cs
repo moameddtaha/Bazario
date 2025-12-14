@@ -25,7 +25,8 @@ namespace Bazario.Core.Extensions.Order
                 DiscountAmount = order.DiscountAmount,
                 AppliedDiscountTypes = order.AppliedDiscountTypes,
                 ShippingCost = order.ShippingCost,
-                Subtotal = order.Subtotal
+                Subtotal = order.Subtotal,
+                RowVersion = order.RowVersion
             };
         }
     }

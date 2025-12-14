@@ -16,5 +16,10 @@ namespace Bazario.Core.Models.Inventory
         public bool IsLowStock => AvailableStock <= LowStockThreshold;
         public bool IsOutOfStock => AvailableStock <= 0;
         public DateTime LastUpdated { get; set; }
+
+        /// <summary>
+        /// Row version for optimistic concurrency control (from Product entity)
+        /// </summary>
+        public byte[]? RowVersion { get; set; }
     }
 }

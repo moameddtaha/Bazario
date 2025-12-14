@@ -10,5 +10,11 @@ namespace Bazario.Core.Models.Inventory
         public Guid ProductId { get; set; }
         public string? ProductSku { get; set; }
         public int NewQuantity { get; set; }
+
+        /// <summary>
+        /// Row version for optimistic concurrency control
+        /// Required for safe bulk updates
+        /// </summary>
+        public byte[]? RowVersion { get; set; }
     }
 }

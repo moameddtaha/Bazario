@@ -3,12 +3,12 @@
   "WorkspaceRootPath": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{C1A81843-27A6-4613-8065-663283676E6B}|Bazario.Api\\Bazario.Api.csproj|d:\\mohamed taha\\private projects\\bazario\\code\\bazario.api\\bazario.api\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{C1A81843-27A6-4613-8065-663283676E6B}|Bazario.Api\\Bazario.Api.csproj|solutionrelative:bazario.api\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{C1A81843-27A6-4613-8065-663283676E6B}|Bazario.Api\\Bazario.Api.csproj|d:\\mohamed taha\\private projects\\bazario\\code\\bazario.api\\bazario.api\\startupextensions\\configureservicesextension.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{C1A81843-27A6-4613-8065-663283676E6B}|Bazario.Api\\Bazario.Api.csproj|solutionrelative:bazario.api\\startupextensions\\configureservicesextension.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{C1A81843-27A6-4613-8065-663283676E6B}|Bazario.Api\\Bazario.Api.csproj|d:\\mohamed taha\\private projects\\bazario\\code\\bazario.api\\bazario.api\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{C1A81843-27A6-4613-8065-663283676E6B}|Bazario.Api\\Bazario.Api.csproj|solutionrelative:bazario.api\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     }
   ],
   "DocumentGroupContainers": [
@@ -18,11 +18,11 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 0,
+          "SelectedChildIndex": 1,
           "Children": [
             {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 1,
               "Title": "Program.cs",
               "DocumentMoniker": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Api\\Program.cs",
               "RelativeDocumentMoniker": "Bazario.Api\\Program.cs",
@@ -36,13 +36,13 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 0,
               "Title": "ConfigureServicesExtension.cs",
               "DocumentMoniker": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Api\\StartupExtensions\\ConfigureServicesExtension.cs",
               "RelativeDocumentMoniker": "Bazario.Api\\StartupExtensions\\ConfigureServicesExtension.cs",
               "ToolTip": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Api\\StartupExtensions\\ConfigureServicesExtension.cs",
               "RelativeToolTip": "Bazario.Api\\StartupExtensions\\ConfigureServicesExtension.cs",
-              "ViewState": "AgIAAM0AAAAAAAAAAAAgwPcAAAAIAAAAAAAAAA==",
+              "ViewState": "AgIAAOgAAAAAAAAAAAAcwPcAAAAIAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2025-12-01T17:13:42.632Z",
               "IsPinned": true,

@@ -55,6 +55,11 @@ namespace Bazario.Core.DTO.Order
         [Display(Name = "Subtotal")]
         public decimal Subtotal { get; set; }
 
+        /// <summary>
+        /// Row version for optimistic concurrency control
+        /// </summary>
+        public byte[]? RowVersion { get; set; }
+
         public override bool Equals(object? obj)
         {
             return obj is OrderResponse response &&
@@ -103,7 +108,8 @@ namespace Bazario.Core.DTO.Order
                 DiscountAmount = DiscountAmount,
                 AppliedDiscountTypes = AppliedDiscountTypes,
                 ShippingCost = ShippingCost,
-                Subtotal = Subtotal
+                Subtotal = Subtotal,
+                RowVersion = RowVersion
             };
         }
     }

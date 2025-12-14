@@ -103,6 +103,12 @@ namespace Bazario.Core.DTO.Order
         [Range(0, double.MaxValue, ErrorMessage = "Subtotal must be 0 or greater")]
         public decimal? Subtotal { get; set; }
 
+        /// <summary>
+        /// Row version for optimistic concurrency control
+        /// Required for update operations to prevent lost updates
+        /// </summary>
+        public byte[]? RowVersion { get; set; }
+
         public OrderEntity ToOrder()
         {
             return new OrderEntity
@@ -115,7 +121,8 @@ namespace Bazario.Core.DTO.Order
                 DiscountAmount = DiscountAmount ?? 0,
                 AppliedDiscountTypes = AppliedDiscountTypes,
                 ShippingCost = ShippingCost ?? 0,
-                Subtotal = Subtotal ?? 0
+                Subtotal = Subtotal ?? 0,
+                RowVersion = RowVersion
             };
         }
     }

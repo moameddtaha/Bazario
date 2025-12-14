@@ -74,6 +74,14 @@ namespace Bazario.Core.Domain.Entities.Order
         [StringLength(500)]
         public string? DeletedReason { get; set; }
 
+        // ---------- Concurrency Control ----------
+        /// <summary>
+        /// Row version for optimistic concurrency control
+        /// Automatically managed by EF Core to prevent lost updates
+        /// </summary>
+        [Timestamp]
+        public byte[]? RowVersion { get; set; }
+
         // ---------- Navigation Properties ----------
 
         public ApplicationUser? Customer { get; set; }

@@ -30,6 +30,11 @@ namespace Bazario.Core.DTO.Store
         [Display(Name = "Is Active")]
         public bool? IsActive { get; set; }
 
+        /// <summary>
+        /// Row version for optimistic concurrency control
+        /// </summary>
+        public byte[]? RowVersion { get; set; }
+
         public StoreEntity ToStore()
         {
             return new StoreEntity
@@ -39,7 +44,8 @@ namespace Bazario.Core.DTO.Store
                 Description = Description ?? string.Empty, // Provide default if null
                 Category = Category ?? string.Empty, // Provide default if null
                 Logo = Logo ?? string.Empty, // Provide default if null
-                IsActive = IsActive ?? true // Default to true if not specified
+                IsActive = IsActive ?? true, // Default to true if not specified
+                RowVersion = RowVersion
             };
         }
     }

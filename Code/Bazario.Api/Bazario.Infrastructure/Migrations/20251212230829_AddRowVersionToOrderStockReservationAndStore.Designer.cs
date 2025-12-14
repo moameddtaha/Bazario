@@ -4,6 +4,7 @@ using Bazario.Infrastructure.DbContext;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Bazario.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251212230829_AddRowVersionToOrderStockReservationAndStore")]
+    partial class AddRowVersionToOrderStockReservationAndStore
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -63,7 +66,7 @@ namespace Bazario.Infrastructure.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("RefreshTokens", (string)null);
+                    b.ToTable("RefreshTokens");
                 });
 
             modelBuilder.Entity("Bazario.Core.Domain.Entities.Catalog.Discount", b =>
@@ -142,7 +145,7 @@ namespace Bazario.Infrastructure.Migrations
 
                     b.HasIndex("Code", "IsActive", "IsUsed");
 
-                    b.ToTable("Discounts", (string)null);
+                    b.ToTable("Discounts");
                 });
 
             modelBuilder.Entity("Bazario.Core.Domain.Entities.Catalog.Product", b =>
@@ -199,7 +202,7 @@ namespace Bazario.Infrastructure.Migrations
 
                     b.HasIndex("StoreId");
 
-                    b.ToTable("Products", (string)null);
+                    b.ToTable("Products");
                 });
 
             modelBuilder.Entity("Bazario.Core.Domain.Entities.Inventory.InventoryAlertPreferences", b =>
@@ -340,7 +343,7 @@ namespace Bazario.Infrastructure.Migrations
 
                     b.HasIndex("Status", "ExpiresAt");
 
-                    b.ToTable("StockReservations", (string)null);
+                    b.ToTable("StockReservations");
                 });
 
             modelBuilder.Entity("Bazario.Core.Domain.Entities.Location.City", b =>
@@ -381,7 +384,7 @@ namespace Bazario.Infrastructure.Migrations
 
                     b.HasIndex("GovernorateId");
 
-                    b.ToTable("Cities", (string)null);
+                    b.ToTable("Cities");
                 });
 
             modelBuilder.Entity("Bazario.Core.Domain.Entities.Location.Country", b =>
@@ -418,7 +421,7 @@ namespace Bazario.Infrastructure.Migrations
 
                     b.HasKey("CountryId");
 
-                    b.ToTable("Countries", (string)null);
+                    b.ToTable("Countries");
                 });
 
             modelBuilder.Entity("Bazario.Core.Domain.Entities.Location.Governorate", b =>
@@ -459,7 +462,7 @@ namespace Bazario.Infrastructure.Migrations
 
                     b.HasIndex("CountryId");
 
-                    b.ToTable("Governorates", (string)null);
+                    b.ToTable("Governorates");
                 });
 
             modelBuilder.Entity("Bazario.Core.Domain.Entities.Location.StoreGovernorateSupport", b =>
@@ -495,7 +498,7 @@ namespace Bazario.Infrastructure.Migrations
                     b.HasIndex("StoreId", "GovernorateId")
                         .IsUnique();
 
-                    b.ToTable("StoreGovernorateSupports", (string)null);
+                    b.ToTable("StoreGovernorateSupports");
                 });
 
             modelBuilder.Entity("Bazario.Core.Domain.Entities.Order.Order", b =>
@@ -563,7 +566,7 @@ namespace Bazario.Infrastructure.Migrations
 
                     b.HasIndex("Status");
 
-                    b.ToTable("Orders", (string)null);
+                    b.ToTable("Orders");
                 });
 
             modelBuilder.Entity("Bazario.Core.Domain.Entities.Order.OrderItem", b =>
@@ -590,7 +593,7 @@ namespace Bazario.Infrastructure.Migrations
 
                     b.HasIndex("ProductId");
 
-                    b.ToTable("OrderItems", (string)null);
+                    b.ToTable("OrderItems");
                 });
 
             modelBuilder.Entity("Bazario.Core.Domain.Entities.Review.Review", b =>
@@ -621,7 +624,7 @@ namespace Bazario.Infrastructure.Migrations
 
                     b.HasIndex("ProductId");
 
-                    b.ToTable("Reviews", (string)null);
+                    b.ToTable("Reviews");
                 });
 
             modelBuilder.Entity("Bazario.Core.Domain.Entities.Store.Store", b =>
@@ -681,7 +684,7 @@ namespace Bazario.Infrastructure.Migrations
 
                     b.HasIndex("SellerId");
 
-                    b.ToTable("Stores", (string)null);
+                    b.ToTable("Stores");
                 });
 
             modelBuilder.Entity("Bazario.Core.Domain.Entities.Store.StoreShippingConfiguration", b =>

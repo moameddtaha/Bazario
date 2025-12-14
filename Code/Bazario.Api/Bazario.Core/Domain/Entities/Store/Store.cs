@@ -40,7 +40,7 @@ namespace Bazario.Core.Domain.Entities.Store
         public Guid? UpdatedBy { get; set; }
 
         // ---------- Store Status Properties ----------
-        
+
         /// <summary>
         /// Indicates if the store is active and available for business
         /// </summary>
@@ -48,7 +48,7 @@ namespace Bazario.Core.Domain.Entities.Store
         public bool IsActive { get; set; } = true;
 
         // ---------- Soft Deletion Properties ----------
-        
+
         /// <summary>
         /// Indicates if the store has been soft deleted
         /// </summary>
@@ -71,6 +71,14 @@ namespace Bazario.Core.Domain.Entities.Store
         /// </summary>
         [StringLength(500)]
         public string? DeletedReason { get; set; }
+
+        // ---------- Concurrency Control ----------
+        /// <summary>
+        /// Row version for optimistic concurrency control
+        /// Automatically managed by EF Core to prevent lost updates during concurrent store modifications
+        /// </summary>
+        [Timestamp]
+        public byte[]? RowVersion { get; set; }
 
         // ---------- Navigation Properties ----------
 

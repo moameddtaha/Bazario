@@ -97,6 +97,14 @@ namespace Bazario.Core.Domain.Entities.Inventory
         [StringLength(500)]
         public string? DeletedReason { get; set; }
 
+        // ---------- Concurrency Control ----------
+        /// <summary>
+        /// Row version for optimistic concurrency control
+        /// Automatically managed by EF Core to prevent lost updates during concurrent reservations
+        /// </summary>
+        [Timestamp]
+        public byte[]? RowVersion { get; set; }
+
         // ---------- Navigation Properties ----------
 
         public Product? Product { get; set; }

@@ -27,7 +27,9 @@ namespace Bazario.Core.Extensions.Store
                 IsDeleted = store.IsDeleted,
                 DeletedAt = store.DeletedAt,
                 DeletedBy = store.DeletedBy,
-                DeletedReason = store.DeletedReason
+                DeletedReason = store.DeletedReason,
+                // Concurrency control
+                RowVersion = store.RowVersion
             };
         }
     }

@@ -16,5 +16,10 @@ namespace Bazario.Core.Models.Inventory
         public DateTime CreatedAt { get; set; }
         public DateTime ExpiresAt { get; set; }
         public bool IsExpired => DateTime.UtcNow > ExpiresAt;
+
+        /// <summary>
+        /// Row version for optimistic concurrency control
+        /// </summary>
+        public byte[]? RowVersion { get; set; }
     }
 }
