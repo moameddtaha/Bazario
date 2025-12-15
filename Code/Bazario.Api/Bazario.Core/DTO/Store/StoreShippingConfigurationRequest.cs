@@ -42,5 +42,7 @@ namespace Bazario.Core.DTO.Store
         // Governorate-based shipping configuration
         public List<Guid>? SupportedGovernorateIds { get; set; } // Governorates where this store delivers
         public List<Guid>? ExcludedGovernorateIds { get; set; } // Governorates where this store does NOT deliver
+
+        public byte[]? RowVersion { get; set; }
     }
 }

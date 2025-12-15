@@ -33,6 +33,14 @@ namespace Bazario.Core.Domain.Entities.Store
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
 
+        /// <summary>
+        /// Row version for optimistic concurrency control
+        /// Automatically managed by EF Core to prevent lost updates during concurrent shipping configuration modifications
+        /// Critical for preventing conflicts when store owners update shipping fees and delivery options
+        /// </summary>
+        [Timestamp]
+        public byte[]? RowVersion { get; set; }
+
         // Navigation properties
         public Store Store { get; set; } = null!;
     }

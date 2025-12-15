@@ -21,6 +21,8 @@ namespace Bazario.Core.DTO.Review
         [Display(Name = "Comment")]
         public string? Comment { get; set; }
 
+        public byte[]? RowVersion { get; set; }
+
         public ReviewEntity ToReview()
         {
             return new ReviewEntity

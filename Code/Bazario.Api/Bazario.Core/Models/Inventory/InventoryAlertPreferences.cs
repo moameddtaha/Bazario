@@ -19,5 +19,11 @@ namespace Bazario.Core.Models.Inventory
         public bool SendWeeklySummary { get; set; } = true;
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
+
+        /// <summary>
+        /// Row version for optimistic concurrency control
+        /// Required for safe concurrent updates to alert preferences
+        /// </summary>
+        public byte[]? RowVersion { get; set; }
     }
 }

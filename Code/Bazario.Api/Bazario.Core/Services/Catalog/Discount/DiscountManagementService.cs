@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Bazario.Core.Domain.RepositoryContracts.Catalog;
 using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.Enums.Catalog;
+using Bazario.Core.Helpers.Catalog;
 using Bazario.Core.ServiceContracts.Catalog.Discount;
 using Microsoft.Extensions.Logging;
 
@@ -18,13 +19,16 @@ namespace Bazario.Core.Services.Catalog.Discount
     public class DiscountManagementService : IDiscountManagementService
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IConcurrencyHelper _concurrencyHelper;
         private readonly ILogger<DiscountManagementService> _logger;
 
         public DiscountManagementService(
             IUnitOfWork unitOfWork,
+            IConcurrencyHelper concurrencyHelper,
             ILogger<DiscountManagementService> logger)
         {
             _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
+            _concurrencyHelper = concurrencyHelper ?? throw new ArgumentNullException(nameof(concurrencyHelper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -81,28 +85,35 @@ namespace Bazario.Core.Services.Catalog.Discount
         {
             _logger.LogInformation("Updating discount with ID: {DiscountId}", discountId);
 
-            var existingDiscount = await _unitOfWork.Discounts.GetDiscountByIdAsync(discountId, cancellationToken);
-
-            if (existingDiscount == null)
+            // Execute with retry logic for optimistic concurrency
+            var updatedDiscount = await _concurrencyHelper.ExecuteWithRetryAsync(async () =>
             {
-                _logger.LogWarning("Discount not found with ID: {DiscountId}", discountId);
-                throw new InvalidOperationException($"Discount with ID {discountId} not found");
-            }
+                // Fetch fresh entity on each retry attempt
+                var existingDiscount = await _unitOfWork.Discounts.GetDiscountByIdAsync(discountId, cancellationToken);
 
-            // Safe Update Pattern: Only update provided fields
-            if (code != null) existingDiscount.Code = code.Trim().ToUpper();
-            if (type.HasValue) existingDiscount.Type = type.Value;
-            if (value.HasValue) existingDiscount.Value = value.Value;
-            if (validFrom.HasValue) existingDiscount.ValidFrom = validFrom.Value;
-            if (validTo.HasValue) existingDiscount.ValidTo = validTo.Value;
-            if (minimumOrderAmount.HasValue) existingDiscount.MinimumOrderAmount = minimumOrderAmount.Value;
-            if (description != null) existingDiscount.Description = description;
+                if (existingDiscount == null)
+                {
+                    _logger.LogWarning("Discount not found with ID: {DiscountId}", discountId);
+                    throw new InvalidOperationException($"Discount with ID {discountId} not found");
+                }
 
-            existingDiscount.UpdatedBy = updatedBy;
-            existingDiscount.UpdatedAt = DateTime.UtcNow;
+                // Safe Update Pattern: Only update provided fields
+                if (code != null) existingDiscount.Code = code.Trim().ToUpper();
+                if (type.HasValue) existingDiscount.Type = type.Value;
+                if (value.HasValue) existingDiscount.Value = value.Value;
+                if (validFrom.HasValue) existingDiscount.ValidFrom = validFrom.Value;
+                if (validTo.HasValue) existingDiscount.ValidTo = validTo.Value;
+                if (minimumOrderAmount.HasValue) existingDiscount.MinimumOrderAmount = minimumOrderAmount.Value;
+                if (description != null) existingDiscount.Description = description;
 
-            var updatedDiscount = await _unitOfWork.Discounts.UpdateDiscountAsync(existingDiscount, cancellationToken);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
+                existingDiscount.UpdatedBy = updatedBy;
+                existingDiscount.UpdatedAt = DateTime.UtcNow;
+
+                var result = await _unitOfWork.Discounts.UpdateDiscountAsync(existingDiscount, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                return result;
+            }, "UpdateDiscount", cancellationToken);
 
             _logger.LogInformation("Discount updated successfully with ID: {DiscountId}", discountId);
 

@@ -27,6 +27,8 @@ namespace Bazario.Core.DTO.Review
         [DataType(DataType.DateTime)]
         public DateTime? CreatedAt { get; set; }
 
+        public byte[]? RowVersion { get; set; }
+
         [Display(Name = "Star Rating")]
         public string StarRating => new string('★', Rating) + new string('☆', 5 - Rating);
 

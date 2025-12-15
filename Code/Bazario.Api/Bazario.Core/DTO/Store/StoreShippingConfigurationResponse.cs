@@ -25,5 +25,6 @@ namespace Bazario.Core.DTO.Store
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
         public bool IsActive { get; set; }
+        public byte[]? RowVersion { get; set; }
     }
 }

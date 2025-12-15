@@ -97,6 +97,14 @@ namespace Bazario.Core.Domain.Entities.Catalog
         /// </summary>
         public Guid? UpdatedBy { get; set; }
 
+        /// <summary>
+        /// Row version for optimistic concurrency control
+        /// Automatically managed by EF Core to prevent lost updates during concurrent discount modifications
+        /// Critical for preventing double-use of one-time discount codes
+        /// </summary>
+        [Timestamp]
+        public byte[]? RowVersion { get; set; }
+
         // ---------- Navigation Properties ----------
 
         /// <summary>

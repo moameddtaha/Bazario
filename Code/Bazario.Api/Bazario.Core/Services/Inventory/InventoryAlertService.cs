@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.Entities.Inventory;
 using Bazario.Core.Domain.RepositoryContracts;
+using Bazario.Core.Helpers.Catalog;
 using Bazario.Core.Models.Inventory;
 using Bazario.Core.ServiceContracts.Inventory;
 using InventoryAlertPreferencesEntity = Bazario.Core.Domain.Entities.Inventory.InventoryAlertPreferences;
@@ -37,6 +38,7 @@ namespace Bazario.Core.Services.Inventory
         private readonly IEmailService _emailService;
         private readonly IInventoryQueryService _inventoryQueryService;
         private readonly IInventoryAnalyticsService _inventoryAnalyticsService;
+        private readonly IConcurrencyHelper _concurrencyHelper;
         private readonly IMemoryCache _cache;
         private readonly IConfiguration _configuration;
         private readonly IUnitOfWork _unitOfWork;
@@ -50,6 +52,7 @@ namespace Bazario.Core.Services.Inventory
             IEmailService emailService,
             IInventoryQueryService inventoryQueryService,
             IInventoryAnalyticsService inventoryAnalyticsService,
+            IConcurrencyHelper concurrencyHelper,
             IMemoryCache cache,
             IConfiguration configuration,
             IUnitOfWork unitOfWork)
@@ -58,6 +61,7 @@ namespace Bazario.Core.Services.Inventory
             _emailService = emailService ?? throw new ArgumentNullException(nameof(emailService));
             _inventoryQueryService = inventoryQueryService ?? throw new ArgumentNullException(nameof(inventoryQueryService));
             _inventoryAnalyticsService = inventoryAnalyticsService ?? throw new ArgumentNullException(nameof(inventoryAnalyticsService));
+            _concurrencyHelper = concurrencyHelper ?? throw new ArgumentNullException(nameof(concurrencyHelper));
             _cache = cache ?? throw new ArgumentNullException(nameof(cache));
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
             _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
@@ -599,32 +603,40 @@ namespace Bazario.Core.Services.Inventory
                     return false;
                 }
 
-                var now = DateTime.UtcNow;
-
-                // Create immutable copy to fix race condition - don't mutate input parameter
-                var preferencesToStore = new InventoryAlertPreferencesEntity
-                {
-                    StoreId = storeId,
-                    AlertEmail = preferences.AlertEmail,
-                    EnableLowStockAlerts = preferences.EnableLowStockAlerts,
-                    EnableOutOfStockAlerts = preferences.EnableOutOfStockAlerts,
-                    EnableRestockRecommendations = preferences.EnableRestockRecommendations,
-                    EnableDeadStockAlerts = preferences.EnableDeadStockAlerts,
-                    DefaultLowStockThreshold = preferences.DefaultLowStockThreshold,
-                    DeadStockDays = preferences.DeadStockDays,
-                    SendDailySummary = preferences.SendDailySummary,
-                    SendWeeklySummary = preferences.SendWeeklySummary,
-                    CreatedAt = preferences.CreatedAt == default ? now : preferences.CreatedAt,
-                    UpdatedAt = now
-                };
-
-                // Invalidate cache BEFORE database write to prevent stale data race condition
                 var cacheKey = $"{CACHE_KEY_PREFIX}{storeId}";
-                _cache.Remove(cacheKey);
 
-                // Save to database (persistence layer)
-                await _unitOfWork.InventoryAlertPreferences.UpsertAsync(preferencesToStore, cancellationToken).ConfigureAwait(false);
-                await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                // Execute with retry logic for optimistic concurrency
+                await _concurrencyHelper.ExecuteWithRetryAsync(async () =>
+                {
+                    var now = DateTime.UtcNow;
+
+                    // Create immutable copy to fix race condition - don't mutate input parameter
+                    var preferencesToStore = new InventoryAlertPreferencesEntity
+                    {
+                        StoreId = storeId,
+                        AlertEmail = preferences.AlertEmail,
+                        EnableLowStockAlerts = preferences.EnableLowStockAlerts,
+                        EnableOutOfStockAlerts = preferences.EnableOutOfStockAlerts,
+                        EnableRestockRecommendations = preferences.EnableRestockRecommendations,
+                        EnableDeadStockAlerts = preferences.EnableDeadStockAlerts,
+                        DefaultLowStockThreshold = preferences.DefaultLowStockThreshold,
+                        DeadStockDays = preferences.DeadStockDays,
+                        SendDailySummary = preferences.SendDailySummary,
+                        SendWeeklySummary = preferences.SendWeeklySummary,
+                        CreatedAt = preferences.CreatedAt == default ? now : preferences.CreatedAt,
+                        UpdatedAt = now,
+                        RowVersion = preferences.RowVersion
+                    };
+
+                    // Invalidate cache BEFORE database write to prevent stale data race condition
+                    _cache.Remove(cacheKey);
+
+                    // Save to database (persistence layer)
+                    await _unitOfWork.InventoryAlertPreferences.UpsertAsync(preferencesToStore, cancellationToken).ConfigureAwait(false);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+                    return true;
+                }, "ConfigureAlertPreferences", cancellationToken);
 
                 // Track store ID for processing
                 _storeIdsWithPreferences.TryAdd(storeId, 0);

@@ -20,7 +20,8 @@ namespace Bazario.Core.Extensions.Review
                 ProductId = review.ProductId,
                 Rating = review.Rating,
                 Comment = review.Comment,
-                CreatedAt = review.CreatedAt
+                CreatedAt = review.CreatedAt,
+                RowVersion = review.RowVersion
             };
         }
     }

@@ -29,6 +29,14 @@ namespace Bazario.Core.Domain.Entities.Review
         [DataType(DataType.DateTime)]
         public DateTime? CreatedAt { get; set; }
 
+        /// <summary>
+        /// Row version for optimistic concurrency control
+        /// Automatically managed by EF Core to prevent lost updates during concurrent review modifications
+        /// Critical for preventing conflicts between customer edits and admin moderation
+        /// </summary>
+        [Timestamp]
+        public byte[]? RowVersion { get; set; }
+
         // ---------- Navigation Properties ----------
 
         public ApplicationUser? Customer { get; set; }

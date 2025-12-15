@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.RepositoryContracts.Catalog;
 using Bazario.Core.Enums.Catalog;
+using Bazario.Core.Helpers.Catalog;
 using Bazario.Core.ServiceContracts.Catalog.Discount;
 using Microsoft.Extensions.Logging;
 
@@ -16,13 +17,16 @@ namespace Bazario.Core.Services.Catalog.Discount
     public class DiscountValidationService : IDiscountValidationService
     {
         private readonly IDiscountRepository _discountRepository;
+        private readonly IConcurrencyHelper _concurrencyHelper;
         private readonly ILogger<DiscountValidationService> _logger;
 
         public DiscountValidationService(
             IDiscountRepository discountRepository,
+            IConcurrencyHelper concurrencyHelper,
             ILogger<DiscountValidationService> logger)
         {
             _discountRepository = discountRepository ?? throw new ArgumentNullException(nameof(discountRepository));
+            _concurrencyHelper = concurrencyHelper ?? throw new ArgumentNullException(nameof(concurrencyHelper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -121,7 +125,11 @@ namespace Bazario.Core.Services.Catalog.Discount
         {
             _logger.LogInformation("Marking discount as used: {DiscountId}", discountId);
 
-            var result = await _discountRepository.MarkDiscountAsUsedAsync(discountId, cancellationToken);
+            // Execute with retry logic for optimistic concurrency - critical for preventing double-use
+            var result = await _concurrencyHelper.ExecuteWithRetryAsync(async () =>
+            {
+                return await _discountRepository.MarkDiscountAsUsedAsync(discountId, cancellationToken);
+            }, "MarkDiscountAsUsed", cancellationToken);
 
             if (result)
             {

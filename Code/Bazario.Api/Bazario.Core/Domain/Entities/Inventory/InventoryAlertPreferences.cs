@@ -79,5 +79,13 @@ namespace Bazario.Core.Domain.Entities.Inventory
         /// Timestamp when preferences were last updated
         /// </summary>
         public DateTime? UpdatedAt { get; set; }
+
+        /// <summary>
+        /// Row version for optimistic concurrency control
+        /// Automatically managed by EF Core to prevent lost updates during concurrent alert preference modifications
+        /// Critical for preventing conflicts when store owners update notification settings
+        /// </summary>
+        [Timestamp]
+        public byte[]? RowVersion { get; set; }
     }
 }
