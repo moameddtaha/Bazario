@@ -23,12 +23,14 @@ namespace Bazario.Core.ServiceContracts.Catalog.Product
         Task<ProductResponse?> GetProductByIdAsync(Guid productId, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Retrieves all products for a specific store
+        /// Retrieves paginated products for a specific store
         /// </summary>
         /// <param name="storeId">Store ID</param>
+        /// <param name="pageNumber">Page number (starting from 1)</param>
+        /// <param name="pageSize">Number of items per page</param>
         /// <param name="cancellationToken">Cancellation token</param>
-        /// <returns>List of store products</returns>
-        Task<List<ProductResponse>> GetProductsByStoreIdAsync(Guid storeId, CancellationToken cancellationToken = default);
+        /// <returns>Paginated response with store products</returns>
+        Task<PagedResponse<ProductResponse>> GetProductsByStoreIdAsync(Guid storeId, int pageNumber = 1, int pageSize = 10, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Searches products with advanced filtering and pagination

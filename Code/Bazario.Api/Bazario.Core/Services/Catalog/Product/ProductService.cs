@@ -76,10 +76,10 @@ namespace Bazario.Core.Services.Catalog.Product
             return await _queryService.GetProductByIdAsync(productId, cancellationToken);
         }
 
-        public async Task<List<ProductResponse>> GetProductsByStoreIdAsync(Guid storeId, CancellationToken cancellationToken = default)
+        public async Task<PagedResponse<ProductResponse>> GetProductsByStoreIdAsync(Guid storeId, int pageNumber = 1, int pageSize = 10, CancellationToken cancellationToken = default)
         {
             _logger.LogDebug("Delegating GetProductsByStoreIdAsync to ProductQueryService");
-            return await _queryService.GetProductsByStoreIdAsync(storeId, cancellationToken);
+            return await _queryService.GetProductsByStoreIdAsync(storeId, pageNumber, pageSize, cancellationToken);
         }
 
         public async Task<PagedResponse<ProductResponse>> SearchProductsAsync(ProductSearchCriteria searchCriteria, CancellationToken cancellationToken = default)

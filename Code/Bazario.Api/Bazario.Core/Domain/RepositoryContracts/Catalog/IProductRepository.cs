@@ -70,6 +70,16 @@ namespace Bazario.Core.Domain.RepositoryContracts.Catalog
         IQueryable<Product> GetProductsQueryableIgnoreFilters();
 
         /// <summary>
+        /// Gets a read-only queryable collection of products with change tracking disabled (optimized for queries)
+        /// </summary>
+        IQueryable<Product> GetProductsQueryableAsNoTracking();
+
+        /// <summary>
+        /// Gets a read-only queryable collection of products ignoring soft deletion filters with change tracking disabled (optimized for queries)
+        /// </summary>
+        IQueryable<Product> GetProductsQueryableIgnoreFiltersAsNoTracking();
+
+        /// <summary>
         /// Gets the count of products from a queryable collection
         /// </summary>
         Task<int> GetProductsCountAsync(IQueryable<Product> query, CancellationToken cancellationToken = default);
@@ -82,7 +92,7 @@ namespace Bazario.Core.Domain.RepositoryContracts.Catalog
         // Soft Deletion Methods
         Task<bool> SoftDeleteProductAsync(Guid productId, Guid deletedBy, string? reason = null, CancellationToken cancellationToken = default);
 
-        Task<bool> RestoreProductAsync(Guid productId, CancellationToken cancellationToken = default);
+        Task<bool> RestoreProductAsync(Guid productId, Guid restoredBy, CancellationToken cancellationToken = default);
 
         Task<Product?> GetProductByIdIncludeDeletedAsync(Guid productId, CancellationToken cancellationToken = default);
 

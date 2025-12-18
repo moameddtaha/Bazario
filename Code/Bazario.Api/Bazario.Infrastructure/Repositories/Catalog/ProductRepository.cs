@@ -519,9 +519,9 @@ namespace Bazario.Infrastructure.Repositories.Catalog
             }
         }
 
-        public async Task<bool> RestoreProductAsync(Guid productId, CancellationToken cancellationToken = default)
+        public async Task<bool> RestoreProductAsync(Guid productId, Guid restoredBy, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Restoring product: {ProductId}", productId);
+            _logger.LogInformation("Restoring product: {ProductId}, RestoredBy: {RestoredBy}", productId, restoredBy);
 
             try
             {
@@ -529,6 +529,12 @@ namespace Bazario.Infrastructure.Repositories.Catalog
                 if (productId == Guid.Empty)
                 {
                     _logger.LogWarning("Attempted to restore product with empty ID");
+                    return false;
+                }
+
+                if (restoredBy == Guid.Empty)
+                {
+                    _logger.LogWarning("Attempted to restore product with empty RestoredBy ID");
                     return false;
                 }
 
@@ -548,21 +554,23 @@ namespace Bazario.Infrastructure.Repositories.Catalog
                     return true; // Already restored, consider it successful
                 }
 
-                // Restore product
+                // Restore product by clearing deletion audit fields
+                // Note: Product entity doesn't have RestoredBy/RestoredAt fields,
+                // so we rely on logging for restoration audit trail
                 product.IsDeleted = false;
                 product.DeletedAt = null;
                 product.DeletedBy = null;
                 product.DeletedReason = null;
 
 
-                _logger.LogInformation("Successfully restored product: {ProductId}, Name: {ProductName}", 
-                    productId, product.Name);
+                _logger.LogInformation("Successfully restored product: {ProductId}, Name: {ProductName}, RestoredBy: {RestoredBy}",
+                    productId, product.Name, restoredBy);
 
                 return true;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to restore product: {ProductId}", productId);
+                _logger.LogError(ex, "Failed to restore product: {ProductId}, RestoredBy: {RestoredBy}", productId, restoredBy);
                 throw new InvalidOperationException($"Failed to restore product {productId}: {ex.Message}", ex);
             }
         }
@@ -810,6 +818,22 @@ namespace Bazario.Infrastructure.Repositories.Catalog
                 .IgnoreQueryFilters()
                 .Include(p => p.Store)
                 .Include(p => p.Reviews);
+        }
+
+        public IQueryable<Product> GetProductsQueryableAsNoTracking()
+        {
+            // For read-only queries: no navigation properties loaded, change tracking disabled
+            // ProductResponse only uses ProductId, Name, Description, Price, StockQuantity, Category, Image, StoreId
+            // Store and Reviews navigation properties are NOT needed - only IDs are used
+            return _context.Products.AsNoTracking();
+        }
+
+        public IQueryable<Product> GetProductsQueryableIgnoreFiltersAsNoTracking()
+        {
+            // For read-only queries with deleted products: no navigation properties, change tracking disabled
+            return _context.Products
+                .IgnoreQueryFilters()
+                .AsNoTracking();
         }
 
         public async Task<int> GetProductsCountAsync(IQueryable<Product> query, CancellationToken cancellationToken = default)

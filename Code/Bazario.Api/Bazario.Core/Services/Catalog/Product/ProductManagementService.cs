@@ -134,39 +134,50 @@ namespace Bazario.Core.Services.Catalog.Product
                     throw new InvalidOperationException(string.Format(ErrorMessages.StoreInactive, productAddRequest.StoreId));
                 }
 
-                // Create product entity
-                var product = productAddRequest.ToProduct();
-                product.ProductId = Guid.NewGuid();
+                // Begin explicit transaction to ensure atomicity
+                await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
-                _logger.LogDebug("Creating product with ID: {ProductId}, Name: {ProductName}, StoreId: {StoreId}",
-                    product.ProductId, product.Name, product.StoreId);
-
-                // Save to repository
-                var createdProduct = await _unitOfWork.Products.AddProductAsync(product, cancellationToken);
-
-                // Transaction Handling: Persist changes with proper exception handling
-                // DbUpdateConcurrencyException: Another process modified the product between read and write
-                // DbUpdateException: Database constraint violation (e.g., duplicate key, FK violation)
-                // The retry helper will automatically retry the operation if a concurrency conflict occurs
-                await _concurrencyHelper.ExecuteWithRetryAsync(async () =>
+                try
                 {
+                    // Create product entity
+                    var product = productAddRequest.ToProduct();
+                    product.ProductId = Guid.NewGuid();
+
+                    _logger.LogDebug("Creating product with ID: {ProductId}, Name: {ProductName}, StoreId: {StoreId}",
+                        product.ProductId, product.Name, product.StoreId);
+
+                    // Save to repository
+                    var createdProduct = await _unitOfWork.Products.AddProductAsync(product, cancellationToken);
+
+                    // Transaction Handling: Persist changes with proper exception handling
+                    // DbUpdateException: Database constraint violation (e.g., duplicate key, FK violation)
+                    // Note: Create operations don't use retry logic because there's no concurrency conflict
+                    // on new entities (the entity doesn't exist yet, so no RowVersion to check)
                     try
                     {
                         await _unitOfWork.SaveChangesAsync(cancellationToken);
-                        return true; // Success
+                        await _unitOfWork.CommitTransactionAsync(cancellationToken);
                     }
                     catch (Exception ex) when (_productValidationHelper.IsDatabaseUpdateException(ex))
                     {
+                        await _unitOfWork.RollbackTransactionAsync(cancellationToken);
                         _logger.LogError(ex, "Database error creating product. ProductId: {ProductId} (failed after {ElapsedMs}ms)",
                             product.ProductId, stopwatch.ElapsedMilliseconds);
                         throw new InvalidOperationException(ErrorMessages.DatabaseErrorCreate, ex);
                     }
-                }, "CreateProduct", cancellationToken);
 
-                _logger.LogInformation("Successfully created product. ProductId: {ProductId}, Name: {ProductName}, StoreId: {StoreId} (completed in {ElapsedMs}ms)",
-                    createdProduct.ProductId, _productValidationHelper.GetProductNameForLogging(createdProduct.Name), createdProduct.StoreId, stopwatch.ElapsedMilliseconds);
+                    _logger.LogInformation("Successfully created product. ProductId: {ProductId}, Name: {ProductName}, StoreId: {StoreId} (completed in {ElapsedMs}ms)",
+                        createdProduct.ProductId, _productValidationHelper.GetProductNameForLogging(createdProduct.Name), createdProduct.StoreId, stopwatch.ElapsedMilliseconds);
 
-                return createdProduct.ToProductResponse();
+                    return createdProduct.ToProductResponse()
+                        ?? throw new InvalidOperationException("Failed to convert created product to response");
+                }
+                catch
+                {
+                    // Rollback transaction on any error
+                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                    throw;
+                }
             }
             catch (Exception ex)
             {
@@ -188,57 +199,75 @@ namespace Bazario.Core.Services.Catalog.Product
                 throw new ArgumentNullException(nameof(productUpdateRequest));
             }
 
+            // Perform comprehensive business validation
+            ValidateProductUpdateRequest(productUpdateRequest);
+
             var stopwatch = Stopwatch.StartNew();
 
             try
             {
                 _logger.LogInformation("Starting product update for product: {ProductId}", productUpdateRequest.ProductId);
 
-        // Wrap the entire update operation in retry logic
-        // This ensures that on each retry, we re-fetch the product with the latest RowVersion
-        var updatedProduct = await _concurrencyHelper.ExecuteWithRetryAsync(async () =>
-        {
-            // Get existing product (this gets the latest RowVersion from the database)
-            var existingProduct = await _unitOfWork.Products.GetProductByIdAsync(productUpdateRequest.ProductId, cancellationToken);
-            if (existingProduct == null)
-            {
-                _logger.LogWarning("Product update failed: Product not found. ProductId: {ProductId}", productUpdateRequest.ProductId);
-                throw new InvalidOperationException(string.Format(ErrorMessages.ProductNotFound, productUpdateRequest.ProductId));
-            }
+                // Wrap the entire update operation in retry logic
+                // This ensures that on each retry, we re-fetch the product with the latest RowVersion
+                var updatedProduct = await _concurrencyHelper.ExecuteWithRetryAsync(async () =>
+                {
+                    // Begin explicit transaction to ensure atomicity
+                    await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
-            // Check for cancellation before processing update
-            cancellationToken.ThrowIfCancellationRequested();
+                    try
+                    {
+                        // Get existing product (this gets the latest RowVersion from the database)
+                        var existingProduct = await _unitOfWork.Products.GetProductByIdAsync(productUpdateRequest.ProductId, cancellationToken);
+                        if (existingProduct == null)
+                        {
+                            _logger.LogWarning("Product update failed: Product not found. ProductId: {ProductId}", productUpdateRequest.ProductId);
+                            throw new InvalidOperationException(string.Format(ErrorMessages.ProductNotFound, productUpdateRequest.ProductId));
+                        }
 
-            // Convert DTO to entity for update
-            var product = productUpdateRequest.ToProduct();
+                        // Check for cancellation before processing update
+                        cancellationToken.ThrowIfCancellationRequested();
 
-            _logger.LogDebug("Updating product with ID: {ProductId}, Name: {ProductName}",
-                product.ProductId, product.Name);
+                        // Convert DTO to entity for update
+                        var product = productUpdateRequest.ToProduct();
 
-            // Save to repository (repository handles null checks)
-            var updated = await _unitOfWork.Products.UpdateProductAsync(product, cancellationToken);
+                        _logger.LogDebug("Updating product with ID: {ProductId}, Name: {ProductName}",
+                            product.ProductId, product.Name);
 
-            // Transaction Handling: Critical for preventing lost updates in concurrent scenarios
-            // NOTE: RowVersion property is now included for optimistic concurrency control
-            // EF Core will automatically check RowVersion and throw DbUpdateConcurrencyException if mismatch
-            try
-            {
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-                return updated; // Success
-            }
-            catch (Exception ex) when (_productValidationHelper.IsDatabaseUpdateException(ex))
-            {
-                // Handle EF Core database update exception
-                _logger.LogError(ex, "Database error updating product. ProductId: {ProductId} (failed after {ElapsedMs}ms)",
-                    productUpdateRequest.ProductId, stopwatch.ElapsedMilliseconds);
-                throw new InvalidOperationException(ErrorMessages.DatabaseErrorUpdate, ex);
-            }
-        }, "UpdateProduct", cancellationToken);
+                        // Save to repository (repository handles null checks)
+                        var updated = await _unitOfWork.Products.UpdateProductAsync(product, cancellationToken);
 
-        _logger.LogInformation("Successfully updated product. ProductId: {ProductId}, Name: {ProductName} (completed in {ElapsedMs}ms)",
-            updatedProduct.ProductId, _productValidationHelper.GetProductNameForLogging(updatedProduct.Name), stopwatch.ElapsedMilliseconds);
+                        // Transaction Handling: Critical for preventing lost updates in concurrent scenarios
+                        // NOTE: RowVersion property is now included for optimistic concurrency control
+                        // EF Core will automatically check RowVersion and throw DbUpdateConcurrencyException if mismatch
+                        try
+                        {
+                            await _unitOfWork.SaveChangesAsync(cancellationToken);
+                            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+                            return updated; // Success
+                        }
+                        catch (Exception ex) when (_productValidationHelper.IsDatabaseUpdateException(ex))
+                        {
+                            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                            // Handle EF Core database update exception
+                            _logger.LogError(ex, "Database error updating product. ProductId: {ProductId} (failed after {ElapsedMs}ms)",
+                                productUpdateRequest.ProductId, stopwatch.ElapsedMilliseconds);
+                            throw new InvalidOperationException(ErrorMessages.DatabaseErrorUpdate, ex);
+                        }
+                    }
+                    catch
+                    {
+                        // Rollback transaction on any error
+                        await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                        throw;
+                    }
+                }, "UpdateProduct", cancellationToken);
 
-        return updatedProduct.ToProductResponse();
+                _logger.LogInformation("Successfully updated product. ProductId: {ProductId}, Name: {ProductName} (completed in {ElapsedMs}ms)",
+                    updatedProduct.ProductId, _productValidationHelper.GetProductNameForLogging(updatedProduct.Name), stopwatch.ElapsedMilliseconds);
+
+                return updatedProduct.ToProductResponse()
+                    ?? throw new InvalidOperationException("Failed to convert updated product to response");
             }
             catch (Exception ex)
             {
@@ -269,56 +298,89 @@ namespace Bazario.Core.Services.Catalog.Product
             _logger.LogInformation("Starting soft deletion for product: {ProductId}, DeletedBy: {DeletedBy}, Reason: {Reason}",
                 productId, deletedBy, _productValidationHelper.SanitizeForLogging(reason));
 
+            // Perform safety validation check BEFORE deletion (outside retry - validation doesn't need retrying)
+            // Note: This is informational only for soft deletes - we log warnings but don't block deletion
+            // Soft deletion is safe because it preserves all data and relationships
+            try
+            {
+                var canSafelyDelete = await _validationService.CanProductBeSafelyDeletedAsync(productId, cancellationToken);
+                if (!canSafelyDelete)
+                {
+                    _logger.LogWarning("Product {ProductId} has active orders, reservations, or reviews. " +
+                        "Proceeding with soft deletion (data will be preserved for audit trail).", productId);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Don't block deletion if validation check fails - just log the error
+                _logger.LogWarning(ex, "Failed to perform safety validation check for product {ProductId}. " +
+                    "Proceeding with soft deletion.", productId);
+            }
+
             try
             {
                 // Wrap the entire delete operation in retry logic
                 // This ensures that on each retry, we re-fetch the product with the latest RowVersion
                 var result = await _concurrencyHelper.ExecuteWithRetryAsync(async () =>
                 {
-                    // Validate product exists (including soft-deleted products to check double-deletion)
-                    var product = await _unitOfWork.Products.GetProductByIdIncludeDeletedAsync(productId, cancellationToken);
-                    if (product == null)
-                    {
-                        _logger.LogWarning("Product deletion failed: Product not found. ProductId: {ProductId}", productId);
-                        throw new InvalidOperationException(string.Format(ErrorMessages.ProductNotFound, productId));
-                    }
+                    // Begin explicit transaction to ensure atomicity
+                    await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
-                    // Business Rule: Prevent double-deletion to preserve audit trail
-                    if (product.IsDeleted)
-                    {
-                        _logger.LogWarning("Product is already deleted. ProductId: {ProductId}, DeletedAt: {DeletedAt}, DeletedBy: {DeletedBy}",
-                            productId, product.DeletedAt, product.DeletedBy);
-                        throw new InvalidOperationException($"Product {productId} is already deleted");
-                    }
-
-                    // Check for cancellation before continuing
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    // Business Rule: Soft deletion preserves all data and relationships
-                    // Products with active orders CAN be soft deleted because:
-                    // 1. Order history is preserved for auditing and analytics
-                    // 2. Customer order details remain accessible
-                    // 3. Data can be restored if deletion was accidental
-                    // 4. Referential integrity is maintained
-                    _logger.LogDebug("Soft deletion allows product with active orders. ProductId: {ProductId}", productId);
-
-                    _logger.LogDebug("Performing soft delete for product: {ProductId}, Name: {ProductName}",
-                        productId, _productValidationHelper.GetProductNameForLogging(product.Name));
-
-                    // Perform soft delete
-                    var deleteResult = await _unitOfWork.Products.SoftDeleteProductAsync(productId, deletedBy, reason, cancellationToken);
-
-                    // Transaction Handling: Persist changes with proper exception handling
                     try
                     {
-                        await _unitOfWork.SaveChangesAsync(cancellationToken);
-                        return deleteResult; // Success
+                        // Validate product exists (including soft-deleted products to check double-deletion)
+                        var product = await _unitOfWork.Products.GetProductByIdIncludeDeletedAsync(productId, cancellationToken);
+                        if (product == null)
+                        {
+                            _logger.LogWarning("Product deletion failed: Product not found. ProductId: {ProductId}", productId);
+                            throw new InvalidOperationException(string.Format(ErrorMessages.ProductNotFound, productId));
+                        }
+
+                        // Business Rule: Prevent double-deletion to preserve audit trail
+                        if (product.IsDeleted)
+                        {
+                            _logger.LogWarning("Product is already deleted. ProductId: {ProductId}, DeletedAt: {DeletedAt}, DeletedBy: {DeletedBy}",
+                                productId, product.DeletedAt, product.DeletedBy);
+                            throw new InvalidOperationException($"Product {productId} is already deleted");
+                        }
+
+                        // Check for cancellation before continuing
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                        // Business Rule: Soft deletion preserves all data and relationships
+                        // Products with active orders CAN be soft deleted because:
+                        // 1. Order history is preserved for auditing and analytics
+                        // 2. Customer order details remain accessible
+                        // 3. Data can be restored if deletion was accidental
+                        // 4. Referential integrity is maintained
+                        _logger.LogDebug("Soft deletion allows product with active orders. ProductId: {ProductId}", productId);
+
+                        _logger.LogDebug("Performing soft delete for product: {ProductId}, Name: {ProductName}",
+                            productId, _productValidationHelper.GetProductNameForLogging(product.Name));
+
+                        // Perform soft delete
+                        var deleteResult = await _unitOfWork.Products.SoftDeleteProductAsync(productId, deletedBy, reason, cancellationToken);
+
+                        // Transaction Handling: Persist changes with proper exception handling
+                        try
+                        {
+                            await _unitOfWork.SaveChangesAsync(cancellationToken);
+                            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+                            return deleteResult; // Success
+                        }
+                        catch (Exception ex) when (_productValidationHelper.IsDatabaseUpdateException(ex))
+                        {
+                            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                            _logger.LogError(ex, "Database error deleting product. ProductId: {ProductId} (failed after {ElapsedMs}ms)",
+                                productId, stopwatch.ElapsedMilliseconds);
+                            throw new InvalidOperationException(ErrorMessages.DatabaseErrorDelete, ex);
+                        }
                     }
-                    catch (Exception ex) when (_productValidationHelper.IsDatabaseUpdateException(ex))
+                    catch
                     {
-                        _logger.LogError(ex, "Database error deleting product. ProductId: {ProductId} (failed after {ElapsedMs}ms)",
-                            productId, stopwatch.ElapsedMilliseconds);
-                        throw new InvalidOperationException(ErrorMessages.DatabaseErrorDelete, ex);
+                        // Rollback transaction on any error
+                        await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                        throw;
                     }
                 }, "DeleteProduct", cancellationToken);
 
@@ -326,8 +388,18 @@ namespace Bazario.Core.Services.Catalog.Product
                 {
                     // Re-fetch to get the product name for logging
                     var deletedProduct = await _unitOfWork.Products.GetProductByIdIncludeDeletedAsync(productId, cancellationToken);
-                    _logger.LogInformation("Successfully soft deleted product. ProductId: {ProductId}, Name: {ProductName}, DeletedBy: {DeletedBy} (completed in {ElapsedMs}ms)",
-                        productId, _productValidationHelper.GetProductNameForLogging(deletedProduct?.Name), deletedBy, stopwatch.ElapsedMilliseconds);
+
+                    if (deletedProduct != null)
+                    {
+                        _logger.LogInformation("Successfully soft deleted product. ProductId: {ProductId}, Name: {ProductName}, DeletedBy: {DeletedBy} (completed in {ElapsedMs}ms)",
+                            productId, _productValidationHelper.GetProductNameForLogging(deletedProduct.Name), deletedBy, stopwatch.ElapsedMilliseconds);
+                    }
+                    else
+                    {
+                        // Edge case: deletion succeeded but product couldn't be retrieved for logging
+                        _logger.LogInformation("Successfully soft deleted product. ProductId: {ProductId}, DeletedBy: {DeletedBy} (completed in {ElapsedMs}ms) - Note: Product could not be retrieved for name logging",
+                            productId, deletedBy, stopwatch.ElapsedMilliseconds);
+                    }
                 }
                 else
                 {
@@ -440,11 +512,20 @@ namespace Bazario.Core.Services.Catalog.Product
                     // Perform hard delete
                     var deleteResult = await _unitOfWork.Products.HardDeleteProductAsync(productId, cancellationToken);
 
+                    // Check if hard delete operation succeeded before persisting
+                    if (!deleteResult)
+                    {
+                        _logger.LogError("Hard delete returned false. ProductId: {ProductId} (failed after {ElapsedMs}ms)",
+                            productId, stopwatch.ElapsedMilliseconds);
+                        throw new InvalidOperationException($"Hard delete failed for product {productId}");
+                    }
+
                     // Transaction Handling: Persist changes with proper exception handling
                     try
                     {
                         await _unitOfWork.SaveChangesAsync(cancellationToken);
                         await _unitOfWork.CommitTransactionAsync(cancellationToken);
+                        return deleteResult;
                     }
                     catch (Exception ex) when (_productValidationHelper.IsDatabaseUpdateException(ex))
                     {
@@ -453,16 +534,6 @@ namespace Bazario.Core.Services.Catalog.Product
                             productId, stopwatch.ElapsedMilliseconds);
                         throw new InvalidOperationException(ErrorMessages.DatabaseErrorDelete, ex);
                     }
-
-                    if (!deleteResult)
-                    {
-                        _logger.LogError("Hard delete returned false. ProductId: {ProductId} (completed in {ElapsedMs}ms)",
-                            productId, stopwatch.ElapsedMilliseconds);
-                        await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                        throw new InvalidOperationException($"Hard delete failed for product {productId}");
-                    }
-
-                    return deleteResult;
                 }
                 catch
                 {
@@ -512,64 +583,80 @@ namespace Bazario.Core.Services.Catalog.Product
                 // This ensures that on each retry, we re-fetch the product with the latest RowVersion
                 var restoredProduct = await _concurrencyHelper.ExecuteWithRetryAsync(async () =>
                 {
-                    // Check if product exists (including soft-deleted)
-                    var product = await _unitOfWork.Products.GetProductByIdIncludeDeletedAsync(productId, cancellationToken);
-                    if (product == null)
-                    {
-                        _logger.LogWarning("Product restoration failed: Product not found. ProductId: {ProductId}", productId);
-                        throw new InvalidOperationException(string.Format(ErrorMessages.ProductNotFound, productId));
-                    }
+                    // Begin explicit transaction to ensure atomicity
+                    await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
-                    if (!product.IsDeleted)
-                    {
-                        _logger.LogWarning("Product restoration failed: Product is not deleted. ProductId: {ProductId}", productId);
-                        throw new InvalidOperationException(string.Format(ErrorMessages.ProductNotDeleted, productId));
-                    }
-
-                    // Check for cancellation before restoring
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    _logger.LogDebug("Restoring product. ProductId: {ProductId}, Name: {ProductName}",
-                        productId, _productValidationHelper.GetProductNameForLogging(product.Name));
-
-                    // Restore the product
-                    var result = await _unitOfWork.Products.RestoreProductAsync(productId, cancellationToken);
-
-                    // Transaction Handling: Persist changes with proper exception handling
                     try
                     {
-                        await _unitOfWork.SaveChangesAsync(cancellationToken);
-                    }
-                    catch (Exception ex) when (_productValidationHelper.IsDatabaseUpdateException(ex))
-                    {
-                        _logger.LogError(ex, "Database error restoring product. ProductId: {ProductId} (failed after {ElapsedMs}ms)",
-                            productId, stopwatch.ElapsedMilliseconds);
-                        throw new InvalidOperationException(ErrorMessages.DatabaseErrorRestore, ex);
-                    }
+                        // Check if product exists (including soft-deleted)
+                        var product = await _unitOfWork.Products.GetProductByIdIncludeDeletedAsync(productId, cancellationToken);
+                        if (product == null)
+                        {
+                            _logger.LogWarning("Product restoration failed: Product not found. ProductId: {ProductId}", productId);
+                            throw new InvalidOperationException(string.Format(ErrorMessages.ProductNotFound, productId));
+                        }
 
-                    if (!result)
-                    {
-                        _logger.LogError("Product restoration failed. ProductId: {ProductId} (failed after {ElapsedMs}ms)",
-                            productId, stopwatch.ElapsedMilliseconds);
-                        throw new InvalidOperationException(string.Format(ErrorMessages.ProductRestorationFailed, productId));
-                    }
+                        if (!product.IsDeleted)
+                        {
+                            _logger.LogWarning("Product restoration failed: Product is not deleted. ProductId: {ProductId}", productId);
+                            throw new InvalidOperationException(string.Format(ErrorMessages.ProductNotDeleted, productId));
+                        }
 
-                    // Get the restored product with proper null check
-                    var restored = await _unitOfWork.Products.GetProductByIdAsync(productId, cancellationToken);
-                    if (restored == null)
-                    {
-                        _logger.LogError("Product restoration succeeded but product could not be retrieved. ProductId: {ProductId} (failed after {ElapsedMs}ms)",
-                            productId, stopwatch.ElapsedMilliseconds);
-                        throw new InvalidOperationException(string.Format(ErrorMessages.ProductRestoredButNotRetrieved, productId));
-                    }
+                        // Check for cancellation before restoring
+                        cancellationToken.ThrowIfCancellationRequested();
 
-                    return restored;
+                        _logger.LogDebug("Restoring product. ProductId: {ProductId}, Name: {ProductName}",
+                            productId, _productValidationHelper.GetProductNameForLogging(product.Name));
+
+                        // Restore the product
+                        var result = await _unitOfWork.Products.RestoreProductAsync(productId, restoredBy, cancellationToken);
+
+                        // Validate restoration succeeded BEFORE committing transaction
+                        if (!result)
+                        {
+                            _logger.LogError("Product restoration failed. ProductId: {ProductId} (failed after {ElapsedMs}ms)",
+                                productId, stopwatch.ElapsedMilliseconds);
+                            throw new InvalidOperationException(string.Format(ErrorMessages.ProductRestorationFailed, productId));
+                        }
+
+                        // Verify the restored product can be retrieved BEFORE committing transaction
+                        var restored = await _unitOfWork.Products.GetProductByIdAsync(productId, cancellationToken);
+                        if (restored == null)
+                        {
+                            _logger.LogError("Product restoration succeeded but product could not be retrieved. ProductId: {ProductId} (failed after {ElapsedMs}ms)",
+                                productId, stopwatch.ElapsedMilliseconds);
+                            throw new InvalidOperationException(string.Format(ErrorMessages.ProductRestoredButNotRetrieved, productId));
+                        }
+
+                        // Transaction Handling: Persist changes with proper exception handling
+                        // All validations passed, now commit the transaction
+                        try
+                        {
+                            await _unitOfWork.SaveChangesAsync(cancellationToken);
+                            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+                            return restored;
+                        }
+                        catch (Exception ex) when (_productValidationHelper.IsDatabaseUpdateException(ex))
+                        {
+                            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                            _logger.LogError(ex, "Database error restoring product. ProductId: {ProductId} (failed after {ElapsedMs}ms)",
+                                productId, stopwatch.ElapsedMilliseconds);
+                            throw new InvalidOperationException(ErrorMessages.DatabaseErrorRestore, ex);
+                        }
+                    }
+                    catch
+                    {
+                        // Rollback transaction on any error
+                        await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                        throw;
+                    }
                 }, "RestoreProduct", cancellationToken);
 
                 _logger.LogInformation("Successfully restored product. ProductId: {ProductId}, RestoredBy: {RestoredBy} (completed in {ElapsedMs}ms)",
                     productId, restoredBy, stopwatch.ElapsedMilliseconds);
 
-                return restoredProduct.ToProductResponse();
+                return restoredProduct.ToProductResponse()
+                    ?? throw new InvalidOperationException("Failed to convert restored product to response");
             }
             catch (Exception ex)
             {
@@ -585,6 +672,40 @@ namespace Bazario.Core.Services.Catalog.Product
 
         // ========== Private Helper Methods ==========
 
+        // Validation constants
+        private const decimal MaxReasonablePrice = 1_000_000m;
+        private const int MaxReasonableStock = 1_000_000;
+
+        /// <summary>
+        /// Validates ProductUpdateRequest for business rules beyond data annotations
+        /// </summary>
+        private void ValidateProductUpdateRequest(ProductUpdateRequest request)
+        {
+            var errors = new List<string>();
+
+            // Validate Category enum value is defined (UpdateRequest has nullable Category)
+            if (request.Category != null && !Enum.IsDefined(typeof(Category), request.Category))
+            {
+                errors.Add($"Invalid category value: {request.Category}");
+            }
+
+            // Perform common validation for both Add and Update requests
+            ValidateCommonProductFields(
+                request.Image,
+                request.Price,
+                request.StockQuantity,
+                request.Name,
+                errors);
+
+            // If there are validation errors, throw aggregate exception
+            if (errors.Count > 0)
+            {
+                var errorMessage = string.Join("; ", errors);
+                _logger.LogWarning("ProductUpdateRequest validation failed: {Errors}", errorMessage);
+                throw new ArgumentException($"Product validation failed: {errorMessage}");
+            }
+        }
+
         /// <summary>
         /// Validates ProductAddRequest for business rules beyond data annotations
         /// </summary>
@@ -592,16 +713,48 @@ namespace Bazario.Core.Services.Catalog.Product
         {
             var errors = new List<string>();
 
-            // Validate Category enum value is defined
+            // Validate Category enum value is defined (AddRequest has non-nullable Category)
             if (!Enum.IsDefined(typeof(Category), request.Category))
             {
                 errors.Add($"Invalid category value: {request.Category}");
             }
 
-            // Validate Image URL format if provided
-            if (!string.IsNullOrWhiteSpace(request.Image))
+            // Perform common validation for both Add and Update requests
+            ValidateCommonProductFields(
+                request.Image,
+                request.Price,
+                request.StockQuantity,
+                request.Name,
+                errors);
+
+            // If there are validation errors, throw aggregate exception
+            if (errors.Count > 0)
             {
-                if (!Uri.TryCreate(request.Image, UriKind.Absolute, out var imageUri))
+                var errorMessage = string.Join("; ", errors);
+                _logger.LogWarning("ProductAddRequest validation failed: {Errors}", errorMessage);
+                throw new ArgumentException($"Product validation failed: {errorMessage}");
+            }
+        }
+
+        /// <summary>
+        /// Validates common product fields shared between Add and Update operations
+        /// </summary>
+        /// <param name="image">Product image URL</param>
+        /// <param name="price">Product price (nullable for update requests)</param>
+        /// <param name="stockQuantity">Product stock quantity (nullable for update requests)</param>
+        /// <param name="name">Product name</param>
+        /// <param name="errors">List to collect validation errors</param>
+        private static void ValidateCommonProductFields(
+            string? image,
+            decimal? price,
+            int? stockQuantity,
+            string? name,
+            List<string> errors)
+        {
+            // Validate Image URL format if provided
+            if (!string.IsNullOrWhiteSpace(image))
+            {
+                if (!Uri.TryCreate(image, UriKind.Absolute, out var imageUri))
                 {
                     errors.Add("Image must be a valid absolute URL");
                 }
@@ -612,31 +765,21 @@ namespace Bazario.Core.Services.Catalog.Product
             }
 
             // Validate reasonable price limits (prevent astronomical prices)
-            const decimal MaxReasonablePrice = 1_000_000m;
-            if (request.Price > MaxReasonablePrice)
+            if (price.HasValue && price.Value > MaxReasonablePrice)
             {
                 errors.Add($"Price cannot exceed {MaxReasonablePrice:C}");
             }
 
             // Validate reasonable stock quantity limits
-            const int MaxReasonableStock = 1_000_000;
-            if (request.StockQuantity > MaxReasonableStock)
+            if (stockQuantity.HasValue && stockQuantity.Value > MaxReasonableStock)
             {
                 errors.Add($"Stock quantity cannot exceed {MaxReasonableStock:N0}");
             }
 
             // Validate Name is not just whitespace
-            if (!string.IsNullOrWhiteSpace(request.Name) && string.IsNullOrWhiteSpace(request.Name.Trim()))
+            if (!string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(name.Trim()))
             {
                 errors.Add("Product name cannot be only whitespace");
-            }
-
-            // If there are validation errors, throw aggregate exception
-            if (errors.Count > 0)
-            {
-                var errorMessage = string.Join("; ", errors);
-                _logger.LogWarning("ProductAddRequest validation failed: {Errors}", errorMessage);
-                throw new ArgumentException($"Product validation failed: {errorMessage}");
             }
         }
 

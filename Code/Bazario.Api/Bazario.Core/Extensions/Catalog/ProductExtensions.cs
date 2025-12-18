@@ -12,8 +12,17 @@ namespace Bazario.Core.Extensions.Catalog
 {
     public static class ProductExtensions
     {
-        public static ProductResponse ToProductResponse(this Product product)
+        /// <summary>
+        /// Converts a Product entity to a ProductResponse DTO
+        /// Defensive: Returns null if product is null (prevents NullReferenceException)
+        /// </summary>
+        public static ProductResponse? ToProductResponse(this Product? product)
         {
+            if (product == null)
+            {
+                return null;
+            }
+
             return new ProductResponse
             {
                 ProductId = product.ProductId,
