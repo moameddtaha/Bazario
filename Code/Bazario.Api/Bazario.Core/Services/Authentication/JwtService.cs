@@ -100,9 +100,9 @@ namespace Bazario.Core.Services.Authentication
 
             var refreshToken = Convert.ToBase64String(randomNumber);
 
-            // In a real application, you would store this refresh token in the database
-            // associated with the user and with an expiration date
-            // For now, we'll just return the generated token
+            // Note: This method only generates the refresh token.
+            // Storage and validation is handled by RefreshTokenService (see RefreshTokenService.cs)
+            // which stores tokens in database with expiration tracking and rotation.
 
             return refreshToken;
         }
