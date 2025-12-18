@@ -77,7 +77,18 @@ namespace Bazario.Core.Services.Authentication
                 
                 if (tokenModel.IsRevoked)
                 {
-                    _logger.LogWarning("Token revoked: {UserId}", tokenModel.UserId);
+                    // SECURITY: Token reuse detected - revoke ALL user tokens
+                    // This follows OWASP best practices for detecting token theft
+                    // If an attacker is using a revoked token, we assume the user's tokens are compromised
+                    _logger.LogWarning("SECURITY ALERT: Revoked token reuse detected for UserId: {UserId}. Revoking all user tokens to prevent token theft.", tokenModel.UserId);
+
+                    // Revoke all tokens for this user (token theft suspected)
+                    await RevokeAllUserTokensAsync(
+                        tokenModel.UserId,
+                        "System",
+                        "Token reuse detected - possible token theft"
+                    );
+
                     return null;
                 }
                 
@@ -127,12 +138,40 @@ namespace Bazario.Core.Services.Authentication
                 // Generate new tokens
                 var roles = await _roleManagementService.GetUserRolesAsync(user);
                 var (newAccessToken, newRefreshToken, accessTokenExpiration, refreshTokenExpiration) = GenerateTokens(user, roles);
-                
-                // Store the new refresh token
-                await StoreRefreshTokenAsync(user.Id, newRefreshToken, accessTokenExpiration, refreshTokenExpiration);
 
-                // Revoke the old refresh token
-                await RevokeRefreshTokenAsync(refreshToken, "System", "Replaced by new token");
+                // BEGIN TRANSACTION - Critical section to prevent race conditions
+                // Must revoke old token BEFORE storing new token to prevent replay attacks
+                await _unitOfWork.BeginTransactionAsync();
+                try
+                {
+                    // 1. Revoke old token FIRST (prevents replay attacks during token rotation)
+                    var revokeResult = await RevokeRefreshTokenAsync(refreshToken, "System", "Replaced by new token");
+                    if (!revokeResult)
+                    {
+                        // Token was already revoked or doesn't exist - possible replay attack
+                        await _unitOfWork.RollbackTransactionAsync();
+                        _logger.LogWarning("SECURITY: Token refresh failed - token already revoked. Possible replay attack. UserId: {UserId}", userId.Value);
+                        return AuthResponse.Failure("Invalid refresh token.");
+                    }
+
+                    // 2. Store new token (only after old token is revoked)
+                    var storeResult = await StoreRefreshTokenAsync(user.Id, newRefreshToken, accessTokenExpiration, refreshTokenExpiration);
+                    if (!storeResult)
+                    {
+                        await _unitOfWork.RollbackTransactionAsync();
+                        _logger.LogError("Failed to store new refresh token: {UserId}", userId.Value);
+                        return AuthResponse.Failure("Failed to store new refresh token.");
+                    }
+
+                    // Commit transaction - both revocation and storage succeeded
+                    await _unitOfWork.CommitTransactionAsync();
+                }
+                catch (Exception ex)
+                {
+                    await _unitOfWork.RollbackTransactionAsync();
+                    _logger.LogError(ex, "Transaction failed during token refresh: {UserId}", userId.Value);
+                    throw;
+                }
 
                 // Create user response based on role
                 object userResponse;

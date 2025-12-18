@@ -241,6 +241,11 @@ namespace Bazario.Api.StartupExtensions
                 options.AddPolicy("Seller", policy => policy.RequireRole("Seller"));
             });
 
+            // ========================================
+            // BACKGROUND SERVICES
+            // ========================================
+            services.AddHostedService<Bazario.Infrastructure.BackgroundServices.RefreshTokenCleanupService>();
+
             services.AddControllers();
             // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             services.AddEndpointsApiExplorer();
