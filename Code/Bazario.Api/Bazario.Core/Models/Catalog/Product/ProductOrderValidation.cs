@@ -8,7 +8,11 @@ namespace Bazario.Core.Models.Catalog.Product
     /// </summary>
     public class ProductOrderValidation
     {
-        public bool IsValid { get; set; }
+        /// <summary>
+        /// Indicates whether the product passed all validation checks.
+        /// Computed from ValidationErrors collection - true when no errors exist.
+        /// </summary>
+        public bool IsValid => ValidationErrors.Count == 0;
         public Guid ProductId { get; set; }
         public string? ProductName { get; set; }
         public Guid StoreId { get; set; }

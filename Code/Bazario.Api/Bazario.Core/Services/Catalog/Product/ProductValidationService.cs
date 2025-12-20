@@ -29,6 +29,7 @@ namespace Bazario.Core.Services.Catalog.Product
 
         // Default configuration values
         private const int DEFAULT_RESERVATION_LOOKBACK_DAYS = 7; // Based on typical payment processing window
+        private const int MAX_VALIDATION_ERRORS = 6; // Maximum possible validation errors in ValidateForOrderAsync
 
         // Configuration keys
         private static class ConfigurationKeys
@@ -82,7 +83,7 @@ namespace Bazario.Core.Services.Catalog.Product
             _maximumProductPrice = _configHelper.GetValue(ConfigurationKeys.MaximumProductPrice, 1_000_000m);
             _maximumOrderQuantity = _configHelper.GetValue(ConfigurationKeys.MaximumOrderQuantity, 10_000);
             _reservationLookbackDays = _configHelper.GetValue(ConfigurationKeys.ReservationLookbackDays, DEFAULT_RESERVATION_LOOKBACK_DAYS);
-            _maximumOrderTotal = _configHelper.GetValue(ConfigurationKeys.MaximumOrderTotal, decimal.MaxValue / 2);
+            _maximumOrderTotal = _configHelper.GetValue(ConfigurationKeys.MaximumOrderTotal, 10_000_000m);
         }
 
         public async Task<ProductOrderValidation> ValidateForOrderAsync(Guid productId, int quantity, CancellationToken cancellationToken = default)
@@ -115,7 +116,6 @@ namespace Bazario.Core.Services.Catalog.Product
                     _logger.LogDebug("Product validation failed: Product not found or deleted. ProductId: {ProductId}", productId);
                     return new ProductOrderValidation
                     {
-                        IsValid = false,
                         ProductId = productId,
                         RequestedQuantity = quantity,
                         AvailableQuantity = 0,
@@ -135,7 +135,6 @@ namespace Bazario.Core.Services.Catalog.Product
                         productId, product.StoreId);
                     return new ProductOrderValidation
                     {
-                        IsValid = false,
                         ProductId = productId,
                         RequestedQuantity = quantity,
                         AvailableQuantity = product.StockQuantity,
@@ -144,7 +143,7 @@ namespace Bazario.Core.Services.Catalog.Product
                     };
                 }
 
-                var validationErrors = new List<string>(capacity: 5); // Pre-allocate for typical validation error count
+                var validationErrors = new List<string>(capacity: MAX_VALIDATION_ERRORS); // Pre-allocate for maximum possible validation errors
 
                 // Check for cancellation before starting validation logic
                 cancellationToken.ThrowIfCancellationRequested();
@@ -164,15 +163,23 @@ namespace Bazario.Core.Services.Catalog.Product
                 }
 
                 // Business Rule 3: Stock availability check
-                // WARNING: This validation is NOT atomic and is susceptible to race conditions
-                // Multiple concurrent requests can all pass this check simultaneously, leading to overselling
+                // =====================================================================================
+                // ARCHITECTURAL DECISION: Race Condition Documented and Accepted for Pre-Validation
+                // =====================================================================================
+                // WARNING: This validation is NOT atomic and is susceptible to race conditions.
+                // Multiple concurrent requests can all pass this check simultaneously, leading to overselling.
                 //
-                // For production use, implement one of these solutions:
+                // DESIGN INTENT: This service is intentionally designed for PRE-VALIDATION ONLY.
+                // Actual stock reservation and concurrency control MUST be handled by the order processing layer.
+                //
+                // Recommended implementation in order processing:
                 // 1. Use IInventoryManagementService.CreateStockReservationAsync() for pessimistic locking
-                // 2. Add RowVersion column to Product entity for optimistic concurrency control
+                // 2. Product entity already has RowVersion - use optimistic concurrency control in order creation
                 // 3. Use database row-level locking: WITH (UPDLOCK, ROWLOCK) in SQL queries
                 //
-                // Current implementation is suitable for PRE-VALIDATION only, not final stock commitment
+                // This service should NEVER be used as the final authority for stock commitment.
+                // It serves as an early check to improve UX by catching obvious stock issues before order submission.
+                // =====================================================================================
                 if (product.StockQuantity < quantity)
                 {
                     validationErrors.Add(string.Format(ErrorMessages.InsufficientStock, product.StockQuantity, quantity));
@@ -209,9 +216,8 @@ namespace Bazario.Core.Services.Catalog.Product
 
                 var validation = new ProductOrderValidation
                 {
-                    IsValid = validationErrors.Count == 0,
                     ProductId = productId,
-                    ProductName = product.Name!, // Already validated as non-null/whitespace at line 159
+                    ProductName = product.Name ?? "Unknown Product", // Defensive - validation adds error but doesn't prevent assignment
                     StoreId = product.StoreId,
                     StoreName = store.Name ?? "Unknown", // Store name not validated, keep defensive coalescing
                     RequestedQuantity = quantity,
@@ -225,7 +231,7 @@ namespace Bazario.Core.Services.Catalog.Product
                 };
 
                 stopwatch.Stop();
-                _logger.LogInformation(
+                _logger.LogDebug(
                     "Product validation completed in {ElapsedMs}ms: ProductId: {ProductId}, IsValid: {IsValid}, ErrorCount: {ErrorCount}",
                     stopwatch.ElapsedMilliseconds, productId, validation.IsValid, validationErrors.Count);
 
@@ -238,6 +244,17 @@ namespace Bazario.Core.Services.Catalog.Product
             }
         }
 
+        /// <summary>
+        /// Determines whether a product can be safely deleted without violating referential integrity.
+        /// Checks for active orders, pending reservations, and reviews.
+        /// </summary>
+        /// <param name="productId">The ID of the product to check</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>
+        /// True if the product can be safely deleted (no active orders, no pending reservations).
+        /// False if deletion would violate business rules or on error (fail-safe to prevent deletion).
+        /// Note: Having reviews does not prevent deletion but logs a warning suggesting soft delete.
+        /// </returns>
         public async Task<bool> CanProductBeSafelyDeletedAsync(Guid productId, CancellationToken cancellationToken = default)
         {
             if (productId == Guid.Empty)
@@ -281,6 +298,16 @@ namespace Bazario.Core.Services.Catalog.Product
             }
         }
 
+        /// <summary>
+        /// Checks whether a product has any active orders (Pending, Processing, or Shipped status).
+        /// </summary>
+        /// <param name="productId">The ID of the product to check</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>
+        /// True if the product has active orders.
+        /// False if no active orders exist.
+        /// On error: Returns true (fail-safe to prevent deletion).
+        /// </returns>
         public async Task<bool> HasProductActiveOrdersAsync(Guid productId, CancellationToken cancellationToken = default)
         {
             if (productId == Guid.Empty)
@@ -292,6 +319,9 @@ namespace Bazario.Core.Services.Catalog.Product
             try
             {
                 _logger.LogDebug("Checking active orders for product {ProductId}", productId);
+
+                // Check for cancellation before database call
+                cancellationToken.ThrowIfCancellationRequested();
 
                 // Use optimized EXISTS query - no data loaded into memory, just returns boolean
                 var hasActiveOrders = await _unitOfWork.Orders.HasProductInOrdersWithStatusAsync(
@@ -317,6 +347,17 @@ namespace Bazario.Core.Services.Catalog.Product
             }
         }
 
+        /// <summary>
+        /// Checks whether a product has pending reservations (Pending or Processing orders within lookback period).
+        /// Uses configurable lookback period (default: 7 days) to account for payment processing windows.
+        /// </summary>
+        /// <param name="productId">The ID of the product to check</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>
+        /// True if the product has recent pending/processing orders.
+        /// False if no pending reservations exist.
+        /// On error: Returns true (fail-safe to prevent deletion).
+        /// </returns>
         public async Task<bool> HasProductPendingReservationsAsync(Guid productId, CancellationToken cancellationToken = default)
         {
             if (productId == Guid.Empty)
@@ -328,6 +369,9 @@ namespace Bazario.Core.Services.Catalog.Product
             try
             {
                 _logger.LogDebug("Checking pending reservations for product {ProductId}", productId);
+
+                // Check for cancellation before database call
+                cancellationToken.ThrowIfCancellationRequested();
 
                 var lookbackDate = DateTime.UtcNow.AddDays(-_reservationLookbackDays);
 
@@ -356,6 +400,17 @@ namespace Bazario.Core.Services.Catalog.Product
             }
         }
 
+        /// <summary>
+        /// Checks whether a product has any customer reviews.
+        /// Note: This is informational only and does not block deletion.
+        /// </summary>
+        /// <param name="productId">The ID of the product to check</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>
+        /// True if the product has reviews.
+        /// False if no reviews exist.
+        /// On error: Returns false (fail-safe to allow operation to proceed, as reviews are not critical for deletion safety).
+        /// </returns>
         public async Task<bool> HasProductReviewsAsync(Guid productId, CancellationToken cancellationToken = default)
         {
             if (productId == Guid.Empty)
@@ -367,6 +422,9 @@ namespace Bazario.Core.Services.Catalog.Product
             try
             {
                 _logger.LogDebug("Checking reviews for product {ProductId}", productId);
+
+                // Check for cancellation before database call
+                cancellationToken.ThrowIfCancellationRequested();
 
                 // Get the actual review count from the Reviews repository
                 var reviewCount = await _unitOfWork.Reviews.GetReviewCountByProductIdAsync(productId, cancellationToken);
