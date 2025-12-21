@@ -1121,5 +1121,144 @@ namespace Bazario.Infrastructure.Repositories.Order
                 throw new InvalidOperationException($"Failed to check product in orders with date: {ex.Message}", ex);
             }
         }
+
+        // ========== BULK ANALYTICS METHODS (Performance Optimized) ==========
+
+        public async Task<List<OrderDiscountStats>> GetOrderStatsByDiscountCodesAsync(
+            List<string> discountCodes,
+            CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Getting order stats for {Count} discount codes in bulk", discountCodes.Count);
+
+            try
+            {
+                if (discountCodes == null || discountCodes.Count == 0)
+                {
+                    _logger.LogWarning("Discount codes list is null or empty");
+                    return new List<OrderDiscountStats>();
+                }
+
+                // Single database query with projection
+                // Uses projection to select only needed fields - no full Order entities loaded
+                // Note: Must load data first with ToListAsync, then do client-side string processing
+                var ordersWithDiscounts = await _context.Orders
+                    .Where(o => o.AppliedDiscountCodes != null &&
+                                discountCodes.Any(code => o.AppliedDiscountCodes.Contains(code)))
+                    .Select(o => new
+                    {
+                        o.AppliedDiscountCodes,
+                        o.TotalAmount,
+                        o.DiscountAmount,
+                        o.Date
+                    })
+                    .AsNoTracking()
+                    .ToListAsync(cancellationToken);
+
+                // Client-side processing for complex string operations
+                var stats = ordersWithDiscounts
+                    .SelectMany(order =>
+                        // Extract individual codes from comma-separated string
+                        order.AppliedDiscountCodes!.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                            .Where(code => discountCodes.Contains(code.Trim(), StringComparer.OrdinalIgnoreCase))
+                            .Select(code => new
+                            {
+                                Code = code.Trim().ToUpper(),
+                                order.TotalAmount,
+                                order.DiscountAmount,
+                                order.Date
+                            }))
+                    .GroupBy(x => x.Code)
+                    .Select(g => new OrderDiscountStats
+                    {
+                        DiscountCode = g.Key,
+                        OrderCount = g.Count(),
+                        TotalDiscountAmount = g.Sum(x => x.DiscountAmount),
+                        AverageDiscountAmount = g.Average(x => x.DiscountAmount),
+                        TotalRevenue = g.Sum(x => x.TotalAmount),
+                        AverageOrderValue = g.Average(x => x.TotalAmount),
+                        FirstUsed = g.Min(x => x.Date),
+                        LastUsed = g.Max(x => x.Date)
+                    })
+                    .ToList();
+
+                _logger.LogDebug("Retrieved stats for {StatCount} discount codes", stats.Count);
+                return stats;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get order stats for discount codes in bulk");
+                throw new InvalidOperationException($"Failed to get bulk order discount stats: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<List<OrderDiscountStats>> GetOrderStatsByDiscountCodesAndDateRangeAsync(
+            List<string> discountCodes,
+            DateTime startDate,
+            DateTime endDate,
+            CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Getting order stats for {Count} discount codes between {StartDate} and {EndDate}",
+                discountCodes.Count, startDate, endDate);
+
+            try
+            {
+                if (discountCodes == null || discountCodes.Count == 0)
+                {
+                    _logger.LogWarning("Discount codes list is null or empty");
+                    return new List<OrderDiscountStats>();
+                }
+
+                // Single database query with GROUP BY aggregation and date filtering
+                // Uses projection to select only needed fields - no full Order entities loaded
+                // Note: Must load data first with ToListAsync, then do client-side string processing
+                var ordersInRange = await _context.Orders
+                    .Where(o => o.Date >= startDate && o.Date <= endDate &&
+                                o.AppliedDiscountCodes != null &&
+                                discountCodes.Any(code => o.AppliedDiscountCodes.Contains(code)))
+                    .Select(o => new
+                    {
+                        o.AppliedDiscountCodes,
+                        o.TotalAmount,
+                        o.DiscountAmount,
+                        o.Date
+                    })
+                    .ToListAsync(cancellationToken);
+
+                // Client-side processing for complex string operations
+                var stats = ordersInRange
+                    .SelectMany(order =>
+                        // Extract individual codes from comma-separated string
+                        order.AppliedDiscountCodes!.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                            .Where(code => discountCodes.Contains(code.Trim(), StringComparer.OrdinalIgnoreCase))
+                            .Select(code => new
+                            {
+                                Code = code.Trim().ToUpper(),
+                                order.TotalAmount,
+                                order.DiscountAmount,
+                                order.Date
+                            }))
+                    .GroupBy(x => x.Code)
+                    .Select(g => new OrderDiscountStats
+                    {
+                        DiscountCode = g.Key,
+                        OrderCount = g.Count(),
+                        TotalDiscountAmount = g.Sum(x => x.DiscountAmount),
+                        AverageDiscountAmount = g.Average(x => x.DiscountAmount),
+                        TotalRevenue = g.Sum(x => x.TotalAmount),
+                        AverageOrderValue = g.Average(x => x.TotalAmount),
+                        FirstUsed = g.Min(x => x.Date),
+                        LastUsed = g.Max(x => x.Date)
+                    })
+                    .ToList();
+
+                _logger.LogDebug("Retrieved stats for {StatCount} discount codes in date range", stats.Count);
+                return stats;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get order stats for discount codes with date range");
+                throw new InvalidOperationException($"Failed to get bulk order discount stats with date range: {ex.Message}", ex);
+            }
+        }
     }
 }

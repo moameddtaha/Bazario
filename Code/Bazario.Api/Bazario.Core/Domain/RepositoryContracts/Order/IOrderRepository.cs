@@ -122,5 +122,35 @@ namespace Bazario.Core.Domain.RepositoryContracts.Order
         /// <param name="cancellationToken">Cancellation token</param>
         /// <returns>True if product exists in orders matching criteria, false otherwise</returns>
         Task<bool> HasProductInOrdersWithStatusAndDateAsync(Guid productId, string[] statuses, DateTime startDate, CancellationToken cancellationToken = default);
+
+        // ========== BULK ANALYTICS METHODS (Performance Optimized) ==========
+
+        /// <summary>
+        /// Gets aggregated order statistics for multiple discount codes in a single query.
+        /// Uses database-level GROUP BY aggregation to avoid N+1 query problems.
+        /// Returns only aggregated data - no full Order entities loaded.
+        /// </summary>
+        /// <param name="discountCodes">List of discount codes to get statistics for</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>List of aggregated statistics per discount code</returns>
+        Task<List<OrderDiscountStats>> GetOrderStatsByDiscountCodesAsync(
+            List<string> discountCodes,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets aggregated order statistics for multiple discount codes within a date range.
+        /// Uses database-level GROUP BY aggregation with date filtering.
+        /// Returns only aggregated data - no full Order entities loaded.
+        /// </summary>
+        /// <param name="discountCodes">List of discount codes to get statistics for</param>
+        /// <param name="startDate">Start date for filtering orders</param>
+        /// <param name="endDate">End date for filtering orders</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>List of aggregated statistics per discount code</returns>
+        Task<List<OrderDiscountStats>> GetOrderStatsByDiscountCodesAndDateRangeAsync(
+            List<string> discountCodes,
+            DateTime startDate,
+            DateTime endDate,
+            CancellationToken cancellationToken = default);
     }
 }

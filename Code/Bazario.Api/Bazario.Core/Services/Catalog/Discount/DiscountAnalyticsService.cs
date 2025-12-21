@@ -88,13 +88,13 @@ namespace Bazario.Core.Services.Catalog.Discount
 
         /// <summary>
         /// Gets usage statistics for all valid discounts within a date range.
+        /// Uses bulk database aggregation to avoid N+1 query problems.
         /// </summary>
         /// <param name="startDate">Start date for analysis (defaults to 12 months ago)</param>
         /// <param name="endDate">End date for analysis (defaults to current date)</param>
         /// <param name="cancellationToken">Cancellation token</param>
         /// <returns>
         /// List of usage statistics ordered by total revenue (descending).
-        /// Note: This method has N+1 query performance issues with large discount counts.
         /// </returns>
         public async Task<List<DiscountUsageStats>> GetAllDiscountUsageStatsAsync(
             DateTime? startDate = null,
@@ -107,18 +107,41 @@ namespace Bazario.Core.Services.Catalog.Discount
             endDate ??= DateTime.UtcNow;
 
             var discounts = await _discountRepository.GetValidDiscountsAsync(startDate.Value, endDate.Value, cancellationToken);
-            var statsList = new List<DiscountUsageStats>();
 
+            if (discounts == null || discounts.Count == 0)
+            {
+                return new List<DiscountUsageStats>();
+            }
+
+            // PERFORMANCE FIX: Use bulk repository method instead of N+1 queries
+            // Single query to get all order statistics grouped by discount code
+            var discountCodes = discounts.Select(d => d.Code).ToList();
+            var orderStats = await _orderRepository.GetOrderStatsByDiscountCodesAsync(discountCodes, cancellationToken);
+
+            // Build stats in memory (no additional database queries)
+            var statsList = new List<DiscountUsageStats>();
             foreach (var discount in discounts)
             {
-                // Check for cancellation before expensive operation
-                cancellationToken.ThrowIfCancellationRequested();
+                var orderStat = orderStats.FirstOrDefault(s => s.DiscountCode.Equals(discount.Code, StringComparison.OrdinalIgnoreCase));
 
-                var stats = await GetDiscountUsageStatsAsync(discount.Code, cancellationToken);
-                if (stats != null)
-                {
-                    statsList.Add(stats);
-                }
+                var stats = orderStat != null && orderStat.OrderCount > 0
+                    ? new DiscountUsageStats
+                    {
+                        DiscountCode = discount.Code,
+                        UsageCount = orderStat.OrderCount,
+                        TotalDiscountAmount = orderStat.TotalDiscountAmount,
+                        AverageDiscountAmount = orderStat.AverageDiscountAmount,
+                        TotalRevenue = orderStat.TotalRevenue,
+                        AverageOrderValue = orderStat.AverageOrderValue,
+                        FirstUsed = orderStat.FirstUsed,
+                        LastUsed = orderStat.LastUsed,
+                        IsActive = discount.IsActive,
+                        StoreId = discount.ApplicableStoreId,
+                        StoreName = discount.Store?.Name
+                    }
+                    : CreateEmptyUsageStats(discount.Code, discount);
+
+                statsList.Add(stats);
             }
 
             return statsList.OrderByDescending(s => s.TotalRevenue).ToList();
@@ -188,6 +211,7 @@ namespace Bazario.Core.Services.Catalog.Discount
 
         /// <summary>
         /// Gets performance metrics for all valid discounts within a date range.
+        /// PERFORMANCE OPTIMIZED: Uses bulk repository method to avoid N+1 query problems.
         /// </summary>
         /// <param name="startDate">Start date for analysis (defaults to 12 months ago)</param>
         /// <param name="endDate">End date for analysis (defaults to current date)</param>
@@ -195,7 +219,6 @@ namespace Bazario.Core.Services.Catalog.Discount
         /// <returns>
         /// List of performance metrics ordered by total revenue (descending).
         /// Only includes discounts with at least one order in the date range.
-        /// Note: This method has N+1 query performance issues with large discount counts.
         /// </returns>
         public async Task<List<DiscountPerformance>> GetAllDiscountPerformanceAsync(
             DateTime? startDate = null,
@@ -208,16 +231,44 @@ namespace Bazario.Core.Services.Catalog.Discount
             endDate ??= DateTime.UtcNow;
 
             var discounts = await _discountRepository.GetValidDiscountsAsync(startDate.Value, endDate.Value, cancellationToken);
-            var performanceList = new List<DiscountPerformance>();
 
+            // PERFORMANCE FIX: Use bulk repository method instead of N+1 queries
+            // Single query to get all order statistics grouped by discount code with date filtering
+            var discountCodes = discounts.Select(d => d.Code).ToList();
+            var orderStats = await _orderRepository.GetOrderStatsByDiscountCodesAndDateRangeAsync(
+                discountCodes, startDate.Value, endDate.Value, cancellationToken);
+
+            // Get total order count for conversion rate calculation (single query)
+            var totalOrderCount = await _orderRepository.GetOrdersCountByDateRangeAsync(
+                startDate.Value, endDate.Value, cancellationToken);
+
+            // Build performance list in memory (no additional database queries)
+            var performanceList = new List<DiscountPerformance>();
             foreach (var discount in discounts)
             {
-                // Check for cancellation before expensive operation
-                cancellationToken.ThrowIfCancellationRequested();
+                var orderStat = orderStats.FirstOrDefault(s => s.DiscountCode.Equals(discount.Code, StringComparison.OrdinalIgnoreCase));
 
-                var performance = await GetDiscountPerformanceAsync(discount.Code, startDate, endDate, cancellationToken);
-                if (performance != null && performance.OrderCount > 0)
+                // Only include discounts that have orders in the date range
+                if (orderStat != null && orderStat.OrderCount > 0)
                 {
+                    var performance = new DiscountPerformance
+                    {
+                        DiscountCode = discount.Code,
+                        DiscountType = discount.Type,
+                        DiscountValue = discount.Value,
+                        OrderCount = orderStat.OrderCount,
+                        TotalRevenue = orderStat.TotalRevenue,
+                        TotalDiscountGiven = orderStat.TotalDiscountAmount,
+                        NetRevenue = orderStat.TotalRevenue - orderStat.TotalDiscountAmount,
+                        ConversionRate = totalOrderCount > 0 ? (decimal)orderStat.OrderCount / totalOrderCount * 100 : 0,
+                        AverageOrderValue = orderStat.AverageOrderValue,
+                        AverageDiscountPerOrder = orderStat.AverageDiscountAmount,
+                        StartDate = startDate.Value,
+                        EndDate = endDate.Value,
+                        StoreId = discount.ApplicableStoreId,
+                        StoreName = discount.Store?.Name
+                    };
+
                     performanceList.Add(performance);
                 }
             }
@@ -320,6 +371,7 @@ namespace Bazario.Core.Services.Catalog.Discount
 
         /// <summary>
         /// Gets usage statistics for all discounts associated with a specific store.
+        /// PERFORMANCE OPTIMIZED: Uses bulk repository method to avoid N+1 query problems.
         /// </summary>
         /// <param name="storeId">The ID of the store to analyze</param>
         /// <param name="startDate">Start date for analysis (defaults to 12 months ago)</param>
@@ -327,7 +379,6 @@ namespace Bazario.Core.Services.Catalog.Discount
         /// <param name="cancellationToken">Cancellation token</param>
         /// <returns>
         /// List of usage statistics for store discounts ordered by total revenue (descending).
-        /// Note: This method has N+1 query performance issues with large discount counts.
         /// </returns>
         public async Task<List<DiscountUsageStats>> GetStoreDiscountUsageStatsAsync(
             Guid storeId,
@@ -341,18 +392,37 @@ namespace Bazario.Core.Services.Catalog.Discount
             endDate ??= DateTime.UtcNow;
 
             var storeDiscounts = await _discountRepository.GetDiscountsByStoreIdAsync(storeId, cancellationToken);
-            var statsList = new List<DiscountUsageStats>();
 
+            // PERFORMANCE FIX: Use bulk repository method instead of N+1 queries
+            // Single query to get all order statistics grouped by discount code with date filtering
+            var discountCodes = storeDiscounts.Select(d => d.Code).ToList();
+            var orderStats = await _orderRepository.GetOrderStatsByDiscountCodesAndDateRangeAsync(
+                discountCodes, startDate.Value, endDate.Value, cancellationToken);
+
+            // Build stats list in memory (no additional database queries)
+            var statsList = new List<DiscountUsageStats>();
             foreach (var discount in storeDiscounts)
             {
-                // Check for cancellation before expensive operation
-                cancellationToken.ThrowIfCancellationRequested();
+                var orderStat = orderStats.FirstOrDefault(s => s.DiscountCode.Equals(discount.Code, StringComparison.OrdinalIgnoreCase));
 
-                var stats = await GetDiscountUsageStatsAsync(discount.Code, cancellationToken);
-                if (stats != null)
-                {
-                    statsList.Add(stats);
-                }
+                var stats = orderStat != null && orderStat.OrderCount > 0
+                    ? new DiscountUsageStats
+                    {
+                        DiscountCode = discount.Code,
+                        UsageCount = orderStat.OrderCount,
+                        TotalDiscountAmount = orderStat.TotalDiscountAmount,
+                        AverageDiscountAmount = orderStat.AverageDiscountAmount,
+                        TotalRevenue = orderStat.TotalRevenue,
+                        AverageOrderValue = orderStat.AverageOrderValue,
+                        FirstUsed = orderStat.FirstUsed,
+                        LastUsed = orderStat.LastUsed,
+                        IsActive = discount.IsActive,
+                        StoreId = discount.ApplicableStoreId,
+                        StoreName = discount.Store?.Name
+                    }
+                    : CreateEmptyUsageStats(discount.Code, discount);
+
+                statsList.Add(stats);
             }
 
             return statsList.OrderByDescending(s => s.TotalRevenue).ToList();
