@@ -2,12 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Bazario.Core.DTO.Catalog.Discount;
 
 namespace Bazario.Core.ServiceContracts.Catalog.Discount
 {
     /// <summary>
     /// Service contract for discount validation business rules.
     /// Handles validation of discount codes for order application.
+    /// Returns DTOs instead of entities to maintain service layer abstraction.
     /// </summary>
     public interface IDiscountValidationService
     {
@@ -18,8 +20,8 @@ namespace Bazario.Core.ServiceContracts.Catalog.Discount
         /// <param name="orderSubtotal">Order subtotal amount</param>
         /// <param name="storeIds">Store IDs in the order</param>
         /// <param name="cancellationToken">Cancellation token</param>
-        /// <returns>Validation result with discount details if valid</returns>
-        Task<(bool IsValid, Domain.Entities.Catalog.Discount? Discount, string? ErrorMessage)> ValidateDiscountCodeAsync(
+        /// <returns>Validation result with discount response if valid</returns>
+        Task<(bool IsValid, DiscountResponse? Discount, string? ErrorMessage)> ValidateDiscountCodeAsync(
             string code,
             decimal orderSubtotal,
             List<Guid> storeIds,
@@ -32,8 +34,8 @@ namespace Bazario.Core.ServiceContracts.Catalog.Discount
         /// <param name="orderSubtotal">Order subtotal amount</param>
         /// <param name="storeIds">Store IDs in the order</param>
         /// <param name="cancellationToken">Cancellation token</param>
-        /// <returns>List of valid discounts and list of error messages for invalid codes</returns>
-        Task<(List<Domain.Entities.Catalog.Discount> ValidDiscounts, List<string> ErrorMessages)> ValidateMultipleDiscountCodesAsync(
+        /// <returns>List of valid discount responses and list of error messages for invalid codes</returns>
+        Task<(List<DiscountResponse> ValidDiscounts, List<string> ErrorMessages)> ValidateMultipleDiscountCodesAsync(
             List<string> codes,
             decimal orderSubtotal,
             List<Guid> storeIds,

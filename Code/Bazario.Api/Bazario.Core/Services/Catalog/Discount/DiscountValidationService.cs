@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.RepositoryContracts.Catalog;
+using Bazario.Core.DTO.Catalog.Discount;
 using Bazario.Core.Enums.Catalog;
 using Bazario.Core.Helpers.Catalog;
 using Bazario.Core.ServiceContracts.Catalog.Discount;
@@ -13,6 +14,7 @@ namespace Bazario.Core.Services.Catalog.Discount
 {
     /// <summary>
     /// Service for discount validation business rules.
+    /// Returns DTOs instead of entities to maintain service layer abstraction.
     /// </summary>
     public class DiscountValidationService : IDiscountValidationService
     {
@@ -30,7 +32,7 @@ namespace Bazario.Core.Services.Catalog.Discount
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public async Task<(bool IsValid, Domain.Entities.Catalog.Discount? Discount, string? ErrorMessage)> ValidateDiscountCodeAsync(
+        public async Task<(bool IsValid, DiscountResponse? Discount, string? ErrorMessage)> ValidateDiscountCodeAsync(
             string code,
             decimal orderSubtotal,
             List<Guid> storeIds,
@@ -43,16 +45,17 @@ namespace Bazario.Core.Services.Catalog.Discount
             if (!result.IsValid)
             {
                 _logger.LogWarning("Discount validation failed for code: {Code}. Reason: {ErrorMessage}", code, result.ErrorMessage);
-            }
-            else
-            {
-                _logger.LogDebug("Discount code validated successfully: {Code}", code);
+                return (false, null, result.ErrorMessage);
             }
 
-            return result;
+            _logger.LogDebug("Discount code validated successfully: {Code}", code);
+
+            // Convert entity to DTO before returning
+            var discountResponse = result.Discount != null ? DiscountResponse.FromDiscount(result.Discount) : null;
+            return (result.IsValid, discountResponse, result.ErrorMessage);
         }
 
-        public async Task<(List<Domain.Entities.Catalog.Discount> ValidDiscounts, List<string> ErrorMessages)> ValidateMultipleDiscountCodesAsync(
+        public async Task<(List<DiscountResponse> ValidDiscounts, List<string> ErrorMessages)> ValidateMultipleDiscountCodesAsync(
             List<string> codes,
             decimal orderSubtotal,
             List<Guid> storeIds,
@@ -60,7 +63,7 @@ namespace Bazario.Core.Services.Catalog.Discount
         {
             _logger.LogDebug("Validating {Count} discount codes for subtotal: {Subtotal}", codes.Count, orderSubtotal);
 
-            var validDiscounts = new List<Domain.Entities.Catalog.Discount>();
+            var validDiscounts = new List<DiscountResponse>();
             var errorMessages = new List<string>();
 
             foreach (var code in codes)

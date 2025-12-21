@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Bazario.Core.DTO.Catalog.Discount;
 using Bazario.Core.Enums.Catalog;
 using Bazario.Core.Models.Catalog.Discount;
 using Bazario.Core.ServiceContracts.Catalog.Discount;
@@ -11,6 +12,7 @@ namespace Bazario.Core.Services.Catalog.Discount
     /// <summary>
     /// Composite service for all discount-related operations.
     /// Delegates to specialized services for management, validation, and analytics.
+    /// Uses DTOs for request/response to provide validation, security, and versioning.
     /// </summary>
     public class DiscountService : IDiscountService
     {
@@ -28,42 +30,42 @@ namespace Bazario.Core.Services.Catalog.Discount
             _analyticsService = analyticsService ?? throw new ArgumentNullException(nameof(analyticsService));
         }
 
-        // IDiscountManagementService methods
-        public Task<Domain.Entities.Catalog.Discount> CreateDiscountAsync(string code, DiscountType type, decimal value, DateTime validFrom, DateTime validTo, decimal minimumOrderAmount, Guid? applicableStoreId, string? description, Guid createdBy, CancellationToken cancellationToken = default)
-            => _managementService.CreateDiscountAsync(code, type, value, validFrom, validTo, minimumOrderAmount, applicableStoreId, description, createdBy, cancellationToken);
+        // IDiscountManagementService methods - now using DTOs
+        public Task<DiscountResponse> CreateDiscountAsync(DiscountAddRequest request, CancellationToken cancellationToken = default)
+            => _managementService.CreateDiscountAsync(request, cancellationToken);
 
-        public Task<Domain.Entities.Catalog.Discount> UpdateDiscountAsync(Guid discountId, string? code, DiscountType? type, decimal? value, DateTime? validFrom, DateTime? validTo, decimal? minimumOrderAmount, string? description, Guid updatedBy, CancellationToken cancellationToken = default)
-            => _managementService.UpdateDiscountAsync(discountId, code, type, value, validFrom, validTo, minimumOrderAmount, description, updatedBy, cancellationToken);
+        public Task<DiscountResponse> UpdateDiscountAsync(DiscountUpdateRequest request, CancellationToken cancellationToken = default)
+            => _managementService.UpdateDiscountAsync(request, cancellationToken);
 
         public Task<bool> DeleteDiscountAsync(Guid discountId, CancellationToken cancellationToken = default)
             => _managementService.DeleteDiscountAsync(discountId, cancellationToken);
 
-        public Task<Domain.Entities.Catalog.Discount?> GetDiscountByIdAsync(Guid discountId, CancellationToken cancellationToken = default)
+        public Task<DiscountResponse?> GetDiscountByIdAsync(Guid discountId, CancellationToken cancellationToken = default)
             => _managementService.GetDiscountByIdAsync(discountId, cancellationToken);
 
-        public Task<Domain.Entities.Catalog.Discount?> GetDiscountByCodeAsync(string code, CancellationToken cancellationToken = default)
+        public Task<DiscountResponse?> GetDiscountByCodeAsync(string code, CancellationToken cancellationToken = default)
             => _managementService.GetDiscountByCodeAsync(code, cancellationToken);
 
-        public Task<List<Domain.Entities.Catalog.Discount>> GetStoreDiscountsAsync(Guid storeId, CancellationToken cancellationToken = default)
+        public Task<List<DiscountResponse>> GetStoreDiscountsAsync(Guid storeId, CancellationToken cancellationToken = default)
             => _managementService.GetStoreDiscountsAsync(storeId, cancellationToken);
 
-        public Task<List<Domain.Entities.Catalog.Discount>> GetGlobalDiscountsAsync(CancellationToken cancellationToken = default)
+        public Task<List<DiscountResponse>> GetGlobalDiscountsAsync(CancellationToken cancellationToken = default)
             => _managementService.GetGlobalDiscountsAsync(cancellationToken);
 
-        public Task<List<Domain.Entities.Catalog.Discount>> GetDiscountsByTypeAsync(DiscountType type, CancellationToken cancellationToken = default)
+        public Task<List<DiscountResponse>> GetDiscountsByTypeAsync(DiscountType type, CancellationToken cancellationToken = default)
             => _managementService.GetDiscountsByTypeAsync(type, cancellationToken);
 
-        public Task<List<Domain.Entities.Catalog.Discount>> GetExpiringDiscountsAsync(int daysUntilExpiry, CancellationToken cancellationToken = default)
+        public Task<List<DiscountResponse>> GetExpiringDiscountsAsync(int daysUntilExpiry, CancellationToken cancellationToken = default)
             => _managementService.GetExpiringDiscountsAsync(daysUntilExpiry, cancellationToken);
 
-        public Task<List<Domain.Entities.Catalog.Discount>> GetActiveDiscountsAsync(CancellationToken cancellationToken = default)
+        public Task<List<DiscountResponse>> GetActiveDiscountsAsync(CancellationToken cancellationToken = default)
             => _managementService.GetActiveDiscountsAsync(cancellationToken);
 
-        // IDiscountValidationService methods
-        public Task<(bool IsValid, Domain.Entities.Catalog.Discount? Discount, string? ErrorMessage)> ValidateDiscountCodeAsync(string code, decimal orderSubtotal, List<Guid> storeIds, CancellationToken cancellationToken = default)
+        // IDiscountValidationService methods - now using DTOs
+        public Task<(bool IsValid, DiscountResponse? Discount, string? ErrorMessage)> ValidateDiscountCodeAsync(string code, decimal orderSubtotal, List<Guid> storeIds, CancellationToken cancellationToken = default)
             => _validationService.ValidateDiscountCodeAsync(code, orderSubtotal, storeIds, cancellationToken);
 
-        public Task<(List<Domain.Entities.Catalog.Discount> ValidDiscounts, List<string> ErrorMessages)> ValidateMultipleDiscountCodesAsync(List<string> codes, decimal orderSubtotal, List<Guid> storeIds, CancellationToken cancellationToken = default)
+        public Task<(List<DiscountResponse> ValidDiscounts, List<string> ErrorMessages)> ValidateMultipleDiscountCodesAsync(List<string> codes, decimal orderSubtotal, List<Guid> storeIds, CancellationToken cancellationToken = default)
             => _validationService.ValidateMultipleDiscountCodesAsync(codes, orderSubtotal, storeIds, cancellationToken);
 
         public Task<bool> DiscountExistsAsync(string code, CancellationToken cancellationToken = default)

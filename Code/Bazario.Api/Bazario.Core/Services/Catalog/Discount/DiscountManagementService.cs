@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Bazario.Core.Domain.RepositoryContracts.Catalog;
 using Bazario.Core.Domain.RepositoryContracts;
+using Bazario.Core.DTO.Catalog.Discount;
 using Bazario.Core.Enums.Catalog;
 using Bazario.Core.Helpers.Catalog;
 using Bazario.Core.ServiceContracts.Catalog.Discount;
@@ -15,6 +16,7 @@ namespace Bazario.Core.Services.Catalog.Discount
     /// <summary>
     /// Service for managing discount CRUD operations.
     /// Uses Unit of Work pattern for transaction management and data consistency.
+    /// Uses DTOs for request/response to provide validation, security, and versioning.
     /// </summary>
     public class DiscountManagementService : IDiscountManagementService
     {
@@ -32,82 +34,70 @@ namespace Bazario.Core.Services.Catalog.Discount
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public async Task<Domain.Entities.Catalog.Discount> CreateDiscountAsync(
-            string code,
-            DiscountType type,
-            decimal value,
-            DateTime validFrom,
-            DateTime validTo,
-            decimal minimumOrderAmount,
-            Guid? applicableStoreId,
-            string? description,
-            Guid createdBy,
+        public async Task<DiscountResponse> CreateDiscountAsync(
+            DiscountAddRequest request,
             CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Creating discount with code: {Code}", code);
+            if (request == null) throw new ArgumentNullException(nameof(request));
 
-            var discount = new Domain.Entities.Catalog.Discount
-            {
-                DiscountId = Guid.NewGuid(),
-                Code = code.Trim().ToUpper(),
-                Type = type,
-                Value = value,
-                ValidFrom = validFrom,
-                ValidTo = validTo,
-                MinimumOrderAmount = minimumOrderAmount,
-                ApplicableStoreId = applicableStoreId,
-                Description = description,
-                CreatedBy = createdBy,
-                CreatedAt = DateTime.UtcNow,
-                IsActive = true,
-                IsUsed = false
-            };
+            _logger.LogInformation("Creating discount with code: {Code}", request.Code);
+
+            // Convert DTO to entity - uses ToDiscount() method
+            var discount = request.ToDiscount();
+            discount.DiscountId = Guid.NewGuid();
+            // Normalize code: trim and uppercase for consistency
+            discount.Code = discount.Code.Trim().ToUpper();
 
             var createdDiscount = await _unitOfWork.Discounts.AddDiscountAsync(discount, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation("Discount created successfully with ID: {DiscountId}", createdDiscount.DiscountId);
 
-            return createdDiscount;
+            // Convert entity to response DTO
+            return DiscountResponse.FromDiscount(createdDiscount);
         }
 
-        public async Task<Domain.Entities.Catalog.Discount> UpdateDiscountAsync(
-            Guid discountId,
-            string? code,
-            DiscountType? type,
-            decimal? value,
-            DateTime? validFrom,
-            DateTime? validTo,
-            decimal? minimumOrderAmount,
-            string? description,
-            Guid updatedBy,
+        public async Task<DiscountResponse> UpdateDiscountAsync(
+            DiscountUpdateRequest request,
             CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Updating discount with ID: {DiscountId}", discountId);
+            if (request == null) throw new ArgumentNullException(nameof(request));
+
+            _logger.LogInformation("Updating discount with ID: {DiscountId}", request.DiscountId);
 
             // Execute with retry logic for optimistic concurrency
             var updatedDiscount = await _concurrencyHelper.ExecuteWithRetryAsync(async () =>
             {
                 // Fetch fresh entity on each retry attempt
-                var existingDiscount = await _unitOfWork.Discounts.GetDiscountByIdAsync(discountId, cancellationToken);
+                var existingDiscount = await _unitOfWork.Discounts.GetDiscountByIdAsync(request.DiscountId, cancellationToken);
 
                 if (existingDiscount == null)
                 {
-                    _logger.LogWarning("Discount not found with ID: {DiscountId}", discountId);
-                    throw new InvalidOperationException($"Discount with ID {discountId} not found");
+                    _logger.LogWarning("Discount not found with ID: {DiscountId}", request.DiscountId);
+                    throw new InvalidOperationException($"Discount with ID {request.DiscountId} not found");
                 }
 
-                // Safe Update Pattern: Only update provided fields
-                if (code != null) existingDiscount.Code = code.Trim().ToUpper();
-                if (type.HasValue) existingDiscount.Type = type.Value;
-                if (value.HasValue) existingDiscount.Value = value.Value;
-                if (validFrom.HasValue) existingDiscount.ValidFrom = validFrom.Value;
-                if (validTo.HasValue) existingDiscount.ValidTo = validTo.Value;
-                if (minimumOrderAmount.HasValue) existingDiscount.MinimumOrderAmount = minimumOrderAmount.Value;
-                if (description != null) existingDiscount.Description = description;
+                // Safe Update Pattern: Only update provided fields (non-null/non-sentinel values)
+                if (request.Code != null && request.Code != string.Empty)
+                    existingDiscount.Code = request.Code.Trim().ToUpper();
+                if (request.Type.HasValue)
+                    existingDiscount.Type = request.Type.Value;
+                if (request.Value.HasValue && request.Value.Value > 0)
+                    existingDiscount.Value = request.Value.Value;
+                if (request.ValidFrom.HasValue && request.ValidFrom.Value != DateTime.MinValue)
+                    existingDiscount.ValidFrom = request.ValidFrom.Value;
+                if (request.ValidTo.HasValue && request.ValidTo.Value != DateTime.MinValue)
+                    existingDiscount.ValidTo = request.ValidTo.Value;
+                if (request.MinimumOrderAmount.HasValue && request.MinimumOrderAmount.Value >= 0)
+                    existingDiscount.MinimumOrderAmount = request.MinimumOrderAmount.Value;
+                if (request.Description != null)
+                    existingDiscount.Description = request.Description;
+                if (request.IsActive.HasValue)
+                    existingDiscount.IsActive = request.IsActive.Value;
 
-                existingDiscount.UpdatedBy = updatedBy;
+                existingDiscount.UpdatedBy = request.UpdatedBy;
                 existingDiscount.UpdatedAt = DateTime.UtcNow;
+                existingDiscount.RowVersion = request.RowVersion; // For optimistic concurrency
 
                 var result = await _unitOfWork.Discounts.UpdateDiscountAsync(existingDiscount, cancellationToken);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -115,9 +105,10 @@ namespace Bazario.Core.Services.Catalog.Discount
                 return result;
             }, "UpdateDiscount", cancellationToken);
 
-            _logger.LogInformation("Discount updated successfully with ID: {DiscountId}", discountId);
+            _logger.LogInformation("Discount updated successfully with ID: {DiscountId}", request.DiscountId);
 
-            return updatedDiscount;
+            // Convert entity to response DTO
+            return DiscountResponse.FromDiscount(updatedDiscount);
         }
 
         public async Task<bool> DeleteDiscountAsync(Guid discountId, CancellationToken cancellationToken = default)
@@ -139,50 +130,57 @@ namespace Bazario.Core.Services.Catalog.Discount
             return result;
         }
 
-        public async Task<Domain.Entities.Catalog.Discount?> GetDiscountByIdAsync(Guid discountId, CancellationToken cancellationToken = default)
+        public async Task<DiscountResponse?> GetDiscountByIdAsync(Guid discountId, CancellationToken cancellationToken = default)
         {
             _logger.LogDebug("Getting discount by ID: {DiscountId}", discountId);
-            return await _unitOfWork.Discounts.GetDiscountByIdAsync(discountId, cancellationToken);
+            var discount = await _unitOfWork.Discounts.GetDiscountByIdAsync(discountId, cancellationToken);
+            return discount != null ? DiscountResponse.FromDiscount(discount) : null;
         }
 
-        public async Task<Domain.Entities.Catalog.Discount?> GetDiscountByCodeAsync(string code, CancellationToken cancellationToken = default)
+        public async Task<DiscountResponse?> GetDiscountByCodeAsync(string code, CancellationToken cancellationToken = default)
         {
             _logger.LogDebug("Getting discount by code: {Code}", code);
-            return await _unitOfWork.Discounts.GetDiscountByCodeAsync(code, cancellationToken);
+            var discount = await _unitOfWork.Discounts.GetDiscountByCodeAsync(code, cancellationToken);
+            return discount != null ? DiscountResponse.FromDiscount(discount) : null;
         }
 
-        public async Task<List<Domain.Entities.Catalog.Discount>> GetStoreDiscountsAsync(Guid storeId, CancellationToken cancellationToken = default)
+        public async Task<List<DiscountResponse>> GetStoreDiscountsAsync(Guid storeId, CancellationToken cancellationToken = default)
         {
             _logger.LogDebug("Getting discounts for store ID: {StoreId}", storeId);
-            return await _unitOfWork.Discounts.GetDiscountsByStoreIdAsync(storeId, cancellationToken);
+            var discounts = await _unitOfWork.Discounts.GetDiscountsByStoreIdAsync(storeId, cancellationToken);
+            return discounts.Select(DiscountResponse.FromDiscount).ToList();
         }
 
-        public async Task<List<Domain.Entities.Catalog.Discount>> GetGlobalDiscountsAsync(CancellationToken cancellationToken = default)
+        public async Task<List<DiscountResponse>> GetGlobalDiscountsAsync(CancellationToken cancellationToken = default)
         {
             _logger.LogDebug("Getting global discounts");
-            return await _unitOfWork.Discounts.GetGlobalDiscountsAsync(cancellationToken);
+            var discounts = await _unitOfWork.Discounts.GetGlobalDiscountsAsync(cancellationToken);
+            return discounts.Select(DiscountResponse.FromDiscount).ToList();
         }
 
-        public async Task<List<Domain.Entities.Catalog.Discount>> GetDiscountsByTypeAsync(DiscountType type, CancellationToken cancellationToken = default)
+        public async Task<List<DiscountResponse>> GetDiscountsByTypeAsync(DiscountType type, CancellationToken cancellationToken = default)
         {
             _logger.LogDebug("Getting discounts by type: {Type}", type);
-            return await _unitOfWork.Discounts.GetDiscountsByTypeAsync(type, cancellationToken);
+            var discounts = await _unitOfWork.Discounts.GetDiscountsByTypeAsync(type, cancellationToken);
+            return discounts.Select(DiscountResponse.FromDiscount).ToList();
         }
 
-        public async Task<List<Domain.Entities.Catalog.Discount>> GetExpiringDiscountsAsync(int daysUntilExpiry, CancellationToken cancellationToken = default)
+        public async Task<List<DiscountResponse>> GetExpiringDiscountsAsync(int daysUntilExpiry, CancellationToken cancellationToken = default)
         {
             _logger.LogDebug("Getting discounts expiring within {Days} days", daysUntilExpiry);
-            return await _unitOfWork.Discounts.GetExpiringDiscountsAsync(daysUntilExpiry, cancellationToken);
+            var discounts = await _unitOfWork.Discounts.GetExpiringDiscountsAsync(daysUntilExpiry, cancellationToken);
+            return discounts.Select(DiscountResponse.FromDiscount).ToList();
         }
 
-        public async Task<List<Domain.Entities.Catalog.Discount>> GetActiveDiscountsAsync(CancellationToken cancellationToken = default)
+        public async Task<List<DiscountResponse>> GetActiveDiscountsAsync(CancellationToken cancellationToken = default)
         {
             _logger.LogDebug("Getting active discounts");
 
             var query = _unitOfWork.Discounts.GetDiscountsQueryable()
                 .Where(d => d.IsActive && !d.IsUsed && d.ValidTo >= DateTime.UtcNow);
 
-            return await _unitOfWork.Discounts.GetDiscountsPagedAsync(query, 1, int.MaxValue, cancellationToken);
+            var discounts = await _unitOfWork.Discounts.GetDiscountsPagedAsync(query, 1, int.MaxValue, cancellationToken);
+            return discounts.Select(DiscountResponse.FromDiscount).ToList();
         }
     }
 }
