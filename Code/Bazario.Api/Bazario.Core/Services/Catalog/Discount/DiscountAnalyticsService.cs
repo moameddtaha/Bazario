@@ -13,7 +13,14 @@ namespace Bazario.Core.Services.Catalog.Discount
 {
     /// <summary>
     /// Service for discount analytics and performance tracking.
+    /// Provides comprehensive metrics including usage statistics, performance analysis,
+    /// revenue impact, and trend analysis for discount campaigns.
     /// </summary>
+    /// <remarks>
+    /// Note: This service has known N+1 query issues in bulk methods (GetAllDiscountUsageStatsAsync,
+    /// GetAllDiscountPerformanceAsync, GetStoreDiscountUsageStatsAsync). For production use with
+    /// large discount counts, consider implementing bulk repository methods with database-level aggregation.
+    /// </remarks>
     public class DiscountAnalyticsService : IDiscountAnalyticsService
     {
         private readonly IDiscountRepository _discountRepository;
@@ -30,6 +37,16 @@ namespace Bazario.Core.Services.Catalog.Discount
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
+        /// <summary>
+        /// Gets comprehensive usage statistics for a specific discount code.
+        /// </summary>
+        /// <param name="discountCode">The discount code to analyze</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>
+        /// Usage statistics including order count, revenue, and average values.
+        /// Returns null if discount code not found.
+        /// Returns empty stats if discount exists but has never been used.
+        /// </returns>
         public async Task<DiscountUsageStats?> GetDiscountUsageStatsAsync(string discountCode, CancellationToken cancellationToken = default)
         {
             _logger.LogDebug("Getting usage stats for discount code: {Code}", discountCode);
@@ -41,15 +58,15 @@ namespace Bazario.Core.Services.Catalog.Discount
                 return null;
             }
 
-            var orderCount = await _orderRepository.GetOrderCountByDiscountCodeAsync(discountCode, cancellationToken);
+            // Get all orders with this discount code to calculate stats
+            // Removed redundant orderCount query - we can check orders.Count directly
+            var orders = await _orderRepository.GetOrdersByDiscountCodeAsync(discountCode, cancellationToken);
 
-            if (orderCount == 0)
+            // Null safety check
+            if (orders == null || orders.Count == 0)
             {
                 return CreateEmptyUsageStats(discountCode, discount);
             }
-
-            // Get all orders with this discount code to calculate stats
-            var orders = await _orderRepository.GetOrdersByDiscountCodeAsync(discountCode, cancellationToken);
 
             var stats = new DiscountUsageStats
             {
@@ -69,6 +86,16 @@ namespace Bazario.Core.Services.Catalog.Discount
             return stats;
         }
 
+        /// <summary>
+        /// Gets usage statistics for all valid discounts within a date range.
+        /// </summary>
+        /// <param name="startDate">Start date for analysis (defaults to 12 months ago)</param>
+        /// <param name="endDate">End date for analysis (defaults to current date)</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>
+        /// List of usage statistics ordered by total revenue (descending).
+        /// Note: This method has N+1 query performance issues with large discount counts.
+        /// </returns>
         public async Task<List<DiscountUsageStats>> GetAllDiscountUsageStatsAsync(
             DateTime? startDate = null,
             DateTime? endDate = null,
@@ -84,6 +111,9 @@ namespace Bazario.Core.Services.Catalog.Discount
 
             foreach (var discount in discounts)
             {
+                // Check for cancellation before expensive operation
+                cancellationToken.ThrowIfCancellationRequested();
+
                 var stats = await GetDiscountUsageStatsAsync(discount.Code, cancellationToken);
                 if (stats != null)
                 {
@@ -94,6 +124,18 @@ namespace Bazario.Core.Services.Catalog.Discount
             return statsList.OrderByDescending(s => s.TotalRevenue).ToList();
         }
 
+        /// <summary>
+        /// Gets detailed performance metrics for a specific discount code within a date range.
+        /// </summary>
+        /// <param name="discountCode">The discount code to analyze</param>
+        /// <param name="startDate">Start date for analysis (defaults to 12 months ago)</param>
+        /// <param name="endDate">End date for analysis (defaults to current date)</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>
+        /// Performance metrics including conversion rate, revenue, and averages.
+        /// Returns null if discount code not found.
+        /// Returns empty performance if no orders in the specified date range.
+        /// </returns>
         public async Task<DiscountPerformance?> GetDiscountPerformanceAsync(
             string discountCode,
             DateTime? startDate = null,
@@ -114,13 +156,14 @@ namespace Bazario.Core.Services.Catalog.Discount
             var discountOrders = await _orderRepository.GetOrdersByDiscountCodeAndDateRangeAsync(
                 discountCode, startDate.Value, endDate.Value, cancellationToken);
 
-            var totalOrderCount = await _orderRepository.GetOrdersCountByDateRangeAsync(
-                startDate.Value, endDate.Value, cancellationToken);
-
-            if (!discountOrders.Any())
+            // Null safety check
+            if (discountOrders == null || discountOrders.Count == 0)
             {
                 return CreateEmptyPerformance(discount, startDate.Value, endDate.Value);
             }
+
+            var totalOrderCount = await _orderRepository.GetOrdersCountByDateRangeAsync(
+                startDate.Value, endDate.Value, cancellationToken);
 
             var performance = new DiscountPerformance
             {
@@ -143,6 +186,17 @@ namespace Bazario.Core.Services.Catalog.Discount
             return performance;
         }
 
+        /// <summary>
+        /// Gets performance metrics for all valid discounts within a date range.
+        /// </summary>
+        /// <param name="startDate">Start date for analysis (defaults to 12 months ago)</param>
+        /// <param name="endDate">End date for analysis (defaults to current date)</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>
+        /// List of performance metrics ordered by total revenue (descending).
+        /// Only includes discounts with at least one order in the date range.
+        /// Note: This method has N+1 query performance issues with large discount counts.
+        /// </returns>
         public async Task<List<DiscountPerformance>> GetAllDiscountPerformanceAsync(
             DateTime? startDate = null,
             DateTime? endDate = null,
@@ -158,6 +212,9 @@ namespace Bazario.Core.Services.Catalog.Discount
 
             foreach (var discount in discounts)
             {
+                // Check for cancellation before expensive operation
+                cancellationToken.ThrowIfCancellationRequested();
+
                 var performance = await GetDiscountPerformanceAsync(discount.Code, startDate, endDate, cancellationToken);
                 if (performance != null && performance.OrderCount > 0)
                 {
@@ -168,6 +225,16 @@ namespace Bazario.Core.Services.Catalog.Discount
             return performanceList.OrderByDescending(p => p.TotalRevenue).ToList();
         }
 
+        /// <summary>
+        /// Analyzes the overall revenue impact of discount usage across all orders.
+        /// Compares discounted vs non-discounted orders to measure discount effectiveness.
+        /// </summary>
+        /// <param name="startDate">Start date for analysis (defaults to 12 months ago)</param>
+        /// <param name="endDate">End date for analysis (defaults to current date)</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>
+        /// Revenue impact analysis including total revenue, discount costs, usage rates, and comparative metrics.
+        /// </returns>
         public async Task<DiscountRevenueImpact> GetDiscountRevenueImpactAsync(
             DateTime? startDate = null,
             DateTime? endDate = null,
@@ -179,6 +246,10 @@ namespace Bazario.Core.Services.Catalog.Discount
             endDate ??= DateTime.UtcNow;
 
             var allOrders = await _orderRepository.GetOrdersByDateRangeAsync(startDate.Value, endDate.Value, cancellationToken);
+
+            // Null safety check
+            allOrders ??= [];
+
             var discountedOrders = allOrders.Where(o => o.DiscountAmount > 0).ToList();
             var nonDiscountedOrders = allOrders.Where(o => o.DiscountAmount == 0).ToList();
 
@@ -220,6 +291,17 @@ namespace Bazario.Core.Services.Catalog.Discount
             return impact;
         }
 
+        /// <summary>
+        /// Gets the top performing discounts ranked by total revenue.
+        /// </summary>
+        /// <param name="topCount">Number of top discounts to return (default: 10)</param>
+        /// <param name="startDate">Start date for analysis (defaults to 12 months ago)</param>
+        /// <param name="endDate">End date for analysis (defaults to current date)</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>
+        /// List of top performing discounts ordered by total revenue (descending).
+        /// Limited to topCount results.
+        /// </returns>
         public async Task<List<DiscountPerformance>> GetTopPerformingDiscountsAsync(
             int topCount = 10,
             DateTime? startDate = null,
@@ -236,6 +318,17 @@ namespace Bazario.Core.Services.Catalog.Discount
                 .ToList();
         }
 
+        /// <summary>
+        /// Gets usage statistics for all discounts associated with a specific store.
+        /// </summary>
+        /// <param name="storeId">The ID of the store to analyze</param>
+        /// <param name="startDate">Start date for analysis (defaults to 12 months ago)</param>
+        /// <param name="endDate">End date for analysis (defaults to current date)</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>
+        /// List of usage statistics for store discounts ordered by total revenue (descending).
+        /// Note: This method has N+1 query performance issues with large discount counts.
+        /// </returns>
         public async Task<List<DiscountUsageStats>> GetStoreDiscountUsageStatsAsync(
             Guid storeId,
             DateTime? startDate = null,
@@ -252,6 +345,9 @@ namespace Bazario.Core.Services.Catalog.Discount
 
             foreach (var discount in storeDiscounts)
             {
+                // Check for cancellation before expensive operation
+                cancellationToken.ThrowIfCancellationRequested();
+
                 var stats = await GetDiscountUsageStatsAsync(discount.Code, cancellationToken);
                 if (stats != null)
                 {
@@ -262,6 +358,13 @@ namespace Bazario.Core.Services.Catalog.Discount
             return statsList.OrderByDescending(s => s.TotalRevenue).ToList();
         }
 
+        /// <summary>
+        /// Gets high-level overview statistics for the entire discount system.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>
+        /// Tuple containing: (TotalCreated - all discounts, TotalUsed - at least one use, TotalActive - currently active).
+        /// </returns>
         public async Task<(int TotalCreated, int TotalUsed, int TotalActive)> GetOverallDiscountStatsAsync(CancellationToken cancellationToken = default)
         {
             _logger.LogDebug("Getting overall discount statistics");
