@@ -58,8 +58,11 @@ namespace Bazario.Core.Services.Catalog.Discount
         public Task<List<DiscountResponse>> GetExpiringDiscountsAsync(int daysUntilExpiry, CancellationToken cancellationToken = default)
             => _managementService.GetExpiringDiscountsAsync(daysUntilExpiry, cancellationToken);
 
-        public Task<List<DiscountResponse>> GetActiveDiscountsAsync(CancellationToken cancellationToken = default)
-            => _managementService.GetActiveDiscountsAsync(cancellationToken);
+        public Task<List<DiscountResponse>> GetActiveDiscountsAsync(
+            int pageNumber = 1,
+            int pageSize = 100,
+            CancellationToken cancellationToken = default)
+            => _managementService.GetActiveDiscountsAsync(pageNumber, pageSize, cancellationToken);
 
         // IDiscountValidationService methods - now using DTOs
         public Task<(bool IsValid, DiscountResponse? Discount, string? ErrorMessage)> ValidateDiscountCodeAsync(string code, decimal orderSubtotal, List<Guid> storeIds, CancellationToken cancellationToken = default)

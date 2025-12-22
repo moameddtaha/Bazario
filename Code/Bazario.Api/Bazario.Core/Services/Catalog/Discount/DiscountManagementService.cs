@@ -153,6 +153,12 @@ namespace Bazario.Core.Services.Catalog.Discount
 
         public async Task<List<DiscountResponse>> GetStoreDiscountsAsync(Guid storeId, CancellationToken cancellationToken = default)
         {
+            if (storeId == Guid.Empty)
+            {
+                _logger.LogWarning("GetStoreDiscountsAsync called with empty store ID");
+                throw new ArgumentException("Store ID cannot be empty", nameof(storeId));
+            }
+
             _logger.LogDebug("Getting discounts for store ID: {StoreId}", storeId);
             var discounts = await _unitOfWork.Discounts.GetDiscountsByStoreIdAsync(storeId, cancellationToken);
             return discounts.Select(DiscountResponse.FromDiscount).ToList();
@@ -191,14 +197,29 @@ namespace Bazario.Core.Services.Catalog.Discount
             return discounts.Select(DiscountResponse.FromDiscount).ToList();
         }
 
-        public async Task<List<DiscountResponse>> GetActiveDiscountsAsync(CancellationToken cancellationToken = default)
+        public async Task<List<DiscountResponse>> GetActiveDiscountsAsync(
+            int pageNumber = 1,
+            int pageSize = 100,
+            CancellationToken cancellationToken = default)
         {
-            _logger.LogDebug("Getting active discounts");
+            if (pageNumber < 1)
+            {
+                _logger.LogWarning("GetActiveDiscountsAsync called with invalid page number: {PageNumber}", pageNumber);
+                throw new ArgumentOutOfRangeException(nameof(pageNumber), "Page number must be at least 1");
+            }
+
+            if (pageSize < 1 || pageSize > 1000)
+            {
+                _logger.LogWarning("GetActiveDiscountsAsync called with invalid page size: {PageSize}", pageSize);
+                throw new ArgumentOutOfRangeException(nameof(pageSize), "Page size must be between 1 and 1000");
+            }
+
+            _logger.LogDebug("Getting active discounts (page {Page}, size {Size})", pageNumber, pageSize);
 
             var query = _unitOfWork.Discounts.GetDiscountsQueryable()
                 .Where(d => d.IsActive && !d.IsUsed && d.ValidTo >= DateTime.UtcNow);
 
-            var discounts = await _unitOfWork.Discounts.GetDiscountsPagedAsync(query, 1, int.MaxValue, cancellationToken);
+            var discounts = await _unitOfWork.Discounts.GetDiscountsPagedAsync(query, pageNumber, pageSize, cancellationToken);
             return discounts.Select(DiscountResponse.FromDiscount).ToList();
         }
     }

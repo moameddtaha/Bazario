@@ -91,10 +91,15 @@ namespace Bazario.Core.ServiceContracts.Catalog.Discount
         Task<List<DiscountResponse>> GetExpiringDiscountsAsync(int daysUntilExpiry, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Gets all active discounts.
+        /// Gets all active discounts with pagination.
         /// </summary>
+        /// <param name="pageNumber">Page number (default: 1, minimum: 1)</param>
+        /// <param name="pageSize">Page size (default: 100, range: 1-1000)</param>
         /// <param name="cancellationToken">Cancellation token</param>
-        /// <returns>List of discount responses</returns>
-        Task<List<DiscountResponse>> GetActiveDiscountsAsync(CancellationToken cancellationToken = default);
+        /// <returns>List of discount responses for the requested page</returns>
+        Task<List<DiscountResponse>> GetActiveDiscountsAsync(
+            int pageNumber = 1,
+            int pageSize = 100,
+            CancellationToken cancellationToken = default);
     }
 }
