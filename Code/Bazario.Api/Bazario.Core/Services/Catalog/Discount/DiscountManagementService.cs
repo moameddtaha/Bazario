@@ -7,6 +7,7 @@ using Bazario.Core.Domain.RepositoryContracts.Catalog;
 using Bazario.Core.Domain.RepositoryContracts;
 using Bazario.Core.DTO.Catalog.Discount;
 using Bazario.Core.Enums.Catalog;
+using Bazario.Core.Exceptions.Catalog;
 using Bazario.Core.Helpers.Catalog;
 using Bazario.Core.ServiceContracts.Catalog.Discount;
 using Microsoft.Extensions.Logging;
@@ -74,7 +75,7 @@ namespace Bazario.Core.Services.Catalog.Discount
                 if (existingDiscount == null)
                 {
                     _logger.LogWarning("Discount not found with ID: {DiscountId}", request.DiscountId);
-                    throw new InvalidOperationException($"Discount with ID {request.DiscountId} not found");
+                    throw new DiscountNotFoundException(request.DiscountId);
                 }
 
                 // Safe Update Pattern: Only update provided fields (non-null/non-sentinel values)
@@ -139,6 +140,12 @@ namespace Bazario.Core.Services.Catalog.Discount
 
         public async Task<DiscountResponse?> GetDiscountByCodeAsync(string code, CancellationToken cancellationToken = default)
         {
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                _logger.LogWarning("GetDiscountByCodeAsync called with null or empty code");
+                throw new ArgumentException("Discount code cannot be null or empty", nameof(code));
+            }
+
             _logger.LogDebug("Getting discount by code: {Code}", code);
             var discount = await _unitOfWork.Discounts.GetDiscountByCodeAsync(code, cancellationToken);
             return discount != null ? DiscountResponse.FromDiscount(discount) : null;
@@ -167,6 +174,18 @@ namespace Bazario.Core.Services.Catalog.Discount
 
         public async Task<List<DiscountResponse>> GetExpiringDiscountsAsync(int daysUntilExpiry, CancellationToken cancellationToken = default)
         {
+            if (daysUntilExpiry < 0)
+            {
+                _logger.LogWarning("GetExpiringDiscountsAsync called with negative days: {Days}", daysUntilExpiry);
+                throw new ArgumentOutOfRangeException(nameof(daysUntilExpiry), "Days until expiry cannot be negative");
+            }
+
+            if (daysUntilExpiry > 365)
+            {
+                _logger.LogWarning("GetExpiringDiscountsAsync called with excessive days: {Days}", daysUntilExpiry);
+                throw new ArgumentOutOfRangeException(nameof(daysUntilExpiry), "Days until expiry cannot exceed 365 days");
+            }
+
             _logger.LogDebug("Getting discounts expiring within {Days} days", daysUntilExpiry);
             var discounts = await _unitOfWork.Discounts.GetExpiringDiscountsAsync(daysUntilExpiry, cancellationToken);
             return discounts.Select(DiscountResponse.FromDiscount).ToList();
