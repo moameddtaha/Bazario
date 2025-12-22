@@ -17,9 +17,14 @@ namespace Bazario.Core.Services.Catalog.Discount
     /// revenue impact, and trend analysis for discount campaigns.
     /// </summary>
     /// <remarks>
-    /// Note: This service has known N+1 query issues in bulk methods (GetAllDiscountUsageStatsAsync,
-    /// GetAllDiscountPerformanceAsync, GetStoreDiscountUsageStatsAsync). For production use with
-    /// large discount counts, consider implementing bulk repository methods with database-level aggregation.
+    /// PERFORMANCE OPTIMIZED: Bulk methods (GetAllDiscountUsageStatsAsync, GetAllDiscountPerformanceAsync,
+    /// GetStoreDiscountUsageStatsAsync) use database-level aggregation with projections for optimal performance.
+    ///
+    /// Individual discount methods (GetDiscountUsageStatsAsync, GetDiscountPerformanceAsync) also use
+    /// projection-based queries for efficient data retrieval.
+    ///
+    /// GetDiscountRevenueImpactAsync uses database-level aggregation to efficiently analyze revenue impact
+    /// across all orders without loading full entities.
     /// </remarks>
     public class DiscountAnalyticsService : IDiscountAnalyticsService
     {
@@ -39,6 +44,7 @@ namespace Bazario.Core.Services.Catalog.Discount
 
         /// <summary>
         /// Gets comprehensive usage statistics for a specific discount code.
+        /// PERFORMANCE OPTIMIZED: Uses projection-based bulk method to avoid loading full Order entities.
         /// </summary>
         /// <param name="discountCode">The discount code to analyze</param>
         /// <param name="cancellationToken">Cancellation token</param>
@@ -58,12 +64,14 @@ namespace Bazario.Core.Services.Catalog.Discount
                 return null;
             }
 
-            // Get all orders with this discount code to calculate stats
-            // Removed redundant orderCount query - we can check orders.Count directly
-            var orders = await _orderRepository.GetOrdersByDiscountCodeAsync(discountCode, cancellationToken);
+            // PERFORMANCE FIX: Reuse bulk repository method with single-item list
+            // Uses projection to load only aggregated data instead of full Order entities
+            var orderStats = await _orderRepository.GetOrderStatsByDiscountCodesAsync(
+                new List<string> { discountCode }, cancellationToken);
+            var orderStat = orderStats.FirstOrDefault();
 
             // Null safety check
-            if (orders == null || orders.Count == 0)
+            if (orderStat == null || orderStat.OrderCount == 0)
             {
                 return CreateEmptyUsageStats(discountCode, discount);
             }
@@ -71,13 +79,13 @@ namespace Bazario.Core.Services.Catalog.Discount
             var stats = new DiscountUsageStats
             {
                 DiscountCode = discountCode,
-                UsageCount = orders.Count,
-                TotalDiscountAmount = orders.Sum(o => o.DiscountAmount),
-                AverageDiscountAmount = orders.Average(o => o.DiscountAmount),
-                TotalRevenue = orders.Sum(o => o.TotalAmount),
-                AverageOrderValue = orders.Average(o => o.TotalAmount),
-                FirstUsed = orders.Min(o => o.Date),
-                LastUsed = orders.Max(o => o.Date),
+                UsageCount = orderStat.OrderCount,
+                TotalDiscountAmount = orderStat.TotalDiscountAmount,
+                AverageDiscountAmount = orderStat.AverageDiscountAmount,
+                TotalRevenue = orderStat.TotalRevenue,
+                AverageOrderValue = orderStat.AverageOrderValue,
+                FirstUsed = orderStat.FirstUsed,
+                LastUsed = orderStat.LastUsed,
                 IsActive = discount.IsActive,
                 StoreId = discount.ApplicableStoreId,
                 StoreName = discount.Store?.Name
@@ -149,6 +157,7 @@ namespace Bazario.Core.Services.Catalog.Discount
 
         /// <summary>
         /// Gets detailed performance metrics for a specific discount code within a date range.
+        /// PERFORMANCE OPTIMIZED: Uses projection-based bulk method to avoid loading full Order entities.
         /// </summary>
         /// <param name="discountCode">The discount code to analyze</param>
         /// <param name="startDate">Start date for analysis (defaults to 12 months ago)</param>
@@ -176,11 +185,14 @@ namespace Bazario.Core.Services.Catalog.Discount
                 return null;
             }
 
-            var discountOrders = await _orderRepository.GetOrdersByDiscountCodeAndDateRangeAsync(
-                discountCode, startDate.Value, endDate.Value, cancellationToken);
+            // PERFORMANCE FIX: Reuse bulk repository method with single-item list
+            // Uses projection to load only aggregated data instead of full Order entities
+            var orderStats = await _orderRepository.GetOrderStatsByDiscountCodesAndDateRangeAsync(
+                new List<string> { discountCode }, startDate.Value, endDate.Value, cancellationToken);
+            var orderStat = orderStats.FirstOrDefault();
 
             // Null safety check
-            if (discountOrders == null || discountOrders.Count == 0)
+            if (orderStat == null || orderStat.OrderCount == 0)
             {
                 return CreateEmptyPerformance(discount, startDate.Value, endDate.Value);
             }
@@ -193,13 +205,13 @@ namespace Bazario.Core.Services.Catalog.Discount
                 DiscountCode = discountCode,
                 DiscountType = discount.Type,
                 DiscountValue = discount.Value,
-                OrderCount = discountOrders.Count,
-                TotalRevenue = discountOrders.Sum(o => o.TotalAmount),
-                TotalDiscountGiven = discountOrders.Sum(o => o.DiscountAmount),
-                NetRevenue = discountOrders.Sum(o => o.TotalAmount - o.DiscountAmount),
-                ConversionRate = totalOrderCount > 0 ? (decimal)discountOrders.Count / totalOrderCount * 100 : 0,
-                AverageOrderValue = discountOrders.Average(o => o.TotalAmount),
-                AverageDiscountPerOrder = discountOrders.Average(o => o.DiscountAmount),
+                OrderCount = orderStat.OrderCount,
+                TotalRevenue = orderStat.TotalRevenue,
+                TotalDiscountGiven = orderStat.TotalDiscountAmount,
+                NetRevenue = orderStat.TotalRevenue - orderStat.TotalDiscountAmount,
+                ConversionRate = totalOrderCount > 0 ? (decimal)orderStat.OrderCount / totalOrderCount * 100 : 0,
+                AverageOrderValue = orderStat.AverageOrderValue,
+                AverageDiscountPerOrder = orderStat.AverageDiscountAmount,
                 StartDate = startDate.Value,
                 EndDate = endDate.Value,
                 StoreId = discount.ApplicableStoreId,
@@ -278,6 +290,8 @@ namespace Bazario.Core.Services.Catalog.Discount
 
         /// <summary>
         /// Analyzes the overall revenue impact of discount usage across all orders.
+        /// PERFORMANCE OPTIMIZED: Uses database-level aggregation to efficiently analyze
+        /// revenue impact without loading full Order entities.
         /// Compares discounted vs non-discounted orders to measure discount effectiveness.
         /// </summary>
         /// <param name="startDate">Start date for analysis (defaults to 12 months ago)</param>
@@ -296,24 +310,23 @@ namespace Bazario.Core.Services.Catalog.Discount
             startDate ??= DateTime.UtcNow.AddMonths(-12);
             endDate ??= DateTime.UtcNow;
 
-            var allOrders = await _orderRepository.GetOrdersByDateRangeAsync(startDate.Value, endDate.Value, cancellationToken);
-
-            // Null safety check
-            allOrders ??= [];
-
-            var discountedOrders = allOrders.Where(o => o.DiscountAmount > 0).ToList();
-            var nonDiscountedOrders = allOrders.Where(o => o.DiscountAmount == 0).ToList();
+            // PERFORMANCE FIX: Use database-level aggregation instead of loading all orders
+            // Single query with CASE aggregations - no full Order entities loaded
+            var stats = await _orderRepository.GetRevenueImpactStatsByDateRangeAsync(
+                startDate.Value, endDate.Value, cancellationToken);
 
             var impact = new DiscountRevenueImpact
             {
-                TotalRevenue = allOrders.Sum(o => o.TotalAmount),
-                DiscountedOrderRevenue = discountedOrders.Sum(o => o.TotalAmount),
-                NonDiscountedOrderRevenue = nonDiscountedOrders.Sum(o => o.TotalAmount),
-                TotalDiscountsGiven = discountedOrders.Sum(o => o.DiscountAmount),
-                NetRevenue = allOrders.Sum(o => o.TotalAmount - o.DiscountAmount),
-                DiscountedOrderCount = discountedOrders.Count,
-                NonDiscountedOrderCount = nonDiscountedOrders.Count,
-                TotalOrderCount = allOrders.Count,
+                TotalRevenue = stats.TotalRevenue,
+                DiscountedOrderRevenue = stats.DiscountedOrderRevenue,
+                NonDiscountedOrderRevenue = stats.NonDiscountedOrderRevenue,
+                TotalDiscountsGiven = stats.TotalDiscountAmount,
+                NetRevenue = stats.TotalRevenue - stats.TotalDiscountAmount,
+                DiscountedOrderCount = stats.DiscountedOrderCount,
+                NonDiscountedOrderCount = stats.NonDiscountedOrderCount,
+                TotalOrderCount = stats.TotalOrderCount,
+                AverageDiscountedOrderValue = stats.AverageDiscountedOrderValue,
+                AverageNonDiscountedOrderValue = stats.AverageNonDiscountedOrderValue,
                 StartDate = startDate.Value,
                 EndDate = endDate.Value
             };
@@ -322,16 +335,6 @@ namespace Bazario.Core.Services.Catalog.Discount
             if (impact.TotalRevenue > 0)
             {
                 impact.DiscountedRevenuePercentage = (impact.DiscountedOrderRevenue / impact.TotalRevenue) * 100;
-            }
-
-            if (impact.DiscountedOrderCount > 0)
-            {
-                impact.AverageDiscountedOrderValue = impact.DiscountedOrderRevenue / impact.DiscountedOrderCount;
-            }
-
-            if (impact.NonDiscountedOrderCount > 0)
-            {
-                impact.AverageNonDiscountedOrderValue = impact.NonDiscountedOrderRevenue / impact.NonDiscountedOrderCount;
             }
 
             if (impact.TotalOrderCount > 0)

@@ -152,5 +152,19 @@ namespace Bazario.Core.Domain.RepositoryContracts.Order
             DateTime startDate,
             DateTime endDate,
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets aggregated revenue impact statistics for all orders within a date range.
+        /// Uses database-level aggregation with CASE statements to efficiently calculate
+        /// discounted vs non-discounted order metrics without loading full Order entities.
+        /// </summary>
+        /// <param name="startDate">Start date for filtering orders</param>
+        /// <param name="endDate">End date for filtering orders</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>Aggregated revenue impact statistics</returns>
+        Task<RevenueImpactStats> GetRevenueImpactStatsByDateRangeAsync(
+            DateTime startDate,
+            DateTime endDate,
+            CancellationToken cancellationToken = default);
     }
 }

@@ -1260,5 +1260,63 @@ namespace Bazario.Infrastructure.Repositories.Order
                 throw new InvalidOperationException($"Failed to get bulk order discount stats with date range: {ex.Message}", ex);
             }
         }
+
+        public async Task<RevenueImpactStats> GetRevenueImpactStatsByDateRangeAsync(
+            DateTime startDate,
+            DateTime endDate,
+            CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Getting revenue impact stats between {StartDate} and {EndDate}", startDate, endDate);
+
+            try
+            {
+                // Single database query with aggregation using CASE statements
+                // Efficiently calculates all metrics without loading full Order entities
+                var stats = await _context.Orders
+                    .Where(o => o.Date >= startDate && o.Date <= endDate)
+                    .GroupBy(o => 1) // Group all orders together for aggregation
+                    .Select(g => new RevenueImpactStats
+                    {
+                        TotalRevenue = g.Sum(o => o.TotalAmount),
+                        TotalDiscountAmount = g.Sum(o => o.DiscountAmount),
+                        TotalOrderCount = g.Count(),
+                        DiscountedOrderCount = g.Count(o => o.DiscountAmount > 0),
+                        NonDiscountedOrderCount = g.Count(o => o.DiscountAmount == 0),
+                        DiscountedOrderRevenue = g.Where(o => o.DiscountAmount > 0).Sum(o => o.TotalAmount),
+                        NonDiscountedOrderRevenue = g.Where(o => o.DiscountAmount == 0).Sum(o => o.TotalAmount),
+                        AverageDiscountedOrderValue = g.Where(o => o.DiscountAmount > 0).Average(o => (decimal?)o.TotalAmount) ?? 0,
+                        AverageNonDiscountedOrderValue = g.Where(o => o.DiscountAmount == 0).Average(o => (decimal?)o.TotalAmount) ?? 0
+                    })
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                // If no orders found, return empty stats
+                if (stats == null)
+                {
+                    _logger.LogDebug("No orders found in date range");
+                    return new RevenueImpactStats
+                    {
+                        TotalRevenue = 0,
+                        TotalDiscountAmount = 0,
+                        TotalOrderCount = 0,
+                        DiscountedOrderCount = 0,
+                        NonDiscountedOrderCount = 0,
+                        DiscountedOrderRevenue = 0,
+                        NonDiscountedOrderRevenue = 0,
+                        AverageDiscountedOrderValue = 0,
+                        AverageNonDiscountedOrderValue = 0
+                    };
+                }
+
+                _logger.LogDebug("Retrieved revenue impact stats: {TotalOrders} orders, {TotalRevenue} revenue",
+                    stats.TotalOrderCount, stats.TotalRevenue);
+                return stats;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get revenue impact stats for date range");
+                throw new InvalidOperationException($"Failed to get revenue impact stats: {ex.Message}", ex);
+            }
+        }
     }
 }
