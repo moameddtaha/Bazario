@@ -130,12 +130,24 @@ namespace Bazario.Core.Services.Catalog.Discount
 
         public async Task<bool> DiscountExistsAsync(string code, CancellationToken cancellationToken = default)
         {
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                _logger.LogWarning("DiscountExistsAsync called with null or empty code");
+                throw new ArgumentException("Discount code cannot be null or empty", nameof(code));
+            }
+
             var discount = await _discountRepository.GetDiscountByCodeAsync(code, cancellationToken);
             return discount != null;
         }
 
         public async Task<bool> IsDiscountCodeUniqueAsync(string code, Guid? excludeDiscountId = null, CancellationToken cancellationToken = default)
         {
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                _logger.LogWarning("IsDiscountCodeUniqueAsync called with null or empty code");
+                throw new ArgumentException("Discount code cannot be null or empty", nameof(code));
+            }
+
             var existingDiscount = await _discountRepository.GetDiscountByCodeAsync(code, cancellationToken);
 
             if (existingDiscount == null)
@@ -156,7 +168,7 @@ namespace Bazario.Core.Services.Catalog.Discount
         {
             return type switch
             {
-                DiscountType.Percentage => value > 0 && value <= 1, // Percentage should be 0-1 (0%-100%)
+                DiscountType.Percentage => value > 0 && value <= 100, // Percentage should be 1-100 (1%-100%)
                 DiscountType.FixedAmount => value > 0, // Fixed amount should be positive
                 _ => false
             };
@@ -164,11 +176,37 @@ namespace Bazario.Core.Services.Catalog.Discount
 
         public bool ValidateDateRange(DateTime validFrom, DateTime validTo)
         {
-            return validTo > validFrom && validFrom >= DateTime.UtcNow.AddDays(-1);
+            var utcNow = DateTime.UtcNow;
+
+            // ValidFrom should be now or in future for new discounts
+            if (validFrom < utcNow)
+            {
+                return false;
+            }
+
+            // ValidTo must be after ValidFrom
+            if (validTo <= validFrom)
+            {
+                return false;
+            }
+
+            // Enforce reasonable validity window (max 2 years)
+            if ((validTo - validFrom).TotalDays > 730)
+            {
+                return false;
+            }
+
+            return true;
         }
 
         public async Task<bool> MarkDiscountAsUsedAsync(Guid discountId, CancellationToken cancellationToken = default)
         {
+            if (discountId == Guid.Empty)
+            {
+                _logger.LogWarning("MarkDiscountAsUsedAsync called with empty discount ID");
+                throw new ArgumentException("Discount ID cannot be empty", nameof(discountId));
+            }
+
             _logger.LogInformation("Marking discount as used: {DiscountId}", discountId);
 
             // Execute with retry logic for optimistic concurrency - critical for preventing double-use
