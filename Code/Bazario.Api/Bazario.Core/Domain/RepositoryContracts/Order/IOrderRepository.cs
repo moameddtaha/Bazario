@@ -166,5 +166,31 @@ namespace Bazario.Core.Domain.RepositoryContracts.Order
             DateTime startDate,
             DateTime endDate,
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Checks if a customer has purchased a specific product in a completed order.
+        /// Used for review eligibility validation.
+        /// </summary>
+        /// <param name="customerId">Customer ID</param>
+        /// <param name="productId">Product ID</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>True if customer has purchased the product, false otherwise</returns>
+        Task<bool> HasCustomerPurchasedProductAsync(
+            Guid customerId,
+            Guid productId,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets the purchase date for a customer's first purchase of a specific product.
+        /// Returns null if customer has not purchased the product.
+        /// </summary>
+        /// <param name="customerId">Customer ID</param>
+        /// <param name="productId">Product ID</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>Purchase date or null if not purchased</returns>
+        Task<DateTime?> GetProductPurchaseDateAsync(
+            Guid customerId,
+            Guid productId,
+            CancellationToken cancellationToken = default);
     }
 }

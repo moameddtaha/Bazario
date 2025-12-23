@@ -1318,5 +1318,63 @@ namespace Bazario.Infrastructure.Repositories.Order
                 throw new InvalidOperationException($"Failed to get revenue impact stats: {ex.Message}", ex);
             }
         }
+
+        public async Task<bool> HasCustomerPurchasedProductAsync(
+            Guid customerId,
+            Guid productId,
+            CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Checking if customer {CustomerId} has purchased product {ProductId}", customerId, productId);
+
+            try
+            {
+                var hasPurchased = await _context.Orders
+                    .Where(o => o.CustomerId == customerId && o.Status == OrderStatus.Delivered.ToString())
+                    .AnyAsync(o => o.OrderItems != null && o.OrderItems.Any(oi => oi.ProductId == productId), cancellationToken);
+
+                _logger.LogDebug("Customer {CustomerId} purchase check for product {ProductId}: {Result}",
+                    customerId, productId, hasPurchased);
+
+                return hasPurchased;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to check if customer {CustomerId} purchased product {ProductId}",
+                    customerId, productId);
+                throw new InvalidOperationException(
+                    $"Failed to verify customer purchase: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<DateTime?> GetProductPurchaseDateAsync(
+            Guid customerId,
+            Guid productId,
+            CancellationToken cancellationToken = default)
+        {
+            _logger.LogDebug("Getting purchase date for customer {CustomerId} and product {ProductId}",
+                customerId, productId);
+
+            try
+            {
+                var purchaseDate = await _context.Orders
+                    .Where(o => o.CustomerId == customerId && o.Status == OrderStatus.Delivered.ToString())
+                    .Where(o => o.OrderItems != null && o.OrderItems.Any(oi => oi.ProductId == productId))
+                    .OrderBy(o => o.Date)
+                    .Select(o => o.Date)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                _logger.LogDebug("Purchase date for customer {CustomerId} and product {ProductId}: {Date}",
+                    customerId, productId, purchaseDate);
+
+                return purchaseDate;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get purchase date for customer {CustomerId} and product {ProductId}",
+                    customerId, productId);
+                throw new InvalidOperationException(
+                    $"Failed to get purchase date: {ex.Message}", ex);
+            }
+        }
     }
 }

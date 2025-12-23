@@ -38,11 +38,13 @@ using Bazario.Core.ServiceContracts.Authentication;
 using Bazario.Core.ServiceContracts.Authorization;
 using Bazario.Core.ServiceContracts.Catalog.Product;
 using Bazario.Core.ServiceContracts.Catalog.Discount;
+using Bazario.Core.ServiceContracts.Review;
 using Bazario.Core.ServiceContracts.Infrastructure;
 using Bazario.Core.Services.Authentication;
 using Bazario.Core.Services.Authorization;
 using Bazario.Core.Services.Catalog.Product;
 using Bazario.Core.Services.Catalog.Discount;
+using Bazario.Core.Services.Review;
 using Bazario.Core.Services.Infrastructure;
 using Bazario.Infrastructure.Repositories.Authentication;
 using Bazario.Infrastructure.Repositories.UserManagement;
@@ -182,6 +184,15 @@ namespace Bazario.Api.StartupExtensions
             services.AddScoped<IDiscountValidationService, DiscountValidationService>();
             services.AddScoped<IDiscountAnalyticsService, DiscountAnalyticsService>();
             services.AddScoped<IDiscountService, DiscountService>(); // Composite interface
+
+            // ========================================
+            // REVIEW SERVICES
+            // ========================================
+            services.AddScoped<IReviewManagementService, ReviewManagementService>();
+            services.AddScoped<IReviewValidationService, ReviewValidationService>();
+            services.AddScoped<IReviewAnalyticsService, ReviewAnalyticsService>();
+            services.AddScoped<IReviewModerationService, ReviewModerationService>();
+            services.AddScoped<IReviewService, ReviewService>(); // Composite interface
 
             // ========================================
             // INFRASTRUCTURE SERVICES

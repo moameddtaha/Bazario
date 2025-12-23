@@ -69,5 +69,19 @@ namespace Bazario.Core.DTO.Review
                 Comment = Comment
             };
         }
+
+        public static ReviewResponse FromReview(Domain.Entities.Review.Review review)
+        {
+            return new ReviewResponse
+            {
+                ReviewId = review.ReviewId,
+                CustomerId = review.CustomerId,
+                ProductId = review.ProductId,
+                Rating = review.Rating,
+                Comment = review.Comment,
+                CreatedAt = review.CreatedAt,
+                RowVersion = review.RowVersion
+            };
+        }
     }
 }

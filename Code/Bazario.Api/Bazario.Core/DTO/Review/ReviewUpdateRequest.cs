@@ -13,6 +13,9 @@ namespace Bazario.Core.DTO.Review
         [Required(ErrorMessage = "Review Id cannot be blank")]
         public Guid ReviewId { get; set; }
 
+        [Required(ErrorMessage = "Requesting User Id cannot be blank")]
+        public Guid RequestingUserId { get; set; }
+
         [Display(Name = "Rating")]
         [Range(1, 5, ErrorMessage = "Rating must be between 1 and 5")]
         public int? Rating { get; set; }
