@@ -38,6 +38,24 @@ namespace Bazario.Core.Services.Catalog.Discount
             List<Guid> storeIds,
             CancellationToken cancellationToken = default)
         {
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                _logger.LogWarning("ValidateDiscountCodeAsync called with null or empty code");
+                throw new ArgumentException("Discount code cannot be null or empty", nameof(code));
+            }
+
+            if (storeIds == null || storeIds.Count == 0)
+            {
+                _logger.LogWarning("ValidateDiscountCodeAsync called with null or empty store IDs");
+                throw new ArgumentException("Store IDs cannot be null or empty", nameof(storeIds));
+            }
+
+            if (orderSubtotal <= 0)
+            {
+                _logger.LogWarning("ValidateDiscountCodeAsync called with invalid subtotal: {Subtotal}", orderSubtotal);
+                throw new ArgumentOutOfRangeException(nameof(orderSubtotal), "Order subtotal must be greater than 0");
+            }
+
             _logger.LogDebug("Validating discount code: {Code} for subtotal: {Subtotal}", code, orderSubtotal);
 
             var result = await _discountRepository.ValidateDiscountAsync(code, orderSubtotal, storeIds, cancellationToken);
@@ -48,11 +66,18 @@ namespace Bazario.Core.Services.Catalog.Discount
                 return (false, null, result.ErrorMessage);
             }
 
+            // Assert that valid results have non-null discount (repository contract)
+            if (result.Discount == null)
+            {
+                _logger.LogError("Repository returned IsValid=true but Discount=null for code: {Code}. This indicates a repository bug.", code);
+                throw new InvalidOperationException($"Invalid repository state: discount '{code}' marked as valid but entity is null");
+            }
+
             _logger.LogDebug("Discount code validated successfully: {Code}", code);
 
-            // Convert entity to DTO before returning
-            var discountResponse = result.Discount != null ? DiscountResponse.FromDiscount(result.Discount) : null;
-            return (result.IsValid, discountResponse, result.ErrorMessage);
+            // Discount guaranteed non-null here
+            var discountResponse = DiscountResponse.FromDiscount(result.Discount);
+            return (true, discountResponse, null);
         }
 
         public async Task<(List<DiscountResponse> ValidDiscounts, List<string> ErrorMessages)> ValidateMultipleDiscountCodesAsync(
@@ -61,6 +86,24 @@ namespace Bazario.Core.Services.Catalog.Discount
             List<Guid> storeIds,
             CancellationToken cancellationToken = default)
         {
+            if (codes == null || codes.Count == 0)
+            {
+                _logger.LogWarning("ValidateMultipleDiscountCodesAsync called with null or empty codes");
+                throw new ArgumentException("Discount codes cannot be null or empty", nameof(codes));
+            }
+
+            if (storeIds == null || storeIds.Count == 0)
+            {
+                _logger.LogWarning("ValidateMultipleDiscountCodesAsync called with null or empty store IDs");
+                throw new ArgumentException("Store IDs cannot be null or empty", nameof(storeIds));
+            }
+
+            if (orderSubtotal <= 0)
+            {
+                _logger.LogWarning("ValidateMultipleDiscountCodesAsync called with invalid subtotal: {Subtotal}", orderSubtotal);
+                throw new ArgumentOutOfRangeException(nameof(orderSubtotal), "Order subtotal must be greater than 0");
+            }
+
             _logger.LogDebug("Validating {Count} discount codes for subtotal: {Subtotal}", codes.Count, orderSubtotal);
 
             var validDiscounts = new List<DiscountResponse>();
