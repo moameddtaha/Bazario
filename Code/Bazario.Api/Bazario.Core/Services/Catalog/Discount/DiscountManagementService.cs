@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -24,15 +25,18 @@ namespace Bazario.Core.Services.Catalog.Discount
         private readonly IUnitOfWork _unitOfWork;
         private readonly IConcurrencyHelper _concurrencyHelper;
         private readonly ILogger<DiscountManagementService> _logger;
+        private readonly TimeProvider _timeProvider;
 
         public DiscountManagementService(
             IUnitOfWork unitOfWork,
             IConcurrencyHelper concurrencyHelper,
-            ILogger<DiscountManagementService> logger)
+            ILogger<DiscountManagementService> logger,
+            TimeProvider? timeProvider = null)
         {
             _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _concurrencyHelper = concurrencyHelper ?? throw new ArgumentNullException(nameof(concurrencyHelper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _timeProvider = timeProvider ?? TimeProvider.System;
         }
 
         public async Task<DiscountResponse> CreateDiscountAsync(
@@ -41,6 +45,7 @@ namespace Bazario.Core.Services.Catalog.Discount
         {
             if (request == null) throw new ArgumentNullException(nameof(request));
 
+            var stopwatch = Stopwatch.StartNew();
             _logger.LogInformation("Creating discount with code: {Code}", request.Code);
 
             // Convert DTO to entity - uses ToDiscount() method
@@ -52,7 +57,11 @@ namespace Bazario.Core.Services.Catalog.Discount
             var createdDiscount = await _unitOfWork.Discounts.AddDiscountAsync(discount, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            _logger.LogInformation("Discount created successfully with ID: {DiscountId}", createdDiscount.DiscountId);
+            stopwatch.Stop();
+            _logger.LogInformation(
+                "Discount created successfully with ID: {DiscountId} in {ElapsedMs}ms",
+                createdDiscount.DiscountId,
+                stopwatch.ElapsedMilliseconds);
 
             // Convert entity to response DTO
             return DiscountResponse.FromDiscount(createdDiscount);
@@ -64,6 +73,7 @@ namespace Bazario.Core.Services.Catalog.Discount
         {
             if (request == null) throw new ArgumentNullException(nameof(request));
 
+            var stopwatch = Stopwatch.StartNew();
             _logger.LogInformation("Updating discount with ID: {DiscountId}", request.DiscountId);
 
             // Execute with retry logic for optimistic concurrency
@@ -97,7 +107,7 @@ namespace Bazario.Core.Services.Catalog.Discount
                     existingDiscount.IsActive = request.IsActive.Value;
 
                 existingDiscount.UpdatedBy = request.UpdatedBy;
-                existingDiscount.UpdatedAt = DateTime.UtcNow;
+                existingDiscount.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
                 existingDiscount.RowVersion = request.RowVersion; // For optimistic concurrency
 
                 var result = await _unitOfWork.Discounts.UpdateDiscountAsync(existingDiscount, cancellationToken);
@@ -106,7 +116,11 @@ namespace Bazario.Core.Services.Catalog.Discount
                 return result;
             }, "UpdateDiscount", cancellationToken);
 
-            _logger.LogInformation("Discount updated successfully with ID: {DiscountId}", request.DiscountId);
+            stopwatch.Stop();
+            _logger.LogInformation(
+                "Discount updated successfully with ID: {DiscountId} in {ElapsedMs}ms",
+                request.DiscountId,
+                stopwatch.ElapsedMilliseconds);
 
             // Convert entity to response DTO
             return DiscountResponse.FromDiscount(updatedDiscount);
@@ -114,18 +128,27 @@ namespace Bazario.Core.Services.Catalog.Discount
 
         public async Task<bool> DeleteDiscountAsync(Guid discountId, CancellationToken cancellationToken = default)
         {
+            var stopwatch = Stopwatch.StartNew();
             _logger.LogInformation("Deleting discount with ID: {DiscountId}", discountId);
 
             var result = await _unitOfWork.Discounts.SoftDeleteDiscountAsync(discountId, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+            stopwatch.Stop();
+
             if (result)
             {
-                _logger.LogInformation("Discount deleted successfully with ID: {DiscountId}", discountId);
+                _logger.LogInformation(
+                    "Discount deleted successfully with ID: {DiscountId} in {ElapsedMs}ms",
+                    discountId,
+                    stopwatch.ElapsedMilliseconds);
             }
             else
             {
-                _logger.LogWarning("Discount not found for deletion with ID: {DiscountId}", discountId);
+                _logger.LogWarning(
+                    "Discount not found for deletion with ID: {DiscountId} (elapsed: {ElapsedMs}ms)",
+                    discountId,
+                    stopwatch.ElapsedMilliseconds);
             }
 
             return result;
@@ -216,8 +239,9 @@ namespace Bazario.Core.Services.Catalog.Discount
 
             _logger.LogDebug("Getting active discounts (page {Page}, size {Size})", pageNumber, pageSize);
 
+            var currentTime = _timeProvider.GetUtcNow().UtcDateTime;
             var query = _unitOfWork.Discounts.GetDiscountsQueryable()
-                .Where(d => d.IsActive && !d.IsUsed && d.ValidTo >= DateTime.UtcNow);
+                .Where(d => d.IsActive && !d.IsUsed && d.ValidTo >= currentTime);
 
             var discounts = await _unitOfWork.Discounts.GetDiscountsPagedAsync(query, pageNumber, pageSize, cancellationToken);
             return discounts.Select(DiscountResponse.FromDiscount).ToList();
