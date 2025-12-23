@@ -21,15 +21,18 @@ namespace Bazario.Core.Services.Catalog.Discount
         private readonly IDiscountRepository _discountRepository;
         private readonly IConcurrencyHelper _concurrencyHelper;
         private readonly ILogger<DiscountValidationService> _logger;
+        private readonly TimeProvider _timeProvider;
 
         public DiscountValidationService(
             IDiscountRepository discountRepository,
             IConcurrencyHelper concurrencyHelper,
-            ILogger<DiscountValidationService> logger)
+            ILogger<DiscountValidationService> logger,
+            TimeProvider? timeProvider = null)
         {
             _discountRepository = discountRepository ?? throw new ArgumentNullException(nameof(discountRepository));
             _concurrencyHelper = concurrencyHelper ?? throw new ArgumentNullException(nameof(concurrencyHelper));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _timeProvider = timeProvider ?? TimeProvider.System;
         }
 
         public async Task<(bool IsValid, DiscountResponse? Discount, string? ErrorMessage)> ValidateDiscountCodeAsync(
@@ -55,6 +58,9 @@ namespace Bazario.Core.Services.Catalog.Discount
                 _logger.LogWarning("ValidateDiscountCodeAsync called with invalid subtotal: {Subtotal}", orderSubtotal);
                 throw new ArgumentOutOfRangeException(nameof(orderSubtotal), "Order subtotal must be greater than 0");
             }
+
+            // Normalize code for consistency (matches DiscountManagementService pattern)
+            code = code.Trim().ToUpper();
 
             _logger.LogDebug("Validating discount code: {Code} for subtotal: {Subtotal}", code, orderSubtotal);
 
@@ -111,19 +117,39 @@ namespace Bazario.Core.Services.Catalog.Discount
 
             foreach (var code in codes)
             {
-                var (isValid, discount, errorMessage) = await ValidateDiscountCodeAsync(code, orderSubtotal, storeIds, cancellationToken);
+                try
+                {
+                    var (isValid, discount, errorMessage) = await ValidateDiscountCodeAsync(code, orderSubtotal, storeIds, cancellationToken);
 
-                if (isValid && discount != null)
-                {
-                    validDiscounts.Add(discount);
+                    if (isValid && discount != null)
+                    {
+                        validDiscounts.Add(discount);
+                        _logger.LogDebug("Discount code validated successfully: {Code}", code);
+                    }
+                    else if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        errorMessages.Add($"{code}: {errorMessage}");
+                        _logger.LogWarning("Discount code validation failed: {Code}. Reason: {ErrorMessage}", code, errorMessage);
+                    }
                 }
-                else if (!string.IsNullOrEmpty(errorMessage))
+                catch (Exception ex)
                 {
-                    errorMessages.Add($"{code}: {errorMessage}");
+                    var errorMsg = $"{code}: Validation error: {ex.Message}";
+                    errorMessages.Add(errorMsg);
+                    _logger.LogError(ex, "Unexpected error validating discount code: {Code}", code);
                 }
             }
 
-            _logger.LogInformation("{ValidCount} valid discounts out of {TotalCount} codes", validDiscounts.Count, codes.Count);
+            _logger.LogInformation(
+                "Batch validation complete: {ValidCount} valid, {FailedCount} invalid out of {TotalCount} codes",
+                validDiscounts.Count,
+                errorMessages.Count,
+                codes.Count);
+
+            if (errorMessages.Count > 0)
+            {
+                _logger.LogWarning("Failed discount codes: {@FailedCodes}", errorMessages.Take(10));
+            }
 
             return (validDiscounts, errorMessages);
         }
@@ -136,6 +162,9 @@ namespace Bazario.Core.Services.Catalog.Discount
                 throw new ArgumentException("Discount code cannot be null or empty", nameof(code));
             }
 
+            // Normalize code for consistency
+            code = code.Trim().ToUpper();
+
             var discount = await _discountRepository.GetDiscountByCodeAsync(code, cancellationToken);
             return discount != null;
         }
@@ -147,6 +176,9 @@ namespace Bazario.Core.Services.Catalog.Discount
                 _logger.LogWarning("IsDiscountCodeUniqueAsync called with null or empty code");
                 throw new ArgumentException("Discount code cannot be null or empty", nameof(code));
             }
+
+            // Normalize code for consistency
+            code = code.Trim().ToUpper();
 
             var existingDiscount = await _discountRepository.GetDiscountByCodeAsync(code, cancellationToken);
 
@@ -176,7 +208,7 @@ namespace Bazario.Core.Services.Catalog.Discount
 
         public bool ValidateDateRange(DateTime validFrom, DateTime validTo)
         {
-            var utcNow = DateTime.UtcNow;
+            var utcNow = _timeProvider.GetUtcNow().UtcDateTime;
 
             // ValidFrom should be now or in future for new discounts
             if (validFrom < utcNow)
