@@ -3,16 +3,12 @@
   "WorkspaceRootPath": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Infrastructure\\Migrations\\20251214232228_AddRowVersion.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Bazario.Infrastructure\\Migrations\\20251214232228_AddRowVersion.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{C1A81843-27A6-4613-8065-663283676E6B}|Bazario.Api\\Bazario.Api.csproj|d:\\mohamed taha\\private projects\\bazario\\code\\bazario.api\\bazario.api\\startupextensions\\configureservicesextension.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{C1A81843-27A6-4613-8065-663283676E6B}|Bazario.Api\\Bazario.Api.csproj|solutionrelative:bazario.api\\startupextensions\\configureservicesextension.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{C1A81843-27A6-4613-8065-663283676E6B}|Bazario.Api\\Bazario.Api.csproj|d:\\mohamed taha\\private projects\\bazario\\code\\bazario.api\\bazario.api\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{C1A81843-27A6-4613-8065-663283676E6B}|Bazario.Api\\Bazario.Api.csproj|solutionrelative:bazario.api\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{C1A81843-27A6-4613-8065-663283676E6B}|Bazario.Api\\Bazario.Api.csproj|d:\\mohamed taha\\private projects\\bazario\\code\\bazario.api\\bazario.api\\startupextensions\\configureservicesextension.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{C1A81843-27A6-4613-8065-663283676E6B}|Bazario.Api\\Bazario.Api.csproj|solutionrelative:bazario.api\\startupextensions\\configureservicesextension.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     }
   ],
   "DocumentGroupContainers": [
@@ -22,7 +18,7 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 2,
+          "SelectedChildIndex": 1,
           "Children": [
             {
               "$type": "Document",
@@ -35,33 +31,20 @@
               "ViewState": "AgIAACoAAAAAAAAAAAAwwEgAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2025-12-01T17:13:32.532Z",
-              "IsPinned": true,
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 2,
-              "Title": "ConfigureServicesExtension.cs",
-              "DocumentMoniker": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Api\\StartupExtensions\\ConfigureServicesExtension.cs",
-              "RelativeDocumentMoniker": "Bazario.Api\\StartupExtensions\\ConfigureServicesExtension.cs",
-              "ToolTip": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Api\\StartupExtensions\\ConfigureServicesExtension.cs",
-              "RelativeToolTip": "Bazario.Api\\StartupExtensions\\ConfigureServicesExtension.cs",
-              "ViewState": "AgIAAM0AAAAAAAAAAAAgwPcAAAAIAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-12-01T17:13:42.632Z",
               "IsPinned": true
             },
             {
               "$type": "Document",
               "DocumentIndex": 0,
-              "Title": "20251214232228_AddRowVersion.cs",
-              "DocumentMoniker": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Infrastructure\\Migrations\\20251214232228_AddRowVersion.cs",
-              "RelativeDocumentMoniker": "Bazario.Infrastructure\\Migrations\\20251214232228_AddRowVersion.cs",
-              "ToolTip": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Infrastructure\\Migrations\\20251214232228_AddRowVersion.cs",
-              "RelativeToolTip": "Bazario.Infrastructure\\Migrations\\20251214232228_AddRowVersion.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Title": "ConfigureServicesExtension.cs",
+              "DocumentMoniker": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Api\\StartupExtensions\\ConfigureServicesExtension.cs",
+              "RelativeDocumentMoniker": "Bazario.Api\\StartupExtensions\\ConfigureServicesExtension.cs",
+              "ToolTip": "D:\\Mohamed Taha\\Private Projects\\Bazario\\Code\\Bazario.Api\\Bazario.Api\\StartupExtensions\\ConfigureServicesExtension.cs",
+              "RelativeToolTip": "Bazario.Api\\StartupExtensions\\ConfigureServicesExtension.cs",
+              "ViewState": "AgIAANkAAAAAAAAAAAAcwO4AAAAQAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-12-14T23:22:29.305Z",
+              "WhenOpened": "2025-12-01T17:13:42.632Z",
+              "IsPinned": true,
               "EditorCaption": ""
             }
           ]

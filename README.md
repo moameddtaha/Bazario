@@ -1,35 +1,30 @@
-# Bazario E-Commerce Platform
+# Bazario E-Commerce Platform API
 
-A modern, scalable multi-vendor e-commerce platform built with .NET 8 and Clean Architecture principles.
+A comprehensive, production-ready RESTful API for a multi-vendor e-commerce platform built with ASP.NET Core 8.0, following Clean Architecture principles.
 
-## 🚀 Overview
+## 🚀 Features
 
-Bazario is a comprehensive e-commerce solution that enables sellers to create stores, manage products, and process orders while providing customers with a seamless shopping experience. The platform features advanced inventory management, location-based shipping, multi-discount support, and real-time analytics.
+### Authentication & Authorization
+- **JWT-based authentication** with access and refresh tokens
+- **Role-based authorization** (Admin, Seller, Customer)
+- Email verification and password reset functionality
+- Secure password hashing with BCrypt
+- Token refresh and revocation mechanisms
 
-## ✨ Key Features
+### Multi-Vendor Marketplace
+- **Store Management**: Sellers can create and manage multiple stores
+- **Product Catalog**: Comprehensive product management with categories
+- **Inventory Tracking**: Real-time stock management with movement history
+- **Order Processing**: Complete order lifecycle management
+- **Review System**: Product and store reviews with ratings
 
-### For Sellers
-- **Multi-Store Management** - Create and manage multiple stores with individual analytics
-- **Product Management** - Full CRUD operations with inventory tracking
-- **Order Processing** - Automated order lifecycle management (Pending → Processing → Shipped → Delivered)
-- **Inventory Control** - Real-time stock tracking with configurable low stock alerts and forecasting
-- **Smart Alert System** - Per-store alert preferences with email notifications for low stock, out-of-stock, and restock recommendations
-- **Analytics Dashboard** - Revenue tracking, sales metrics, and performance insights
-- **Shipping Configuration** - Location-based shipping rates per governorate
-
-### For Customers
-- **Product Discovery** - Advanced search and filtering capabilities
-- **Shopping Cart** - Multi-store cart with automatic calculation
-- **Multi-Discount Support** - Apply multiple discount codes with proportional attribution
-- **Location-Based Shipping** - Accurate shipping costs based on governorate
-- **Order Tracking** - Real-time order status updates
-- **Product Reviews** - Rate and review purchased products
-
-### For Administrators
-- **User Management** - Manage sellers and customers
-- **Platform Analytics** - System-wide metrics and reporting
-- **Content Moderation** - Review and moderate content
-- **Discount Management** - Create and track promotional campaigns
+### Advanced Features
+- **Discount System**: Percentage and fixed-amount discounts with validation
+- **Shipping Configuration**: Per-store shipping zones, fees, and delivery options
+- **Same-Day Delivery**: Configurable cutoff times and availability checking
+- **Location-Based Shipping**: Egyptian governorates and cities with custom rates
+- **Inventory Alerts**: Low stock, out-of-stock, and restock notifications
+- **Analytics**: Store and product performance metrics
 
 ## 🏗️ Architecture
 
@@ -37,482 +32,418 @@ Bazario is a comprehensive e-commerce solution that enables sellers to create st
 
 ```
 Bazario.Api/
-├── Bazario.Api/              # Presentation Layer (REST API)
-├── Bazario.Core/             # Domain Layer (Business Logic)
-│   ├── Domain/               # Entities, Enums, Interfaces
-│   ├── Services/             # Business Logic Services
-│   ├── ServiceContracts/     # Service Interfaces
-│   ├── Models/               # DTOs and View Models
-│   └── Helpers/              # Utility Classes
-├── Bazario.Infrastructure/   # Infrastructure Layer (Data Access)
-│   ├── Repositories/         # Repository Implementations
-│   ├── DbContext/            # Entity Framework Context
-│   ├── Configurations/       # EF Configurations
-│   └── Migrations/           # Database Migrations
+├── Bazario.Api/              # Presentation Layer (Controllers, Middleware)
+├── Bazario.Core/             # Application & Domain Layer (Services, Entities, DTOs)
+└── Bazario.Infrastructure/   # Infrastructure Layer (Repositories, DbContext, External Services)
 ```
-
-### Domain-Driven Design (DDD)
-
-The project follows vertical slice architecture organized by domain:
-
-- **Authentication** - User registration, login, JWT tokens
-- **Catalog** - Products, categories, discounts
-- **Store** - Store management and analytics
-- **Order** - Order processing and payment
-- **Inventory** - Stock management and alerts
-- **Review** - Product reviews and ratings
-- **Location** - Countries, governorates, cities
-
-### SOLID Principles
-
-Services are separated by responsibility:
-- **Management Services** - CRUD operations
-- **Validation Services** - Business rule validation
-- **Query Services** - Read operations and filtering
-- **Analytics Services** - Reporting and metrics
-- **Composite Services** - Unified interface
-
-## 📐 System Architecture & Design
-
-### Entity Relationship Diagram
-
-The database schema follows a normalized relational design with clear separation of concerns:
-
-![Entity Relationship Diagram](/ERD.png)
-
-**Key Entity Relationships:**
-- Users can own multiple Stores (One-to-Many)
-- Each Store contains multiple Products (One-to-Many)
-- Products have a one-to-one relationship with Inventory
-- Orders contain multiple OrderItems linking to Products (Many-to-Many through junction)
-- Location hierarchy: Country → Governorate → City
-- Store → InventoryAlertPreferences (One-to-One optional)
-
-### Domain Class Diagram
-
-The class structure implements Clean Architecture with clear dependency flow:
-
-![Class Diagram](/ClassDiagram.png)
-
-**Architecture Highlights:**
-- **API Layer** - Controllers and DTOs
-- **Core Layer** - Domain entities, service interfaces, and business logic
-- **Infrastructure Layer** - Repository implementations and EF Core configurations
-- Dependencies point inward: Infrastructure → Core ← API
-
-## 🛠️ Technology Stack
-
-### Backend
-- **.NET 8** - Latest LTS version
-- **ASP.NET Core** - Web API framework
-- **Entity Framework Core** - ORM for database access
-- **SQL Server** - Relational database
-- **IMemoryCache** - High-performance in-memory caching
-- **AutoMapper** - Object-to-object mapping
-- **Serilog** - Structured logging
-
-### Authentication & Security
-- **JWT (JSON Web Tokens)** - Stateless authentication
-- **BCrypt** - Password hashing
-- **Role-based Authorization** - Admin, Seller, Customer roles
 
 ### Design Patterns
-- **Repository Pattern** - Data access abstraction
-- **Unit of Work** - Transaction management
-- **Cache-Aside Pattern** - Three-layer caching strategy (Memory → Database → Config)
-- **Dependency Injection** - Loose coupling
-- **CQRS** - Separation of reads and writes
-- **Specification Pattern** - Query logic encapsulation
+- **Repository Pattern**: Data access abstraction
+- **Unit of Work Pattern**: Transaction management
+- **Dependency Injection**: Loose coupling and testability
+- **Service Layer Pattern**: Business logic separation
+- **DTO Pattern**: Data transfer objects for API contracts
 
-## 📋 Prerequisites
+### Key Technologies
+- **ASP.NET Core 8.0**: Modern web framework
+- **Entity Framework Core**: ORM for database operations
+- **SQL Server**: Primary database (LocalDB for development)
+- **Serilog**: Structured logging to Console, File, and Database
+- **Swagger/OpenAPI**: API documentation and testing
+- **API Versioning**: Versioned endpoints (v1.0)
+- **DotNetEnv**: Environment variable management
 
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
-- [SQL Server 2019+](https://www.microsoft.com/en-us/sql-server/sql-server-downloads) or SQL Server Express
-- [Visual Studio 2022](https://visualstudio.microsoft.com/) or [VS Code](https://code.visualstudio.com/)
-- [Git](https://git-scm.com/)
+## 📁 Project Structure
 
-## 🚀 Getting Started
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/moameddtaha/Bazario
-cd bazario/Bazario.Api
+### Bazario.Api (Presentation Layer)
+```
+Controllers/
+├── v1/
+│   ├── Admin/              # Admin-only endpoints
+│   ├── Auth/               # Authentication endpoints (Public)
+│   ├── Discount/           # Discount management (Public, Seller, Admin)
+│   ├── Inventory/          # Inventory management (Seller, Admin)
+│   ├── Location/           # Geographic data (Public, Admin)
+│   ├── Order/              # Order processing (Customer, Seller, Admin)
+│   ├── Product/            # Product catalog (Public, Seller, Admin)
+│   ├── Review/             # Review system (Public, Customer, Admin)
+│   ├── Seller/             # Seller-specific endpoints
+│   ├── Shipping/           # Shipping configuration (Public, Seller, Admin)
+│   └── Store/              # Store management (Public, Seller, Admin)
+StartupExtensions/
+├── ConfigureServicesExtension.cs    # Dependency injection configuration
 ```
 
-### 2. Configure Database Connection
-
-Update the connection string in `appsettings.json`:
-
-```json
-{
-  "ConnectionStrings": {
-    "DefaultConnection": "Server=.;Database=BazarioDB;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true"
-  }
-}
+### Bazario.Core (Application & Domain Layer)
+```
+Domain/                     # Domain entities
+├── Entities/
+│   ├── User.cs
+│   ├── Store.cs
+│   ├── Product.cs
+│   ├── Order.cs
+│   ├── Inventory.cs
+│   ├── Review.cs
+│   ├── Discount.cs
+│   └── Location/ (Country, Governorate, City)
+Enums/                      # Enumerations
+DTO/                        # Data Transfer Objects
+│   ├── Auth/
+│   ├── Store/
+│   ├── Product/
+│   ├── Order/
+│   └── ...
+ServiceContracts/           # Service interfaces
+│   ├── Auth/
+│   ├── Store/
+│   ├── Product/
+│   └── ...
+Services/                   # Service implementations
+Exceptions/                 # Custom exceptions
+Helpers/                    # Utility classes
+Templates/                  # Email templates
 ```
 
-### 3. Apply Database Migrations
+### Bazario.Infrastructure (Infrastructure Layer)
+```
+Data/
+├── ApplicationDbContext.cs
+├── Repositories/
+└── Configurations/         # EF Core entity configurations
+```
 
+## 🔐 Authentication Flow
+
+### Registration
+1. User registers with email and password
+2. System sends verification email with token
+3. User verifies email via token
+4. Account becomes active
+
+### Login
+1. User authenticates with email/password
+2. System validates credentials
+3. JWT access token (15 min) and refresh token (7 days) generated
+4. Client stores tokens for subsequent requests
+
+### Password Reset
+1. User requests password reset via email
+2. System sends reset token via email
+3. User submits new password with token
+4. Password updated, all tokens revoked
+
+## 📡 API Endpoints
+
+### Authentication (Public)
+- `POST /api/v1/auth/register` - Register new user
+- `POST /api/v1/auth/login` - Login and get JWT tokens
+- `POST /api/v1/auth/refresh` - Refresh access token
+- `POST /api/v1/auth/revoke` - Revoke refresh token
+- `POST /api/v1/auth/forgot-password` - Request password reset
+- `POST /api/v1/auth/reset-password` - Reset password with token
+- `POST /api/v1/auth/verify-email` - Verify email with token
+
+### Stores
+#### Public
+- `GET /api/v1/stores` - Get all active stores
+- `GET /api/v1/stores/{id}` - Get store by ID
+- `GET /api/v1/stores/search?query=` - Search stores
+
+#### Seller
+- `GET /api/v1/seller/stores` - Get seller's stores
+- `POST /api/v1/seller/stores` - Create new store
+- `PUT /api/v1/seller/stores/{id}` - Update store
+- `DELETE /api/v1/seller/stores/{id}` - Soft delete store
+- `POST /api/v1/seller/stores/{id}/activate` - Activate store
+- `POST /api/v1/seller/stores/{id}/deactivate` - Deactivate store
+
+#### Admin
+- `GET /api/v1/admin/stores` - Get all stores (including deleted)
+- `DELETE /api/v1/admin/stores/{id}` - Hard delete store (with reason)
+
+### Products
+Similar structure: Public (read-only), Seller (CRUD for own products), Admin (full access)
+
+### Orders
+- Customer: Create, view own orders, cancel pending orders
+- Seller: View store orders, update status
+- Admin: View all orders, analytics
+
+### Shipping Configuration
+#### Public
+- `GET /api/v1/shipping/stores/{storeId}/same-day-availability?city=` - Check same-day delivery
+- `GET /api/v1/shipping/stores/{storeId}/delivery-fee?city=` - Calculate delivery fee
+- `GET /api/v1/shipping/stores/{storeId}/delivery-options?city=` - Get delivery options
+- `GET /api/v1/shipping/stores/{storeId}/shipping-zone?city=` - Get shipping zone
+
+#### Seller
+- `GET /api/v1/seller/shipping/stores/{storeId}/configuration` - Get configuration
+- `POST /api/v1/seller/shipping/configuration` - Create configuration
+- `PUT /api/v1/seller/shipping/configuration` - Update configuration
+
+#### Admin
+- Full CRUD access to all store shipping configurations
+- `DELETE /api/v1/admin/shipping/stores/{storeId}/configuration?reason=` - Delete configuration
+
+### Discounts
+- Public: Validate discount codes
+- Seller: CRUD for store-specific discounts
+- Admin: CRUD for global and store-specific discounts
+
+### Inventory
+- Seller: View stock, restock, adjust inventory
+- Admin: Full inventory management and analytics
+
+### Location
+#### Public
+- `GET /api/v1/location/countries` - Get all countries
+- `GET /api/v1/location/countries/{countryId}/governorates` - Get governorates
+- `GET /api/v1/location/governorates/{governorateId}/cities` - Get cities
+
+#### Admin
+- Full CRUD for countries, governorates, and cities
+
+### Reviews
+- Public: View reviews
+- Customer: Create, update, delete own reviews
+- Admin: Moderate all reviews
+
+## ⚙️ Configuration
+
+### Environment Variables (.env)
+```env
+# JWT Configuration
+JwtSettings__SecretKey=<base64-encoded-256-bit-key>
+JwtSettings__Issuer=https://bazario-api.com
+JwtSettings__Audience=https://bazario-api.com
+JwtSettings__AccessTokenExpirationMinutes=15
+JwtSettings__RefreshTokenExpirationDays=7
+
+# Database Connection
+ConnectionStrings__DefaultConnection=Server=(localdb)\\mssqllocaldb;Database=BazarioDb;Trusted_Connection=true;MultipleActiveResultSets=true
+
+# App Settings
+AppSettings__EmailConfirmationUrl=https://your-frontend-domain.com/confirm-email
+AppSettings__PasswordResetUrl=https://your-frontend-domain.com/reset-password
+
+# Gmail SMTP Settings
+EmailSettings__SmtpServer=smtp.gmail.com
+EmailSettings__SmtpPort=587
+EmailSettings__Username=your-email@gmail.com
+EmailSettings__Password=your-app-password
+EmailSettings__EnableSsl=true
+EmailSettings__FromEmail=your-email@gmail.com
+EmailSettings__FromName=Bazario App
+```
+
+### appsettings.json
+Contains fallback values and logging configuration. Sensitive values should be stored in `.env`.
+
+## 🗄️ Database
+
+### Entity Framework Core Migrations
 ```bash
+# Create new migration
+dotnet ef migrations add <MigrationName> --project Bazario.Infrastructure --startup-project Bazario.Api
+
+# Update database
 dotnet ef database update --project Bazario.Infrastructure --startup-project Bazario.Api
+
+# Drop database (development only)
+dotnet ef database drop --project Bazario.Infrastructure --startup-project Bazario.Api
 ```
 
-### 4. Run the Application
+### Key Entities
+- **User**: Authentication and user management
+- **Seller/Customer/Admin**: User role entities
+- **Store**: Multi-vendor stores
+- **Product**: Product catalog with categories
+- **Inventory**: Stock management with movement tracking
+- **Order/OrderItem**: Order processing
+- **Discount**: Promotional codes
+- **Review**: Product and store reviews
+- **Country/Governorate/City**: Location hierarchy
+- **StoreShippingConfiguration**: Per-store shipping settings
+- **InventoryAlertPreferences**: Inventory notification settings
 
-```bash
-dotnet run --project Bazario.Api
-```
+## 📊 Logging
 
-The API will be available at:
-- **HTTP:** `http://localhost:5000`
-- **HTTPS:** `https://localhost:5001`
-- **Swagger UI:** `https://localhost:5001/swagger`
+### Serilog Configuration
+- **Console Sink**: Development debugging
+- **File Sink**: Rolling daily logs (30-day retention, 10MB size limit)
+- **MSSqlServer Sink**: Production logs database (warnings and errors only)
 
-## 📚 API Documentation
+### Log Enrichment
+- Machine name
+- Process ID
+- Thread ID
+- User name (authenticated requests)
+- User agent
+- IP address
 
-### Authentication Endpoints
-
-```
-POST   /api/auth/register        # Register new user
-POST   /api/auth/login           # Login and get JWT token
-POST   /api/auth/refresh         # Refresh access token
-POST   /api/auth/forgot-password # Request password reset
-POST   /api/auth/reset-password  # Reset password
-GET    /api/auth/me              # Get current user info
-PUT    /api/auth/change-password # Change password
-```
-
-### Store Management Endpoints
-
-```
-GET    /api/stores               # List all stores
-POST   /api/stores               # Create new store
-GET    /api/stores/{id}          # Get store details
-PUT    /api/stores/{id}          # Update store
-DELETE /api/stores/{id}          # Delete store
-GET    /api/stores/{id}/products # Get store products
-GET    /api/stores/{id}/analytics # Get store analytics
-```
-
-### Product Management Endpoints
-
-```
-GET    /api/products             # List products (with filtering)
-POST   /api/products             # Create product
-GET    /api/products/{id}        # Get product details
-PUT    /api/products/{id}        # Update product
-DELETE /api/products/{id}        # Delete product
-GET    /api/products/{id}/reviews # Get product reviews
-```
-
-### Order Management Endpoints
-
-```
-GET    /api/orders               # List orders (with filtering)
-POST   /api/orders               # Create order
-GET    /api/orders/{id}          # Get order details
-PUT    /api/orders/{id}          # Update order status
-POST   /api/orders/{id}/cancel   # Cancel order
-GET    /api/orders/analytics     # Get order analytics
-```
-
-### Inventory Management Endpoints
-
-```
-GET    /api/inventory            # List inventory items
-GET    /api/inventory/{productId} # Get product stock
-PUT    /api/inventory/{productId} # Update stock levels
-GET    /api/inventory/alerts     # Get low stock alerts
-GET    /api/inventory/reports    # Get inventory reports
-```
-
-### Inventory Alert Endpoints
-
-```
-GET    /api/inventory/alerts/preferences/{storeId}  # Get store alert preferences
-POST   /api/inventory/alerts/preferences            # Configure alert preferences
-PUT    /api/inventory/alerts/preferences/{storeId}  # Update alert preferences
-POST   /api/inventory/alerts/process                # Process pending alerts (admin)
-POST   /api/inventory/alerts/low-stock              # Send low stock alert
-POST   /api/inventory/alerts/out-of-stock           # Send out-of-stock notification
-POST   /api/inventory/alerts/restock                # Send restock recommendation
-```
-
-### Discount Management Endpoints
-
-```
-GET    /api/discounts            # List discount codes
-POST   /api/discounts            # Create discount
-GET    /api/discounts/{id}       # Get discount details
-PUT    /api/discounts/{id}       # Update discount
-DELETE /api/discounts/{id}       # Delete discount
-POST   /api/discounts/validate   # Validate discount code
-```
-
-For complete API documentation, visit the **Swagger UI** at `/swagger` when running the application.
-
-## 🗄️ Database Schema
-
-### Core Entities
-
-- **Users** - Customer and seller accounts
-- **Roles** - Admin, Seller, Customer
-- **Stores** - Seller stores
-- **Products** - Store products
-- **Categories** - Product categories
-- **Orders** - Customer orders
-- **OrderItems** - Individual order line items
-- **Inventory** - Product stock levels
-- **InventoryAlertPreferences** - Per-store alert configuration with email preferences and thresholds
-- **Discounts** - Promotional codes
-- **Reviews** - Product reviews and ratings
-- **Countries** - Supported countries
-- **Governorates** - States/provinces
-- **Cities** - Cities for shipping
-
-## 🔐 Authentication & Authorization
-
-### JWT Configuration
-
-The application uses JWT tokens with the following claims:
-- `sub` - User ID
-- `email` - User email
-- `role` - User role (Admin, Seller, Customer)
-- `exp` - Token expiration
-
-### Role-Based Access
-
-- **Admin** - Full system access
-- **Seller** - Manage own stores, products, and orders
-- **Customer** - Browse products, place orders, write reviews
-
-### Example: Protected Endpoint
-
-```csharp
-[Authorize(Roles = "Seller")]
-[HttpPost]
-public async Task<IActionResult> CreateStore([FromBody] CreateStoreRequest request)
-{
-    // Only sellers can create stores
-}
-```
-
-## 📊 Business Features
-
-### Order Calculation System
-
-Automated order total calculation with:
-- **Subtotal Calculation** - Sum of all product prices
-- **Multi-Discount Support** - Apply multiple codes with proportional attribution
-- **Location-Based Shipping** - Calculate shipping by governorate
-- **Tax Calculation** - Configurable tax rates (currently disabled)
-
-### Discount System
-
-- **Percentage Discounts** - 10% off, 25% off, etc.
-- **Fixed Amount Discounts** - $10 off, $50 off, etc.
-- **Minimum Order Requirements** - Apply only above threshold
-- **Store-Specific Discounts** - Limit to specific stores
-- **Global Discounts** - Platform-wide promotions
-- **One-Time Use** - Single-use discount codes
-- **Date-Based Validity** - Valid from/to dates
-
-### Location-Based Shipping
-
-- **27 Egyptian Governorates** - Complete coverage
-- **Major Cities** - Cairo, Alexandria, Giza, etc.
-- **Express Delivery** - Available in major cities
-- **Same-Day Delivery** - Available in Cairo
-- **Free Shipping Threshold** - Configurable per store
-- **Hierarchical Resolution** - Postal Code → City → Governorate → Country
-
-### Inventory Management & Alerts (v2.1)
-
-- **Real-Time Stock Tracking** - Automatic updates on orders
-- **Smart Alert System** - Configurable per-store alert preferences with database persistence
-- **Cache-Aside Pattern** - Three-layer caching (Memory → Database → Config) for sub-millisecond retrieval
-- **Email Notifications** - Low stock, out-of-stock, and restock recommendations
-- **Thread-Safe Operations** - Per-store locking prevents race conditions and cache stampede
-- **Bulk Alert Processing** - Efficient handling of pending alerts across all stores
-- **Customizable Thresholds** - Store-specific low stock and dead stock thresholds
-- **Summary Emails** - Daily and weekly inventory status reports
-- **Stock Reservations** - Temporary holds during checkout
-- **Bulk Stock Updates** - Import stock levels
-- **Stock Forecasting** - Demand prediction
-- **Inventory Valuation** - Total inventory value
-- **Dead Stock Detection** - Identify slow-moving items
+### Log Locations
+- Console: Real-time output
+- File: `Logs/Prod/log-YYYYMMDD.txt`
+- Database: `BazarioLogs.ProductionLogs` table
 
 ## 🧪 Testing
 
-### Unit Tests
+### Test Projects
+- **Bazario.Auth.ServiceTests**: Authentication service unit tests
+- **Bazario.Email.ServiceTests**: Email service unit tests
 
+### Running Tests
 ```bash
-dotnet test Bazario.Tests.Unit
+dotnet test
 ```
 
-### Integration Tests
+## 🚀 Getting Started
 
+### Prerequisites
+- .NET 8.0 SDK
+- SQL Server or LocalDB
+- Visual Studio 2022 / VS Code / Rider
+
+### Installation
+
+1. **Clone the repository**
 ```bash
-dotnet test Bazario.Tests.Integration
+git clone <repository-url>
+cd Bazario.Api
 ```
 
-### Test Coverage
-
-Run tests with coverage:
-
+2. **Configure environment variables**
 ```bash
-dotnet test /p:CollectCoverage=true /p:CoverletOutputFormat=opencover
+# Copy .env.example to .env and update values
+cp .env.example .env
 ```
 
-## 🚢 Deployment
-
-### Production Checklist
-
-- [ ] Update connection strings for production database
-- [ ] Configure JWT secret key
-- [ ] Enable HTTPS
-- [ ] Configure CORS policies
-- [ ] Set up logging and monitoring
-- [ ] Configure email service (SMTP)
-- [ ] Set up payment gateway (Paymob)
-- [ ] Enable rate limiting
-- [ ] Configure CDN for static assets
-- [ ] Set up backup and recovery
-
-### Docker Deployment
-
-```bash
-docker build -t bazario-api .
-docker run -d -p 5000:80 bazario-api
+3. **Generate JWT Secret Key** (PowerShell)
+```powershell
+$bytes = New-Object byte[] 32
+[System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+[Convert]::ToBase64String($bytes)
 ```
+Add the output to `.env` as `JwtSettings__SecretKey`
 
-### Environment Variables
+4. **Update database connection string** in `.env`
 
-```bash
-ASPNETCORE_ENVIRONMENT=Production
-JWT__Secret=your-secret-key
-ConnectionStrings__DefaultConnection=your-connection-string
-SMTP__Host=smtp.gmail.com
-SMTP__Port=587
-SMTP__Username=your-email
-SMTP__Password=your-password
-```
-
-## 📈 Performance Optimizations
-
-- **AsNoTracking()** - For read-only queries
-- **Database Indexing** - On frequently queried columns
-- **Pagination** - For large result sets
-- **IMemoryCache** - In-memory caching for hot data (alert preferences, configurations)
-- **Cache-Aside Pattern** - Three-layer caching strategy for optimal performance
-- **Lazy Loading** - Disabled to prevent N+1 queries
-- **Bulk Operations** - For batch updates
-- **Query Optimization** - Database-level filtering and aggregation
-- **Thread-Safe Caching** - Per-resource locking to prevent cache stampede
-
-## 🔄 Migration Guide
-
-### Adding a New Migration
-
-```bash
-dotnet ef migrations add MigrationName --project Bazario.Infrastructure --startup-project Bazario.Api
-```
-
-### Applying Migrations
-
+5. **Run migrations**
 ```bash
 dotnet ef database update --project Bazario.Infrastructure --startup-project Bazario.Api
 ```
 
-### Rolling Back Migrations
-
+6. **Build and run**
 ```bash
-dotnet ef database update PreviousMigrationName --project Bazario.Infrastructure --startup-project Bazario.Api
+dotnet build
+dotnet run --project Bazario.Api
 ```
 
-## 📝 Code Quality Standards
+7. **Access Swagger UI** (Development only)
+```
+https://localhost:5001/swagger
+```
 
-### KISS Principle
-- Methods should be under 50 lines
-- Single responsibility per method
-- Avoid complex nested conditions
+## 📝 API Versioning
 
-### SOLID Principles
-- **S**ingle Responsibility - One reason to change
-- **O**pen/Closed - Open for extension, closed for modification
-- **L**iskov Substitution - Subtypes must be substitutable
-- **I**nterface Segregation - Many specific interfaces vs one general
-- **D**ependency Inversion - Depend on abstractions, not concretions
+The API uses URL-based versioning:
+- Current version: `v1.0`
+- Base URL: `/api/v{version}/`
+- Example: `/api/v1/stores`
 
-### Logging Levels
-- **Debug** - Routine operations
-- **Information** - State changes
-- **Warning** - Validation failures
-- **Error** - Exceptions and failures
+## 🔒 Security
+
+### Best Practices Implemented
+- ✅ JWT token authentication
+- ✅ Password hashing with BCrypt
+- ✅ Email verification required
+- ✅ Role-based authorization
+- ✅ HTTPS enforcement
+- ✅ CORS configuration
+- ✅ Input validation with Data Annotations
+- ✅ SQL injection prevention (EF Core parameterization)
+- ✅ XSS prevention (automatic encoding)
+- ✅ Audit trails (CreatedBy, UpdatedBy, timestamps)
+
+### Security Headers
+- HTTPS redirection enabled
+- Sensitive data excluded from logs
+
+## 📚 Documentation
+
+### Additional Documentation
+- [Entity Relationship Diagram (ERD.md)](ERD.md) - Complete database schema
+- [Class Diagram (ClassDiagram.md)](ClassDiagram.md) - System architecture
+
+### Swagger/OpenAPI
+API documentation available at `/swagger` in development environment.
 
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+### Code Style
+- Follow C# naming conventions
+- Use async/await for I/O operations
+- Include XML documentation comments
+- Write unit tests for business logic
 
-### Commit Message Format
+### Git Workflow
+1. Create feature branch: `git checkout -b feature/your-feature`
+2. Commit changes: `git commit -m "feat: description"`
+3. Push to branch: `git push origin feature/your-feature`
+4. Create Pull Request
 
-```
-feat: Add new feature
-fix: Fix bug in order calculation
-refactor: Simplify StoreValidationService
-docs: Update README
-test: Add unit tests for DiscountService
-```
+### Commit Message Convention
+- `feat:` New feature
+- `fix:` Bug fix
+- `refactor:` Code refactoring
+- `docs:` Documentation changes
+- `test:` Test additions/modifications
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is proprietary software. All rights reserved.
 
 ## 👥 Authors
 
-- **Mohamed Taha** - *Initial work*
+- Mohamed Taha - Initial development
 
-## 🙏 Acknowledgments
+## 🎯 Roadmap
 
-- Clean Architecture principles by Robert C. Martin
-- .NET team for excellent documentation
-- Community contributors
+### Completed Features ✅
+- Phase 1: Authentication system
+- Phase 2: Store management
+- Phase 3: Product catalog
+- Phase 4: Order processing
+- Phase 5: Store controllers (Public, Seller, Admin)
+- Phase 6: Discount controllers
+- Phase 7: Inventory management
+- Phase 8: Location management
+- Phase 9: Shipping configuration
+- Phase 10: Review system
+
+### Future Enhancements 🔮
+- Payment gateway integration (Paymob, Stripe)
+- Real-time notifications (SignalR)
+- Image upload with cloud storage (Azure Blob, AWS S3)
+- Advanced analytics dashboard
+- Wishlist functionality
+- Product recommendations
+- Multi-language support
+- Mobile app API optimizations
+- Caching layer (Redis)
+- Rate limiting
+- GraphQL endpoint
+
+## 🐛 Known Issues
+
+None at this time.
 
 ## 📞 Support
 
-For support, email support@bazario.com or create an issue in this repository.
-
-## 🗺️ Roadmap
-
-### Version 2.1 (Current)
-- [x] Core authentication system
-- [x] Store and product management
-- [x] Order processing system
-- [x] Inventory management with analytics
-- [x] Smart alert system with database persistence (v2.1)
-- [x] Cache-aside pattern for alert preferences (v2.1)
-- [x] Per-store alert configuration (v2.1)
-- [x] Discount system
-- [x] Location-based shipping
-- [ ] Review and rating system
-- [ ] Admin dashboard
-- [ ] Payment gateway integration (Paymob)
-
-### Version 2.0 (Planned)
-- [ ] Real-time notifications
-- [ ] Advanced search with Elasticsearch
-- [ ] Recommendation engine
-- [ ] Multi-language support
-- [ ] Mobile app (Flutter)
-- [ ] Seller analytics dashboard
-- [ ] Automated email campaigns
-- [ ] Chat support system
+For questions or issues, please create an issue in the repository.
 
 ---
 
-**Built with ❤️ using .NET 8 and Clean Architecture**
+**Built with ❤️ using ASP.NET Core 8.0**
+
+*Last Updated: December 2025*
