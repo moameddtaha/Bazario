@@ -18,6 +18,7 @@ erDiagram
     Store ||--o{ StoreGovernorateSupport : "supports"
     Store ||--o{ Review : "has"
     Store ||--o| InventoryAlertPreferences : "has alert config"
+    Store ||--o| StoreShippingConfiguration : "has shipping config"
 
     %% Product & Catalog
     Product ||--o{ OrderItem : "ordered in"
@@ -325,6 +326,24 @@ erDiagram
         bool IsActive
         datetime CreatedAt
     }
+
+    %% Store Shipping Configuration Entity
+    StoreShippingConfiguration {
+        guid StoreId "PK-FK"
+        bool EnableStandardDelivery
+        decimal StandardDeliveryFee
+        bool EnableSameDayDelivery
+        decimal SameDayDeliveryFee
+        int SameDayDeliveryCutoffHour
+        bool EnableExpressDelivery
+        decimal ExpressDeliveryFee
+        decimal FreeShippingThreshold
+        bool IsActive
+        datetime CreatedAt
+        datetime UpdatedAt
+        guid CreatedBy "FK"
+        guid UpdatedBy "FK-nullable"
+    }
 ```
 
 ---
@@ -348,6 +367,7 @@ erDiagram
 
 ### One-to-One Relationships
 - **Store → InventoryAlertPreferences** (1:0..1) - Store can have alert preferences configuration
+- **Store → StoreShippingConfiguration** (1:0..1) - Store can have shipping configuration
 
 ### Many-to-One Relationships
 - **Store → Seller** (N:1) - Multiple stores belong to one seller
@@ -385,6 +405,7 @@ erDiagram
 - **Admin:** UserId (1:1 relationship)
 - **Inventory:** ProductId (1:1 relationship)
 - **InventoryAlertPreferences:** StoreId (1:0..1 relationship with Store)
+- **StoreShippingConfiguration:** StoreId (1:0..1 relationship with Store)
 
 ### Foreign Keys
 - All relationships enforce referential integrity
@@ -441,6 +462,10 @@ CREATE INDEX IX_InventoryAlertPreferences_UpdatedAt ON InventoryAlertPreferences
 -- Location indexes
 CREATE INDEX IX_Governorate_CountryId ON Governorate(CountryId);
 CREATE INDEX IX_City_GovernorateId ON City(GovernorateId);
+
+-- StoreShippingConfiguration indexes
+CREATE INDEX IX_StoreShippingConfiguration_StoreId ON StoreShippingConfiguration(StoreId);
+CREATE INDEX IX_StoreShippingConfiguration_IsActive ON StoreShippingConfiguration(IsActive);
 ```
 
 ---
@@ -502,7 +527,16 @@ CREATE INDEX IX_City_GovernorateId ON City(GovernorateId);
    - Shipping cost = Governorate base + City modifier
    - Express/Same-day delivery support flags
 
-8. **Review System**
+9. **Store Shipping Configuration**
+   - One-to-one relationship with Store
+   - Configurable delivery types (Standard, Same-Day, Express)
+   - Per-store fee customization
+   - Same-day delivery cutoff hour (orders after cutoff get standard delivery)
+   - Free shipping threshold support
+   - Active/inactive configuration status
+   - Audit trail with CreatedBy/UpdatedBy
+
+10. **Review System**
    - Customer can review products and stores
    - Rating scale 1-5
    - Verified purchases flagged

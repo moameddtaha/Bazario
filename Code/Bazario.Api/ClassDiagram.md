@@ -270,6 +270,23 @@ classDiagram
         +DateTime CreatedAt
     }
 
+    class StoreShippingConfiguration {
+        +Guid StoreId
+        +bool EnableStandardDelivery
+        +decimal StandardDeliveryFee
+        +bool EnableSameDayDelivery
+        +decimal SameDayDeliveryFee
+        +int SameDayDeliveryCutoffHour
+        +bool EnableExpressDelivery
+        +decimal ExpressDeliveryFee
+        +decimal FreeShippingThreshold
+        +bool IsActive
+        +DateTime CreatedAt
+        +DateTime UpdatedAt
+        +Guid CreatedBy
+        +Guid? UpdatedBy
+    }
+
     %% ========================================
     %% ENUMS
     %% ========================================
@@ -403,10 +420,12 @@ classDiagram
 
     class IStoreShippingConfigurationService {
         <<interface>>
-        +AddSupportedGovernorateAsync(storeId, governorateId)
-        +RemoveSupportedGovernorateAsync(storeId, governorateId)
-        +UpdateCustomShippingCostAsync(storeId, governorateId, cost)
-        +GetSupportedGovernoratesAsync(storeId)
+        +GetConfigurationAsync(storeId, cancellationToken) Task~StoreShippingConfigurationResponse~
+        +CreateConfigurationAsync(request, userId, cancellationToken) Task~StoreShippingConfigurationResponse~
+        +UpdateConfigurationAsync(request, userId, cancellationToken) Task~StoreShippingConfigurationResponse~
+        +DeleteConfigurationAsync(storeId, deletedBy, reason, cancellationToken) Task~bool~
+        +IsSameDayDeliveryAvailableAsync(storeId, city, cancellationToken) Task~bool~
+        +GetDeliveryFeeAsync(storeId, city, cancellationToken) Task~decimal~
     }
 
     %% ========================================
@@ -568,9 +587,12 @@ classDiagram
 
     class IShippingZoneService {
         <<interface>>
-        +CalculateShippingCostAsync(storeId, governorateId, cityId, weight)
-        +ValidateShippingZoneAsync(storeId, governorateId)
-        +GetAvailableShippingOptionsAsync(storeId, location)
+        +DetermineStoreShippingZoneAsync(storeId, city, country, cancellationToken) Task~ShippingZone~
+        +IsEligibleForStoreSameDayDeliveryAsync(storeId, city, country, cancellationToken) Task~bool~
+        +GetStoreDeliveryFeeAsync(storeId, city, country, cancellationToken) Task~decimal~
+        +GetAvailableDeliveryOptionsAsync(storeId, city, country, cancellationToken) Task~List~ShippingZone~~
+        +GetShippingZoneByNameAsync(city, country, cancellationToken) Task~ShippingZone~
+        +GetShippingZoneByIdAsync(cityId, cancellationToken) Task~ShippingZone~
     }
 
     %% ========================================
@@ -682,6 +704,7 @@ classDiagram
     Store "1" -- "0..*" Review : has
     Store "1" -- "0..*" StoreGovernorateSupport : supports
     Store "1" -- "0..1" InventoryAlertPreferences : has_alert_config
+    Store "1" -- "0..1" StoreShippingConfiguration : has_shipping_config
 
     Product "1" -- "0..*" OrderItem : ordered_in
     Product "1" -- "1" Inventory : has_stock

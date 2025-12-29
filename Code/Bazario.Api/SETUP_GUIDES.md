@@ -915,13 +915,350 @@ if (data.isSuccess) {
 
 ---
 
+---
+
+# 4. Store Shipping Configuration System (Phase 9)
+
+**Status:** ✅ 100% Complete
+**Last Updated:** December 2025
+
+## Overview
+The shipping configuration system allows stores to configure their delivery options, fees, and geographic coverage. It supports same-day delivery with cutoff times, standard delivery, and express delivery options.
+
+## Implementation Status
+
+### ✅ Completed Features
+- ✅ Store-specific shipping configuration (one-to-one relationship with Store)
+- ✅ Multiple delivery types (Standard, Same-Day, Express)
+- ✅ Per-store delivery fee configuration
+- ✅ Same-day delivery cutoff hour validation
+- ✅ Free shipping threshold support
+- ✅ Governorate-based geographic coverage
+- ✅ Database-driven city and governorate resolution
+- ✅ Cross-platform timezone support (IANA timezone IDs)
+- ✅ Three-tier controller architecture (Public, Seller, Admin)
+
+## Database Schema
+
+### StoreShippingConfiguration Entity
+```csharp
+{
+    Guid StoreId (PK, FK to Store)
+    bool EnableStandardDelivery
+    decimal StandardDeliveryFee
+    bool EnableSameDayDelivery
+    decimal SameDayDeliveryFee
+    int SameDayDeliveryCutoffHour (0-23, default: 14)
+    bool EnableExpressDelivery
+    decimal ExpressDeliveryFee
+    decimal FreeShippingThreshold (nullable)
+    bool IsActive
+    DateTime CreatedAt
+    DateTime UpdatedAt
+    Guid CreatedBy (FK to User)
+    Guid? UpdatedBy (FK to User)
+}
+```
+
+## API Endpoints
+
+### Public Endpoints (No Authentication)
+```http
+GET /api/v1/shipping/stores/{storeId}/same-day-availability?city={city}
+  # Check if same-day delivery is available for a specific city
+  # Returns: { storeId, city, sameDayDeliveryAvailable: true/false }
+
+GET /api/v1/shipping/stores/{storeId}/delivery-fee?city={city}
+  # Calculate delivery fee for a specific city
+  # Returns: { storeId, city, deliveryFee: 50.00 }
+
+GET /api/v1/shipping/stores/{storeId}/delivery-options?city={city}&country={country}
+  # Get all available delivery options for a location
+  # Returns: List of ShippingZone (SameDay, Local, National, NotSupported)
+
+GET /api/v1/shipping/stores/{storeId}/shipping-zone?city={city}&country={country}
+  # Determine the shipping zone for a specific location
+  # Returns: ShippingZone enum value
+```
+
+### Seller Endpoints (Requires Seller Role)
+```http
+GET /api/v1/seller/shipping/stores/{storeId}/configuration
+  # Get shipping configuration for seller's store
+
+POST /api/v1/seller/shipping/configuration
+  # Create new shipping configuration
+  # Body: StoreShippingConfigurationRequest
+
+PUT /api/v1/seller/shipping/configuration
+  # Update existing shipping configuration
+  # Body: StoreShippingConfigurationRequest
+
+GET /api/v1/seller/shipping/stores/{storeId}/same-day-availability?city={city}
+  # Check same-day delivery availability (same as public endpoint)
+
+GET /api/v1/seller/shipping/stores/{storeId}/delivery-fee?city={city}
+  # Calculate delivery fee (same as public endpoint)
+```
+
+### Admin Endpoints (Requires Admin Role)
+```http
+GET /api/v1/admin/shipping/stores/{storeId}/configuration
+  # Get shipping configuration for any store
+
+POST /api/v1/admin/shipping/configuration
+  # Create shipping configuration for any store
+  # Body: StoreShippingConfigurationRequest
+
+PUT /api/v1/admin/shipping/configuration
+  # Update shipping configuration for any store
+  # Body: StoreShippingConfigurationRequest
+
+DELETE /api/v1/admin/shipping/stores/{storeId}/configuration?reason={reason}
+  # Delete shipping configuration (requires reason for audit trail)
+  # Requires: reason parameter (min 10 characters)
+
+GET /api/v1/admin/shipping/stores/{storeId}/same-day-availability?city={city}
+  # Check same-day delivery availability for any store
+
+GET /api/v1/admin/shipping/stores/{storeId}/delivery-fee?city={city}
+  # Calculate delivery fee for any store
+```
+
+## Configuration Examples
+
+### Example 1: Cairo Store with Same-Day Delivery
+```json
+{
+  "storeId": "store-guid-here",
+  "enableStandardDelivery": true,
+  "standardDeliveryFee": 30.00,
+  "enableSameDayDelivery": true,
+  "sameDayDeliveryFee": 50.00,
+  "sameDayCutoffHour": 14,
+  "enableExpressDelivery": false,
+  "expressDeliveryFee": 0.00,
+  "freeShippingThreshold": 500.00,
+  "supportedGovernorateIds": ["cairo-governorate-id"],
+  "isActive": true
+}
+```
+
+### Example 2: Nationwide Store (No Same-Day)
+```json
+{
+  "storeId": "store-guid-here",
+  "enableStandardDelivery": true,
+  "standardDeliveryFee": 50.00,
+  "enableSameDayDelivery": false,
+  "sameDayDeliveryFee": 0.00,
+  "sameDayCutoffHour": 0,
+  "enableExpressDelivery": true,
+  "expressDeliveryFee": 80.00,
+  "freeShippingThreshold": 1000.00,
+  "supportedGovernorateIds": [], // Empty = all governorates
+  "isActive": true
+}
+```
+
+### Example 3: Greater Cairo Region Store
+```json
+{
+  "storeId": "store-guid-here",
+  "enableStandardDelivery": true,
+  "standardDeliveryFee": 40.00,
+  "enableSameDayDelivery": true,
+  "sameDayDeliveryFee": 60.00,
+  "sameDayCutoffHour": 12,
+  "enableExpressDelivery": false,
+  "expressDeliveryFee": 0.00,
+  "freeShippingThreshold": null, // No free shipping
+  "supportedGovernorateIds": [
+    "cairo-id",
+    "giza-id",
+    "qalyubia-id"
+  ],
+  "isActive": true
+}
+```
+
+## Same-Day Delivery Logic
+
+### Validation Steps:
+1. **Store Configuration Check**: `EnableSameDayDelivery` must be `true`
+2. **City Resolution**: Resolve city name to Governorate via database
+3. **Governorate Support**: Check if store supports this governorate (junction table)
+4. **Governorate Capability**: Check if governorate `SupportsSameDayDelivery` is `true`
+5. **City Override**: Check if city `SupportsSameDayDelivery` is `true` (optional)
+6. **Cutoff Time Validation**: Current hour (in store's timezone) < `SameDayCutoffHour`
+
+### Timezone Support:
+- Uses **IANA timezone IDs** (`Africa/Cairo`) instead of Windows-specific IDs
+- Cross-platform compatible (works on both Windows and Linux)
+- Uses `TimeZoneConverter` NuGet package (v7.0.0)
+- Cutoff time is evaluated in the store's local timezone
+
+### Example Validation:
+```csharp
+// Order placed at 1:00 PM Cairo time for "Nasr City"
+// Store cutoff: 2:00 PM (14:00)
+// Result: Same-day delivery AVAILABLE
+
+// Order placed at 3:00 PM Cairo time for "Nasr City"
+// Store cutoff: 2:00 PM (14:00)
+// Result: Same-day delivery NOT AVAILABLE (past cutoff, falls back to standard delivery)
+```
+
+## Delivery Fee Calculation
+
+The system returns the appropriate delivery fee based on:
+1. **Same-Day Available**: Returns `SameDayDeliveryFee` if all same-day conditions met
+2. **Standard Delivery**: Returns `StandardDeliveryFee` if same-day not available
+3. **Free Shipping**: Returns `0.00` if order total exceeds `FreeShippingThreshold`
+
+## Business Rules
+
+1. **One Configuration Per Store**: One-to-one relationship (StoreId is primary key)
+2. **Active Configuration Required**: `IsActive` must be `true` for fees to be calculated
+3. **Cutoff Hour Range**: Must be between 0-23 (24-hour format)
+4. **Delivery Fee Validation**: Fees must be >= 0
+5. **Free Shipping Optional**: `FreeShippingThreshold` can be null (no free shipping)
+6. **At Least One Delivery Type**: Must enable at least one of: Standard, Same-Day, Express
+7. **Audit Trail**: All changes tracked with `CreatedBy`, `UpdatedBy`, timestamps
+
+## Integration with Location System
+
+The shipping configuration works seamlessly with the location-based shipping system:
+
+### Governorate Support
+- Stores configure which governorates they ship to via junction table `StoreGovernorateSupport`
+- Empty `SupportedGovernorateIds` = ships to all governorates
+- `ExcludedGovernorateIds` can be used to blacklist specific regions
+
+### City Resolution
+- Uses database-driven city-to-governorate resolution
+- No hardcoded city lists
+- Easy to add new cities via Admin Location API
+- Supports Egyptian cities (20+ major cities seeded)
+
+### Shipping Zones
+The system determines shipping zones:
+- **SameDay**: Cairo cities with same-day delivery enabled
+- **Local**: Greater Cairo region (Cairo, Giza, Qalyubia)
+- **National**: Other Egyptian governorates
+- **NotSupported**: Store doesn't ship to this governorate
+
+## Benefits
+
+### For Store Owners
+✅ Flexible delivery configuration per store
+✅ Easy to enable/disable delivery types
+✅ Custom fees for different delivery speeds
+✅ Free shipping threshold incentivizes larger orders
+✅ Same-day delivery competitive advantage in Cairo
+✅ Visual governorate selection (when UI implemented)
+
+### For Customers
+✅ Clear delivery fee calculation
+✅ Transparent same-day delivery availability
+✅ Multiple delivery options
+✅ Free shipping incentive display
+
+### For Developers
+✅ Clean separation of concerns
+✅ Database-driven configuration (no code changes needed)
+✅ Reusable shipping calculation service
+✅ Comprehensive API for different user roles
+✅ Audit trail for compliance
+
+## Testing
+
+### Unit Tests (Recommended)
+```csharp
+[Test]
+public async Task IsSameDayDeliveryAvailable_BeforeCutoff_ReturnsTrue()
+{
+    // Arrange: Store with 2 PM cutoff, current time 1 PM
+    // Act: Check same-day availability for Cairo city
+    // Assert: Returns true
+}
+
+[Test]
+public async Task GetDeliveryFee_SameDayAvailable_ReturnsSameDayFee()
+{
+    // Arrange: Store with same-day enabled, before cutoff
+    // Act: Get delivery fee
+    // Assert: Returns SameDayDeliveryFee
+}
+
+[Test]
+public async Task GetDeliveryFee_OrderAboveThreshold_ReturnsFree()
+{
+    // Arrange: Order total 600, threshold 500
+    // Act: Get delivery fee
+    // Assert: Returns 0.00
+}
+```
+
+### Integration Tests
+- Test configuration CRUD operations
+- Test same-day availability across timezones
+- Test delivery fee calculation with different scenarios
+- Test governorate support validation
+
+## Migration Guide
+
+### From No Configuration to With Configuration
+1. Admin/Seller creates configuration via API
+2. Configure delivery types and fees
+3. Select supported governorates
+4. Set same-day cutoff hour if applicable
+5. Activate configuration (`IsActive = true`)
+
+### Updating Existing Configuration
+1. GET current configuration
+2. Modify desired fields
+3. PUT updated configuration
+4. System validates and applies changes
+
+## Troubleshooting
+
+### Same-Day Delivery Not Available
+**Problem**: Customer sees "Same-day delivery not available"
+
+**Possible Causes:**
+1. Store `EnableSameDayDelivery` is `false`
+2. Order placed after cutoff hour
+3. City's governorate doesn't support same-day delivery
+4. Store doesn't support this governorate
+5. Configuration is inactive (`IsActive = false`)
+
+**Solution**: Check each validation step in order
+
+### Delivery Fee Shows Zero
+**Problem**: Delivery fee calculation returns 0.00 unexpectedly
+
+**Possible Causes:**
+1. Order total exceeds `FreeShippingThreshold`
+2. Configuration is inactive (returns 0 as fallback)
+3. Configuration not found for store
+
+**Solution**: Verify configuration exists and is active
+
+---
+
 ## Additional Resources
 
+- **README.md** - Project overview and getting started guide
 - **TODO.md** - Development roadmap and task tracking
+- **ERD.md** - Complete database schema with shipping entities
+- **ClassDiagram.md** - Service architecture with shipping services
 - **Bazario_PRD.md** - Product requirements and business objectives
 - **Services/README.md** - Service architecture and best practices
-- **Swagger/OpenAPI** - Complete API documentation (when controllers are implemented)
+- **Swagger/OpenAPI** - Complete API documentation
 
 ---
 
 *This is a living document. Please update it when configurations or procedures change.*
+
+**Last Updated:** December 2025
