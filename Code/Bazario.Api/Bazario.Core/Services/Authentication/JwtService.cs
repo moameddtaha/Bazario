@@ -33,13 +33,13 @@ namespace Bazario.Core.Services.Authentication
 
             var tokenHandler = new JwtSecurityTokenHandler();
             var secretKey = _configuration["JwtSettings:SecretKey"];
-            
+
             if (string.IsNullOrWhiteSpace(secretKey))
             {
                 throw new ArgumentException("JWT SecretKey cannot be null or empty.", nameof(_configuration));
             }
-            
-            var key = Encoding.UTF8.GetBytes(secretKey);
+
+            var key = Convert.FromBase64String(secretKey);
 
             var claims = new List<Claim>
             {

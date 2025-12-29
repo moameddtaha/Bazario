@@ -35,6 +35,7 @@ namespace Bazario.Core.Services.Authentication
 
         public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
         {
+            ApplicationUser? user = null;
             try
             {
                 // Validate request is not null
@@ -44,7 +45,7 @@ namespace Bazario.Core.Services.Authentication
                 }
 
                 _logger.LogInformation("User registration started: {Email} ({Role})", request.Email, request.Role);
-                
+
                 // Validate role
                 if (!UserCreationHelper.IsValidRole(request.Role))
                 {
@@ -59,7 +60,7 @@ namespace Bazario.Core.Services.Authentication
                 }
 
                 // Create and save user
-                var user = await _deps.UserCreationService.CreateUserAsync(request);
+                user = await _deps.UserCreationService.CreateUserAsync(request);
                 if (user == null)
                 {
                     throw new BusinessRuleException("Failed to create user account.", "UserCreationFailed");
@@ -80,7 +81,7 @@ namespace Bazario.Core.Services.Authentication
                 // Generate tokens
                 var roles = await _deps.RoleManagementService.GetUserRolesAsync(user);
                 var (accessToken, refreshToken, accessTokenExpiration, refreshTokenExpiration) = _deps.TokenHelper.GenerateTokens(user, roles);
-                
+
                 // Store refresh token
                 await _deps.RefreshTokenService.StoreRefreshTokenAsync(user.Id, refreshToken, accessTokenExpiration, refreshTokenExpiration);
 
@@ -91,7 +92,7 @@ namespace Bazario.Core.Services.Authentication
                 var userResponse = CreateUserResponse(user, roles.ToList());
 
                 _logger.LogInformation("User registration completed: {Email} ({Role})", request.Email, roleName);
-                
+
                 return AuthResponse.Success(
                     $"User registered successfully as {roleName}. Please check your email to confirm your account before logging in.",
                     accessToken,
@@ -105,6 +106,25 @@ namespace Bazario.Core.Services.Authentication
             {
                 var email = request?.Email ?? "N/A"; // Safe fallback
                 _logger.LogError(ex, "Registration failed: {Email}", email);
+
+                // Rollback: Delete the user if it was created but registration failed
+                if (user != null)
+                {
+                    try
+                    {
+                        _logger.LogWarning("Rolling back user creation for: {Email}", email);
+                        var deleteResult = await _userManager.DeleteAsync(user);
+                        if (!deleteResult.Succeeded)
+                        {
+                            _logger.LogError("Failed to rollback user creation for: {Email}. Errors: {Errors}",
+                                email, string.Join(", ", deleteResult.Errors.Select(e => e.Description)));
+                        }
+                    }
+                    catch (Exception rollbackEx)
+                    {
+                        _logger.LogError(rollbackEx, "Exception during user rollback for: {Email}", email);
+                    }
+                }
 
                 return AuthResponse.Failure($"Registration failed: {ex.Message}");
             }

@@ -25,7 +25,7 @@ Log.Information("Starting Bazario API...");
 
 try
 {
-    builder.Services.ConfigureServices(builder.Configuration);
+    builder.Services.ConfigureServices(builder.Configuration, builder.Environment);
 
     var app = builder.Build();
 

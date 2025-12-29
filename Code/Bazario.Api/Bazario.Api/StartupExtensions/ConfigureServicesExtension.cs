@@ -63,7 +63,7 @@ namespace Bazario.Api.StartupExtensions
 {
     public static class ConfigureServicesExtension
     {
-        public static void ConfigureServices(this IServiceCollection services, IConfiguration configuration)
+        public static void ConfigureServices(this IServiceCollection services, IConfiguration configuration, IWebHostEnvironment environment)
         {
             // Add your service configurations here
             // Example: services.AddScoped<IMyService, MyService>();
@@ -234,7 +234,7 @@ namespace Bazario.Api.StartupExtensions
                 options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
                 options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
             }).AddJwtBearer(options => {
-                options.RequireHttpsMetadata = false;
+                options.RequireHttpsMetadata = !environment.IsDevelopment();
                 options.SaveToken = true;
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
@@ -244,7 +244,7 @@ namespace Bazario.Api.StartupExtensions
                     ValidateIssuerSigningKey = true,
                     ValidIssuer = configuration["JwtSettings:Issuer"],
                     ValidAudience = configuration["JwtSettings:Audience"],
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["JwtSettings:SecretKey"] ?? "")),
+                    IssuerSigningKey = new SymmetricSecurityKey(Convert.FromBase64String(configuration["JwtSettings:SecretKey"] ?? "")),
                     ClockSkew = TimeSpan.FromMinutes(5)
                 };
             });

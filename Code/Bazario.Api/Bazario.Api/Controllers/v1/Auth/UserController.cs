@@ -1,5 +1,7 @@
 using Asp.Versioning;
 using Bazario.Core.DTO.Authentication;
+using Bazario.Core.Exceptions.Authentication;
+using Bazario.Core.Exceptions.Shared;
 using Bazario.Core.ServiceContracts.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -104,6 +106,16 @@ namespace Bazario.Api.Controllers.v1.Auth
                 _logger.LogWarning(ex, "Unauthorized password change attempt");
                 return Unauthorized(new { message = ex.Message });
             }
+            catch (ValidationException ex)
+            {
+                _logger.LogWarning(ex, "Password change validation failed for user");
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (AuthException ex)
+            {
+                _logger.LogWarning(ex, "Authentication error during password change");
+                return BadRequest(new { message = ex.Message });
+            }
             catch (ArgumentException ex)
             {
                 _logger.LogWarning(ex, "Invalid password change request");
@@ -123,7 +135,7 @@ namespace Bazario.Api.Controllers.v1.Auth
         /// <param name="cancellationToken">Cancellation token</param>
         /// <returns>Success message</returns>
         /// <response code="200">Token revoked successfully</response>
-        /// <response code="400">Invalid token</response>
+        /// <response code="400">Invalid token or token not found</response>
         /// <response code="401">User not authenticated</response>
         [HttpPost("revoke-token")]
         [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
@@ -143,7 +155,13 @@ namespace Bazario.Api.Controllers.v1.Auth
                     return BadRequest(new { message = "Refresh token is required" });
                 }
 
-                await _refreshTokenService.RevokeTokenAsync(refreshToken);
+                var result = await _refreshTokenService.RevokeTokenAsync(refreshToken);
+
+                if (!result)
+                {
+                    _logger.LogWarning("Token revocation failed - token not found or already revoked: {UserId}", userId);
+                    return BadRequest(new { message = "Invalid refresh token or token not found" });
+                }
 
                 _logger.LogInformation("Token revoked successfully for user: {UserId}", userId);
                 return Ok(new { message = "Token revoked successfully" });
