@@ -1,6 +1,6 @@
 using Asp.Versioning;
 using Bazario.Core.DTO.Review;
-using Bazario.Core.Exceptions.Reviews;
+using Bazario.Core.Exceptions.Review;
 using Bazario.Core.Models.Review;
 using Bazario.Core.ServiceContracts.Review;
 using Microsoft.AspNetCore.Authorization;

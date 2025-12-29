@@ -149,8 +149,8 @@ namespace Bazario.Api.Controllers.v1.Product
                 }
 
                 _logger.LogInformation(
-                    "Searching products with keyword: {Keyword}, Category: {Category}, Page: {PageNumber}",
-                    searchCriteria.Keyword, searchCriteria.Category, searchCriteria.PageNumber);
+                    "Searching products with keyword: {SearchTerm}, Category: {Category}, Page: {PageNumber}",
+                    searchCriteria.SearchTerm, searchCriteria.Category, searchCriteria.PageNumber);
 
                 var results = await _productQueryService.SearchProductsAsync(searchCriteria, cancellationToken);
 

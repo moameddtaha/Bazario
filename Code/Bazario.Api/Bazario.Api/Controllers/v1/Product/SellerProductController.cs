@@ -24,6 +24,7 @@ namespace Bazario.Api.Controllers.v1.Product
         private readonly IProductQueryService _productQueryService;
         private readonly IProductAnalyticsService _productAnalyticsService;
         private readonly IStoreAuthorizationService _storeAuthorizationService;
+        private readonly IStoreQueryService _storeQueryService;
         private readonly ILogger<SellerProductController> _logger;
 
         public SellerProductController(
@@ -31,12 +32,14 @@ namespace Bazario.Api.Controllers.v1.Product
             IProductQueryService productQueryService,
             IProductAnalyticsService productAnalyticsService,
             IStoreAuthorizationService storeAuthorizationService,
+            IStoreQueryService storeQueryService,
             ILogger<SellerProductController> logger)
         {
             _productManagementService = productManagementService;
             _productQueryService = productQueryService;
             _productAnalyticsService = productAnalyticsService;
             _storeAuthorizationService = storeAuthorizationService;
+            _storeQueryService = storeQueryService;
             _logger = logger;
         }
 
@@ -76,14 +79,17 @@ namespace Bazario.Api.Controllers.v1.Product
                 var sellerId = GetCurrentUserId();
                 _logger.LogInformation("Fetching products for seller: {SellerId}", sellerId);
 
-                // Get seller's store ID through authorization service
-                var store = await _storeAuthorizationService.GetStoreBySellerIdAsync(sellerId, cancellationToken);
+                // Get seller's stores
+                var stores = await _storeQueryService.GetStoresBySellerIdAsync(sellerId, cancellationToken);
 
-                if (store == null)
+                if (stores == null || stores.Count == 0)
                 {
                     _logger.LogWarning("Seller {SellerId} does not own a store", sellerId);
                     return StatusCode(StatusCodes.Status403Forbidden, new { message = "You must own a store to view products" });
                 }
+
+                // Get first store (sellers typically have one store)
+                var store = stores.First();
 
                 var products = await _productQueryService.GetProductsByStoreIdAsync(
                     store.StoreId, pageNumber, pageSize, cancellationToken);
@@ -121,18 +127,20 @@ namespace Bazario.Api.Controllers.v1.Product
                 _logger.LogInformation("Fetching low stock products for seller: {SellerId}, Threshold: {Threshold}",
                     sellerId, threshold);
 
-                // Verify seller owns a store
-                var store = await _storeAuthorizationService.GetStoreBySellerIdAsync(sellerId, cancellationToken);
+                // Get seller's stores
+                var stores = await _storeQueryService.GetStoresBySellerIdAsync(sellerId, cancellationToken);
 
-                if (store == null)
+                if (stores == null || stores.Count == 0)
                 {
                     return StatusCode(StatusCodes.Status403Forbidden, new { message = "You must own a store to view products" });
                 }
 
+                var storeIds = stores.Select(s => s.StoreId).ToList();
+
                 var lowStockProducts = await _productQueryService.GetLowStockProductsAsync(threshold, cancellationToken);
 
                 // Filter to only seller's products
-                var sellerLowStockProducts = lowStockProducts.Where(p => p.StoreId == store.StoreId).ToList();
+                var sellerLowStockProducts = lowStockProducts.Where(p => storeIds.Contains(p.StoreId)).ToList();
 
                 return Ok(sellerLowStockProducts);
             }
@@ -167,11 +175,11 @@ namespace Bazario.Api.Controllers.v1.Product
             {
                 var sellerId = GetCurrentUserId();
 
-                // Verify seller owns the store
-                var isAuthorized = await _storeAuthorizationService.IsStoreOwnerAsync(
-                    request.StoreId, sellerId, cancellationToken);
+                // Verify seller can manage the store
+                var canManage = await _storeAuthorizationService.CanUserManageStoreAsync(
+                    sellerId, request.StoreId, cancellationToken);
 
-                if (!isAuthorized)
+                if (!canManage)
                 {
                     _logger.LogWarning("Seller {SellerId} attempted to create product for unauthorized store {StoreId}",
                         sellerId, request.StoreId);
@@ -245,11 +253,11 @@ namespace Bazario.Api.Controllers.v1.Product
                     return NotFound(new { message = "Product not found" });
                 }
 
-                // Verify seller owns the store
-                var isAuthorized = await _storeAuthorizationService.IsStoreOwnerAsync(
-                    existingProduct.StoreId, sellerId, cancellationToken);
+                // Verify seller can manage the store
+                var canManage = await _storeAuthorizationService.CanUserManageStoreAsync(
+                    sellerId, existingProduct.StoreId, cancellationToken);
 
-                if (!isAuthorized)
+                if (!canManage)
                 {
                     _logger.LogWarning("Seller {SellerId} attempted to update unauthorized product {ProductId}",
                         sellerId, productId);
@@ -316,11 +324,11 @@ namespace Bazario.Api.Controllers.v1.Product
                     return NotFound(new { message = "Product not found" });
                 }
 
-                // Verify seller owns the store
-                var isAuthorized = await _storeAuthorizationService.IsStoreOwnerAsync(
-                    existingProduct.StoreId, sellerId, cancellationToken);
+                // Verify seller can manage the store
+                var canManage = await _storeAuthorizationService.CanUserManageStoreAsync(
+                    sellerId, existingProduct.StoreId, cancellationToken);
 
-                if (!isAuthorized)
+                if (!canManage)
                 {
                     _logger.LogWarning("Seller {SellerId} attempted to delete unauthorized product {ProductId}",
                         sellerId, productId);
@@ -384,11 +392,11 @@ namespace Bazario.Api.Controllers.v1.Product
 
                 var product = await _productManagementService.RestoreProductAsync(productId, sellerId, cancellationToken);
 
-                // Verify seller owns the restored product's store
-                var isAuthorized = await _storeAuthorizationService.IsStoreOwnerAsync(
-                    product.StoreId, sellerId, cancellationToken);
+                // Verify seller can manage the restored product's store
+                var canManage = await _storeAuthorizationService.CanUserManageStoreAsync(
+                    sellerId, product.StoreId, cancellationToken);
 
-                if (!isAuthorized)
+                if (!canManage)
                 {
                     // If not authorized, delete it again
                     await _productManagementService.DeleteProductAsync(productId, sellerId, "Unauthorized restore attempt", cancellationToken);
